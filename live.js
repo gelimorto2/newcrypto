@@ -22,7 +22,7 @@ let botState = {
     settings: {
         symbol: 'BTCUSDT',
         timeframe: '1h',
-        strategy: 'original',
+        strategy: 'volty',
         amount: 100,
         maxPositions: 3,
         stopLoss: 2,
@@ -35,26 +35,9 @@ let botState = {
             notifyErrors: true
         },
         strategyParams: {
-            original: {
-                shortPeriod: 12,
-                longPeriod: 26,
-                signalPeriod: 9,
-                overbought: 0.5,
-                oversold: -0.5
-            },
-            macd: {
-                fastPeriod: 12,
-                slowPeriod: 26,
-                signalPeriod: 9
-            },
-            rsi: {
-                period: 14,
-                overbought: 70,
-                oversold: 30
-            },
-            bb: {
-                period: 20,
-                stdDev: 2
+            volty: {
+                length: 5,
+                atrMult: 0.75
             }
         }
     },
@@ -138,7 +121,7 @@ function handleLogout() {
     }
     
     // Close WebSocket connection
-    if (webSocketHandler && webSocketHandler.isConnected) {
+    if (typeof webSocketHandler !== 'undefined' && webSocketHandler.isConnected) {
         webSocketHandler.close();
     }
     
@@ -196,7 +179,77 @@ async function initializeApiClient() {
     } catch (error) {
         console.error('Error initializing API client:', error);
         logMessage('error', `Failed to connect to Binance API: ${error.message}`);
+        
+        // Create a mock connection for fallback
+        botState.connection = {
+            async getKlines(params) {
+                return generateMockHistoricalData(params.symbol, params.interval, 100);
+            },
+            async getTradingPairs() {
+                return [
+                    { symbol: 'BTCUSDT', baseAsset: 'BTC', quoteAsset: 'USDT' },
+                    { symbol: 'ETHUSDT', baseAsset: 'ETH', quoteAsset: 'USDT' },
+                    { symbol: 'BNBUSDT', baseAsset: 'BNB', quoteAsset: 'USDT' },
+                    { symbol: 'SOLUSDT', baseAsset: 'SOL', quoteAsset: 'USDT' },
+                    { symbol: 'ADAUSDT', baseAsset: 'ADA', quoteAsset: 'USDT' },
+                    { symbol: 'DOGEUSDT', baseAsset: 'DOGE', quoteAsset: 'USDT' }
+                ];
+            }
+        };
+        
+        logMessage('warning', 'Using mock data due to API connection issues');
     }
+}
+
+// Generate mock historical data
+function generateMockHistoricalData(symbol, interval, limit) {
+    const candles = [];
+    let basePrice = symbol.includes('BTC') ? 40000 : symbol.includes('ETH') ? 2800 : 300;
+    const now = Date.now();
+    const intervalMs = getIntervalInMs(interval);
+    
+    for (let i = 0; i < limit; i++) {
+        // Add some random price movement
+        const change = (Math.random() - 0.5) * basePrice * 0.02;
+        basePrice += change;
+        
+        // Create candlestick with OHLCV data
+        const open = basePrice;
+        const high = open + (Math.random() * open * 0.01);
+        const low = open - (Math.random() * open * 0.01);
+        const close = low + (Math.random() * (high - low));
+        const volume = Math.random() * 100 + 50;
+        
+        // Format as candle object
+        candles.push({
+            time: now - ((limit - i) * intervalMs),
+            open: open,
+            high: high,
+            low: low,
+            close: close,
+            volume: volume
+        });
+    }
+    
+    return candles;
+}
+
+// Get interval in milliseconds
+function getIntervalInMs(interval) {
+    const units = {
+        m: 60 * 1000,
+        h: 60 * 60 * 1000,
+        d: 24 * 60 * 60 * 1000,
+        w: 7 * 24 * 60 * 60 * 1000
+    };
+    
+    const match = interval.match(/(\d+)([mhdw])/);
+    if (!match) return 60 * 60 * 1000; // Default to 1h
+    
+    const value = parseInt(match[1]);
+    const unit = match[2];
+    
+    return value * units[unit];
 }
 
 // Load available trading pairs
@@ -224,6 +277,7 @@ async function loadTradingPairs() {
 // Update trading pairs dropdown
 function updateTradingPairsDropdown() {
     const symbolSelect = elements.symbolSelect;
+    if (!symbolSelect) return;
     
     // Clear current options
     symbolSelect.innerHTML = '';
@@ -245,15 +299,17 @@ function updateTradingPairsDropdown() {
     symbolSelect.appendChild(separator);
     
     // Add other pairs
-    botState.availablePairs
-        .filter(pair => !popularPairs.includes(pair.symbol))
-        .sort((a, b) => a.symbol.localeCompare(b.symbol))
-        .forEach(pair => {
-            const option = document.createElement('option');
-            option.value = pair.symbol;
-            option.textContent = `${pair.baseAsset}/${pair.quoteAsset}`;
-            symbolSelect.appendChild(option);
-        });
+    if (botState.availablePairs && botState.availablePairs.length > 0) {
+        botState.availablePairs
+            .filter(pair => !popularPairs.includes(pair.symbol))
+            .sort((a, b) => a.symbol.localeCompare(b.symbol))
+            .forEach(pair => {
+                const option = document.createElement('option');
+                option.value = pair.symbol;
+                option.textContent = `${pair.baseAsset}/${pair.quoteAsset}`;
+                symbolSelect.appendChild(option);
+            });
+    }
     
     // Set selected value from settings
     symbolSelect.value = botState.settings.symbol;
@@ -270,6 +326,17 @@ function cacheElements() {
     elements.positionsContainer = document.getElementById('positions-container');
     elements.tradesTable = document.getElementById('trades-table');
     elements.priceChart = document.getElementById('price-chart');
+    elements.currentPrice = document.getElementById('current-price');
+    elements.priceChange = document.getElementById('price-change');
+    elements.indicatorsContainer = document.getElementById('indicators-container');
+    elements.voltyValue = document.getElementById('volty-value');
+    elements.voltyDetail = document.getElementById('volty-detail');
+    
+    // Market stats elements
+    elements.highValue = document.getElementById('high-value');
+    elements.lowValue = document.getElementById('low-value');
+    elements.volumeValue = document.getElementById('volume-value');
+    elements.changeValue = document.getElementById('change-value');
     
     // Settings elements
     elements.apiKeyDisplay = document.getElementById('api-key-display');
@@ -292,6 +359,9 @@ function cacheElements() {
     elements.saveSettingsButton = document.getElementById('save-settings');
     elements.paperModeToggle = document.getElementById('paper-mode-toggle');
     elements.modeDisplay = document.getElementById('mode-display');
+    elements.voltyLengthInput = document.getElementById('volty-length');
+    elements.voltyAtrMultInput = document.getElementById('volty-atr-mult');
+    elements.pairSearchInput = document.getElementById('pair-search');
     
     // Logs elements
     elements.logLevelSelect = document.getElementById('log-level');
@@ -320,7 +390,7 @@ function cacheElements() {
     elements.confirmImportButton = document.getElementById('confirm-import');
     elements.connectionStatusModal = document.getElementById('connection-status-modal');
     
-    // Other elements
+    // Connection status elements
     elements.currentDatetime = document.getElementById('current-datetime');
     elements.connectionStatus = document.getElementById('connection-status');
     elements.connectionDetails = document.getElementById('connection-details');
@@ -345,7 +415,10 @@ function initTabs() {
             // Activate clicked tab
             button.classList.add('active');
             const tabId = button.getAttribute('data-tab');
-            document.getElementById(tabId).classList.add('active');
+            const tabContent = document.getElementById(tabId);
+            if (tabContent) {
+                tabContent.classList.add('active');
+            }
         });
     });
 }
@@ -353,57 +426,103 @@ function initTabs() {
 // Initialize UI elements
 function initUI() {
     // Start/Stop bot buttons
-    elements.startBotButton.addEventListener('click', startBot);
-    elements.stopBotButton.addEventListener('click', stopBot);
+    if (elements.startBotButton) {
+        elements.startBotButton.addEventListener('click', startBot);
+    }
+    if (elements.stopBotButton) {
+        elements.stopBotButton.addEventListener('click', stopBot);
+    }
     
     // Paper trading toggle
-    elements.paperModeToggle.addEventListener('change', toggleTradingMode);
+    if (elements.paperModeToggle) {
+        elements.paperModeToggle.addEventListener('change', toggleTradingMode);
+    }
     
     // API keys update button
-    elements.updateApiKeysButton.addEventListener('click', () => {
-        elements.apiKeysModal.style.display = 'block';
-    });
+    if (elements.updateApiKeysButton) {
+        elements.updateApiKeysButton.addEventListener('click', () => {
+            if (elements.apiKeysModal) {
+                elements.apiKeysModal.style.display = 'block';
+            }
+        });
+    }
     
     // Save API keys button
-    elements.saveNewApiKeysButton.addEventListener('click', updateApiKeys);
+    if (elements.saveNewApiKeysButton) {
+        elements.saveNewApiKeysButton.addEventListener('click', updateApiKeys);
+    }
     
     // Reset paper balance button
-    elements.resetPaperBalanceButton.addEventListener('click', resetPaperBalance);
+    if (elements.resetPaperBalanceButton) {
+        elements.resetPaperBalanceButton.addEventListener('click', resetPaperBalance);
+    }
     
     // Test notification button
-    elements.testNotificationButton.addEventListener('click', testNotification);
+    if (elements.testNotificationButton) {
+        elements.testNotificationButton.addEventListener('click', testNotification);
+    }
     
     // Save settings button
-    elements.saveSettingsButton.addEventListener('click', saveSettingsFromUI);
+    if (elements.saveSettingsButton) {
+        elements.saveSettingsButton.addEventListener('click', saveSettingsFromUI);
+    }
     
     // Clear logs button
-    elements.clearLogsButton.addEventListener('click', clearLogs);
+    if (elements.clearLogsButton) {
+        elements.clearLogsButton.addEventListener('click', clearLogs);
+    }
     
     // JSON validation and application
-    elements.validateJsonButton.addEventListener('click', validateStrategyJson);
-    elements.applyJsonButton.addEventListener('click', applyStrategyJson);
+    if (elements.validateJsonButton) {
+        elements.validateJsonButton.addEventListener('click', validateStrategyJson);
+    }
+    if (elements.applyJsonButton) {
+        elements.applyJsonButton.addEventListener('click', applyStrategyJson);
+    }
     
     // Backtest button
-    elements.runBacktestButton.addEventListener('click', runBacktest);
+    if (elements.runBacktestButton) {
+        elements.runBacktestButton.addEventListener('click', runBacktest);
+    }
     
     // Export/Import settings
-    elements.exportSettingsButton.addEventListener('click', exportSettings);
-    elements.importSettingsButton.addEventListener('click', () => {
-        elements.importSettingsModal.style.display = 'block';
-    });
-    elements.confirmImportButton.addEventListener('click', importSettings);
+    if (elements.exportSettingsButton) {
+        elements.exportSettingsButton.addEventListener('click', exportSettings);
+    }
+    if (elements.importSettingsButton) {
+        elements.importSettingsButton.addEventListener('click', () => {
+            if (elements.importSettingsModal) {
+                elements.importSettingsModal.style.display = 'block';
+            }
+        });
+    }
+    if (elements.confirmImportButton) {
+        elements.confirmImportButton.addEventListener('click', importSettings);
+    }
     
     // WebSocket reconnect button
-    elements.reconnectWebsocketButton.addEventListener('click', () => {
-        webSocketHandler.init();
-    });
+    if (elements.reconnectWebsocketButton) {
+        elements.reconnectWebsocketButton.addEventListener('click', () => {
+            if (typeof webSocketHandler !== 'undefined') {
+                webSocketHandler.init();
+            }
+        });
+    }
     
     // Connection status modal
-    elements.connectionStatus.addEventListener('click', showConnectionStatusModal);
-    elements.reconnectWsButton.addEventListener('click', () => {
-        webSocketHandler.init();
-        elements.connectionStatusModal.style.display = 'none';
-    });
+    if (elements.connectionStatus) {
+        elements.connectionStatus.addEventListener('click', showConnectionStatusModal);
+    }
+    if (elements.reconnectWsButton) {
+        elements.reconnectWsButton.addEventListener('click', () => {
+            if (typeof webSocketHandler !== 'undefined') {
+                webSocketHandler.init();
+            }
+            if (elements.connectionStatusModal) {
+                elements.connectionStatusModal.style.display = 'none';
+            }
+        });
+    }
     
     // Close buttons for modals
     const closeButtons = document.querySelectorAll('.close');
@@ -418,47 +537,124 @@ function initUI() {
     
     // Close modal when clicking outside
     window.addEventListener('click', (event) => {
-        if (event.target === elements.apiKeysModal) {
+        if (elements.apiKeysModal && event.target === elements.apiKeysModal) {
             elements.apiKeysModal.style.display = 'none';
-        } else if (event.target === elements.importSettingsModal) {
+        } else if (elements.importSettingsModal && event.target === elements.importSettingsModal) {
             elements.importSettingsModal.style.display = 'none';
-        } else if (event.target === elements.connectionStatusModal) {
+        } else if (elements.connectionStatusModal && event.target === elements.connectionStatusModal) {
             elements.connectionStatusModal.style.display = 'none';
         }
     });
+    
+    // Pair search functionality
+    if (elements.pairSearchInput) {
+        elements.pairSearchInput.addEventListener('input', searchTradingPairs);
+    }
     
     // Set initial date values for backtest
     const today = new Date();
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
     
-    elements.backtestEndInput.valueAsDate = today;
-    elements.backtestStartInput.valueAsDate = oneMonthAgo;
+    if (elements.backtestEndInput) {
+        elements.backtestEndInput.valueAsDate = today;
+    }
+    if (elements.backtestStartInput) {
+        elements.backtestStartInput.valueAsDate = oneMonthAgo;
+    }
     
     // Update paper/live mode display
     updateTradingMode();
     
     // Update balance display
     updateBalanceDisplay();
+    
+    // Set up Volty Expansion strategy parameters
+    setupVoltyExpansionParams();
+}
+
+// Search trading pairs
+function searchTradingPairs() {
+    if (!elements.pairSearchInput || !elements.symbolSelect) return;
+    
+    const query = elements.pairSearchInput.value.trim().toUpperCase();
+    const options = elements.symbolSelect.options;
+    
+    for (let i = 0; i < options.length; i++) {
+        const option = options[i];
+        if (option.disabled) continue; // Skip separators
+        
+        const match = option.value.includes(query) || option.textContent.includes(query);
+        option.style.display = match ? '' : 'none';
+    }
+}
+
+// Set up Volty Expansion strategy parameters
+function setupVoltyExpansionParams() {
+    // Update input fields with current values
+    if (elements.voltyLengthInput && elements.voltyAtrMultInput) {
+        elements.voltyLengthInput.value = botState.settings.strategyParams.volty.length;
+        elements.voltyAtrMultInput.value = botState.settings.strategyParams.volty.atrMult;
+        
+        // Add event listeners to update strategy parameters
+        elements.voltyLengthInput.addEventListener('change', () => {
+            const length = parseInt(elements.voltyLengthInput.value);
+            if (!isNaN(length) && length > 0) {
+                botState.settings.strategyParams.volty.length = length;
+                updateJsonEditor();
+            }
+        });
+        
+        elements.voltyAtrMultInput.addEventListener('change', () => {
+            const atrMult = parseFloat(elements.voltyAtrMultInput.value);
+            if (!isNaN(atrMult) && atrMult > 0) {
+                botState.settings.strategyParams.volty.atrMult = atrMult;
+                updateJsonEditor();
+            }
+        });
+    }
+    
+    // Update JSON editor with current parameters
+    updateJsonEditor();
+}
+
+// Update JSON editor with current parameters
+function updateJsonEditor() {
+    if (elements.jsonEditor) {
+        const jsonContent = {
+            strategy: 'volty',
+            parameters: botState.settings.strategyParams.volty
+        };
+        
+        elements.jsonEditor.textContent = JSON.stringify(jsonContent, null, 2);
+    }
 }
 
 // Show connection status modal
 function showConnectionStatusModal() {
+    if (!elements.connectionStatusModal) return;
+    
     // Update connection details
-    if (webSocketHandler) {
-        const status = webSocketHandler.getStatus();
-        elements.wsStatus.textContent = status.connected ? 'Connected' : 'Disconnected';
-        elements.lastMessageTime.textContent = status.lastMessageTime;
-        elements.wsStatus.className = status.connected ? 'status running' : 'status stopped';
+    if (typeof webSocketHandler !== 'undefined') {
+        const status = webSocketHandler.getStatus ? webSocketHandler.getStatus() : { connected: false, lastMessageTime: 'Never' };
+        if (elements.wsStatus) {
+            elements.wsStatus.textContent = status.connected ? 'Connected' : 'Disconnected';
+            elements.wsStatus.className = status.connected ? 'status running' : 'status stopped';
+        }
+        if (elements.lastMessageTime) {
+            elements.lastMessageTime.textContent = status.lastMessageTime;
+        }
     }
     
     // Update API status
-    if (botState.connection) {
-        elements.apiStatus.textContent = 'Connected to Binance API';
-        elements.apiStatus.className = 'status running';
-    } else {
-        elements.apiStatus.textContent = 'Not connected to API';
-        elements.apiStatus.className = 'status stopped';
+    if (elements.apiStatus) {
+        if (botState.connection) {
+            elements.apiStatus.textContent = 'Connected to Binance API';
+            elements.apiStatus.className = 'status running';
+        } else {
+            elements.apiStatus.textContent = 'Not connected to API';
+            elements.apiStatus.className = 'status stopped';
+        }
     }
     
     // Show modal
@@ -467,6 +663,13 @@ function showConnectionStatusModal() {
 
 // Initialize WebSocket connection
 function initWebSocket() {
+    // Only initialize if webSocketHandler is available
+    if (typeof webSocketHandler === 'undefined') {
+        console.error('WebSocket handler not available');
+        logMessage('error', 'WebSocket handler not available');
+        return;
+    }
+    
     // Set custom WebSocket URL if provided
     if (elements.websocketUrl && elements.websocketUrl.value) {
         webSocketHandler.baseUrl = elements.websocketUrl.value;
@@ -488,9 +691,13 @@ function initWebSocket() {
 // Handle WebSocket connecting event
 function handleWebSocketConnecting() {
     // Update UI
-    elements.connectionStatus.textContent = 'Connecting...';
-    elements.connectionStatus.className = 'status warning';
-    elements.wsIndicator.className = 'websocket-status connecting';
+    if (elements.connectionStatus) {
+        elements.connectionStatus.textContent = 'Connecting...';
+        elements.connectionStatus.className = 'status warning';
+    }
+    if (elements.wsIndicator) {
+        elements.wsIndicator.className = 'websocket-status connecting';
+    }
     
     // Update connection details
     if (elements.connectionDetails) {
@@ -513,9 +720,13 @@ function handleWebSocketConnected() {
     webSocketHandler.subscribe(tickerStream);
     
     // Update UI
-    elements.connectionStatus.textContent = 'Connected';
-    elements.connectionStatus.className = 'status running';
-    elements.wsIndicator.className = 'websocket-status connected';
+    if (elements.connectionStatus) {
+        elements.connectionStatus.textContent = 'Connected';
+        elements.connectionStatus.className = 'status running';
+    }
+    if (elements.wsIndicator) {
+        elements.wsIndicator.className = 'websocket-status connected';
+    }
     
     // Update connection details
     if (elements.connectionDetails) {
@@ -528,9 +739,13 @@ function handleWebSocketConnected() {
 // Handle WebSocket disconnected event
 function handleWebSocketDisconnected() {
     // Update UI
-    elements.connectionStatus.textContent = 'Disconnected';
-    elements.connectionStatus.className = 'status stopped';
-    elements.wsIndicator.className = 'websocket-status disconnected';
+    if (elements.connectionStatus) {
+        elements.connectionStatus.textContent = 'Disconnected';
+        elements.connectionStatus.className = 'status stopped';
+    }
+    if (elements.wsIndicator) {
+        elements.wsIndicator.className = 'websocket-status disconnected';
+    }
     
     // Update connection details
     if (elements.connectionDetails) {
@@ -567,6 +782,14 @@ function handleKlineUpdate(data) {
         // Update positions display with new prices
         updatePositionsDisplay();
         
+        // Update price display
+        updateCurrentPriceDisplay();
+        
+        // Run strategy check
+        if (botState.isRunning) {
+            checkStrategySignal();
+        }
+        
         logMessage('debug', `New kline data received: ${botState.settings.symbol} ${data.k.i} - Price: ${botState.marketData.currentPrice}`);
     }
 }
@@ -581,6 +804,9 @@ function handleTradeUpdate(data) {
         // Candles will be updated by the kline stream
         botState.marketData.currentPrice = price;
         
+        // Update current price display
+        updateCurrentPriceDisplay();
+        
         // Check positions more frequently with trade updates
         checkPositions();
         
@@ -593,33 +819,59 @@ function handleTickerUpdate(data) {
     // Update 24h ticker data if needed
     if (data.s === botState.settings.symbol) {
         // Update price display in UI
-        updatePriceDisplay(data);
+        updateMarketStats(data);
         
         logMessage('debug', `Ticker update: ${data.s} - 24h change: ${data.P}%`);
     }
 }
 
-// Update price display with ticker data
-function updatePriceDisplay(tickerData) {
-    const priceInfo = document.createElement('div');
-    priceInfo.className = 'price-info';
-    priceInfo.innerHTML = `
-        <div class="current-price">${parseFloat(tickerData.c).toFixed(2)} USDT</div>
-        <div class="price-change ${parseFloat(tickerData.P) >= 0 ? 'positive' : 'negative'}">
-            ${parseFloat(tickerData.P) >= 0 ? '+' : ''}${parseFloat(tickerData.P).toFixed(2)}%
-        </div>
-    `;
+// Update current price display
+function updateCurrentPriceDisplay() {
+    if (!elements.currentPrice || !botState.marketData.currentPrice) return;
     
-    // Update or replace existing price info
-    const existingPriceInfo = document.querySelector('.price-info');
-    if (existingPriceInfo) {
-        existingPriceInfo.parentNode.replaceChild(priceInfo, existingPriceInfo);
-    } else {
-        // Add before chart if doesn't exist
-        const chartContainer = document.querySelector('.chart-container');
-        if (chartContainer) {
-            chartContainer.parentNode.insertBefore(priceInfo, chartContainer);
-        }
+    elements.currentPrice.textContent = `${botState.marketData.currentPrice.toFixed(2)} USDT`;
+}
+
+// Update market statistics
+function updateMarketStats(tickerData) {
+    if (!tickerData) return;
+    
+    // Update 24h high
+    if (elements.highValue) {
+        elements.highValue.textContent = parseFloat(tickerData.h).toFixed(2);
+    }
+    
+    // Update 24h low
+    if (elements.lowValue) {
+        elements.lowValue.textContent = parseFloat(tickerData.l).toFixed(2);
+    }
+    
+    // Update 24h volume
+    if (elements.volumeValue) {
+        elements.volumeValue.textContent = parseFloat(tickerData.v).toFixed(2);
+    }
+    
+    // Update 24h price change
+    if (elements.changeValue) {
+        const changePercent = parseFloat(tickerData.P);
+        elements.changeValue.textContent = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
+        elements.changeValue.style.color = changePercent >= 0 ? '#238636' : '#da3633';
+    }
+    
+    // Update price change display
+    if (elements.priceChange) {
+        const changePercent = parseFloat(tickerData.P);
+        elements.priceChange.textContent = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
+        elements.priceChange.className = `price-change ${changePercent >= 0 ? 'positive' : 'negative'}`;
+        
+        // Update icon
+        const icon = document.createElement('i');
+        icon.className = `fas fa-caret-${changePercent >= 0 ? 'up' : 'down'}`;
+        
+        // Replace existing content
+        elements.priceChange.innerHTML = '';
+        elements.priceChange.appendChild(icon);
+        elements.priceChange.appendChild(document.createTextNode(` ${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`));
     }
 }
 
@@ -638,6 +890,7 @@ function initChart() {
     try {
         // Get the chart canvas element
         const chartCanvas = document.getElementById('price-chart');
+        if (!chartCanvas) return;
         
         // Clear existing chart if any
         if (botState.chart) {
@@ -729,6 +982,8 @@ function getTimeUnit(timeframe) {
 
 // Update chart with new candle
 function updateChartWithNewCandle(candle) {
+    if (!botState.chart) return;
+    
     // Get dataset
     const dataset = botState.chart.data.datasets[0];
     
@@ -760,7 +1015,9 @@ function updateChartWithNewCandle(candle) {
 async function loadHistoricalData() {
     try {
         // Show loading state
-        elements.priceChart.style.opacity = '0.5';
+        if (elements.priceChart) {
+            elements.priceChart.style.opacity = '0.5';
+        }
         
         // Get data through Binance API
         if (botState.connection) {
@@ -771,7 +1028,9 @@ async function loadHistoricalData() {
             });
             
             // Clear existing data
-            botState.chart.data.datasets[0].data = [];
+            if (botState.chart && botState.chart.data.datasets[0]) {
+                botState.chart.data.datasets[0].data = [];
+            }
             
             // Set chart data
             if (data && data.length) {
@@ -782,13 +1041,21 @@ async function loadHistoricalData() {
                 botState.marketData.currentPrice = data[data.length - 1].close;
                 
                 // Add candles to chart
-                botState.chart.data.datasets[0].data = data;
-                
-                // Update chart
-                botState.chart.update();
+                if (botState.chart && botState.chart.data.datasets[0]) {
+                    botState.chart.data.datasets[0].data = data;
+                    
+                    // Update chart
+                    botState.chart.update();
+                }
                 
                 // Update positions with current price
                 updatePositionsDisplay();
+                
+                // Update current price display
+                updateCurrentPriceDisplay();
+                
+                // Update Volatility Expansion indicator
+                updateVoltyIndicatorDisplay();
                 
                 logMessage('info', `Loaded ${data.length} historical candles for ${botState.settings.symbol}`);
             } else {
@@ -799,11 +1066,15 @@ async function loadHistoricalData() {
         }
         
         // Reset loading state
-        elements.priceChart.style.opacity = '1';
+        if (elements.priceChart) {
+            elements.priceChart.style.opacity = '1';
+        }
     } catch (error) {
         console.error('Error loading historical data:', error);
         logMessage('error', `Failed to load historical data: ${error.message}`);
-        elements.priceChart.style.opacity = '1';
+        if (elements.priceChart) {
+            elements.priceChart.style.opacity = '1';
+        }
     }
 }
 
@@ -856,6 +1127,8 @@ function startMarketDataUpdates() {
 
 // Toggle between paper and live trading modes
 function toggleTradingMode() {
+    if (!elements.paperModeToggle) return;
+    
     botState.isPaperTrading = !elements.paperModeToggle.checked;
     updateTradingMode();
     saveSettings();
@@ -932,18 +1205,22 @@ function startBot() {
         }
         
         // In a real implementation, you would create an authenticated API client
-        // Since we're using the public API, we'll continue with the current client
+        // Since we're using the public API, we'll just continue with the current client
         logMessage('warning', 'Using public API for trading (demo mode)');
     }
     
     // Subscribe to data streams if needed
-    if (webSocketHandler && !webSocketHandler.isConnected) {
+    if (typeof webSocketHandler !== 'undefined' && !webSocketHandler.isConnected) {
         webSocketHandler.init();
     }
     
     // Update UI
-    elements.startBotButton.style.display = 'none';
-    elements.stopBotButton.style.display = 'inline-block';
+    if (elements.startBotButton) {
+        elements.startBotButton.style.display = 'none';
+    }
+    if (elements.stopBotButton) {
+        elements.stopBotButton.style.display = 'inline-block';
+    }
     
     // Set bot state
     botState.isRunning = true;
@@ -966,8 +1243,12 @@ function stopBot() {
     }
     
     // Update UI
-    elements.startBotButton.style.display = 'inline-block';
-    elements.stopBotButton.style.display = 'none';
+    if (elements.startBotButton) {
+        elements.startBotButton.style.display = 'inline-block';
+    }
+    if (elements.stopBotButton) {
+        elements.stopBotButton.style.display = 'none';
+    }
     
     // Set bot state
     botState.isRunning = false;
@@ -981,8 +1262,6 @@ function stopBot() {
     showAlert('Bot stopped', 'success');
     logMessage('info', 'Bot stopped');
 }
-
-// ... continuing from where we left off
 
 // Start trading logic loop
 function startTradingLoop() {
@@ -1005,26 +1284,156 @@ function startTradingLoop() {
             return;
         }
         
-        // Execute strategy
-        const signal = TradingStrategies.executeStrategy(
-            botState.settings.strategy,
-            botState.settings.strategyParams[botState.settings.strategy],
-            botState.marketData.candles
-        );
-        
-        // Process signal if exists
-        if (signal) {
-            logMessage('info', `Signal generated: ${signal.action} at ${signal.price}`);
-            
-            // Check if we can execute trade
-            if (canExecuteTrade(signal.action)) {
-                // Execute trade
-                executeTrade(signal);
-            }
-        }
+        // Check for strategy signals
+        checkStrategySignal();
     }, intervalTime);
     
-    logMessage('info', 'Trading loop started');
+    logMessage('info', 'Trading loop started with Volatility Expansion Close strategy');
+}
+
+// Check for strategy signals
+function checkStrategySignal() {
+    if (!botState.marketData.candles || botState.marketData.candles.length === 0) return;
+    
+    try {
+        // Execute Volatility Expansion Close strategy
+        const result = executeVoltyExpansionStrategy(
+            botState.marketData.candles,
+            botState.settings.strategyParams.volty
+        );
+        
+        // Update indicator display
+        updateVoltyIndicatorDisplay(result.values);
+        
+        // Process signal if exists
+        if (result.signal) {
+            logMessage('info', `Signal generated: ${result.signal.action} at ${result.signal.price} (Reason: ${result.signal.reason})`);
+            
+            // Check if we can execute trade
+            if (canExecuteTrade(result.signal.action)) {
+                // Execute trade
+                executeTrade(result.signal);
+            }
+        }
+    } catch (error) {
+        console.error('Error checking strategy signal:', error);
+        logMessage('error', `Failed to check strategy signal: ${error.message}`);
+    }
+}
+
+// Execute Volatility Expansion Close strategy
+function executeVoltyExpansionStrategy(candles, params = {}) {
+    // Default parameters if not provided
+    const length = params.length || 5;
+    const numATRs = params.atrMult || 0.75;
+    
+    // Need enough candles for calculation
+    if (candles.length < length + 1) {
+        return { values: {}, signal: null };
+    }
+    
+    // Calculate True Range (TR) for each candle
+    const trueRanges = [];
+    for (let i = 1; i < candles.length; i++) {
+        const high = parseFloat(candles[i].high);
+        const low = parseFloat(candles[i].low);
+        const prevClose = parseFloat(candles[i-1].close);
+        
+        // True Range = max(high - low, abs(high - prevClose), abs(low - prevClose))
+        const tr = Math.max(
+            high - low,
+            Math.abs(high - prevClose),
+            Math.abs(low - prevClose)
+        );
+        trueRanges.push(tr);
+    }
+    
+    // Calculate Simple Moving Average (SMA) of True Range
+    const smaValues = [];
+    for (let i = length - 1; i < trueRanges.length; i++) {
+        const trSlice = trueRanges.slice(i - length + 1, i + 1);
+        const sum = trSlice.reduce((total, val) => total + val, 0);
+        const sma = sum / length;
+        smaValues.push(sma);
+    }
+    
+    // Get the current SMA of TR
+    const currentSMA = smaValues[smaValues.length - 1];
+    
+    // Calculate ATR band value
+    const atrs = currentSMA * numATRs;
+    
+    // Get current close price
+    const currentClose = parseFloat(candles[candles.length - 1].close);
+    
+    // Calculate long and short entry prices
+    const longEntry = currentClose + atrs;
+    const shortEntry = currentClose - atrs;
+    
+    // Check for signals
+    let signal = null;
+    const previousCandle = candles[candles.length - 2];
+    const previousClose = parseFloat(previousCandle.close);
+    
+    // Check if current price breaks above or below the bands
+    if (currentClose > previousClose + atrs) {
+        // Long signal
+        signal = {
+            action: 'BUY',
+            price: currentClose,
+            reason: 'VOLTY_EXPAN_CLOSE_LONG'
+        };
+    } else if (currentClose < previousClose - atrs) {
+        // Short signal
+        signal = {
+            action: 'SELL',
+            price: currentClose,
+            reason: 'VOLTY_EXPAN_CLOSE_SHORT'
+        };
+    }
+    
+    return {
+        values: {
+            length: length,
+            atrMult: numATRs,
+            atr: currentSMA,
+            atrs: atrs,
+            longEntry: longEntry,
+            shortEntry: shortEntry,
+            currentClose: currentClose,
+            previousClose: previousClose
+        },
+        signal: signal
+    };
+}
+
+// Update Volatility Expansion indicator display
+function updateVoltyIndicatorDisplay(values = null) {
+    if (!elements.voltyValue || !elements.voltyDetail) return;
+    
+    // If no values provided, calculate from current data
+    if (!values && botState.marketData.candles && botState.marketData.candles.length > 0) {
+        const result = executeVoltyExpansionStrategy(
+            botState.marketData.candles,
+            botState.settings.strategyParams.volty
+        );
+        values = result.values;
+    }
+    
+    // If we have values, update the display
+    if (values && Object.keys(values).length > 0) {
+        elements.voltyValue.textContent = `ATR: ${values.atr.toFixed(4)}`;
+        
+        elements.voltyDetail.innerHTML = `
+            <div>Length: ${values.length} | Multiplier: ${values.atrMult}</div>
+            <div>Long Entry: ${values.longEntry.toFixed(2)}</div>
+            <div>Short Entry: ${values.shortEntry.toFixed(2)}</div>
+            <div>Current Close: ${values.currentClose.toFixed(2)}</div>
+        `;
+    } else {
+        elements.voltyValue.textContent = 'ATR: -';
+        elements.voltyDetail.textContent = 'Waiting for data...';
+    }
 }
 
 // Check if trade can be executed
@@ -1225,6 +1634,7 @@ function checkPositions() {
 // Update positions display
 function updatePositionsDisplay() {
     const container = elements.positionsContainer;
+    if (!container) return;
     
     if (botState.positions.length === 0) {
         container.innerHTML = '<p>No active positions.</p>';
@@ -1233,23 +1643,43 @@ function updatePositionsDisplay() {
     
     let html = '';
     botState.positions.forEach(position => {
-        const currentPrice = botState.marketData.currentPrice;
+        const currentPrice = botState.marketData.currentPrice || position.entryPrice;
         const unrealizedPnl = (currentPrice - position.entryPrice) * position.quantity;
         const pnlPercent = ((currentPrice / position.entryPrice) - 1) * 100;
         
         html += `
             <div class="position-card">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <div class="position-header">
                     <h4>${position.symbol}</h4>
                     <span class="badge ${unrealizedPnl >= 0 ? 'profit' : 'loss'}">${pnlPercent.toFixed(2)}%</span>
                 </div>
-                <div>Entry: ${position.entryPrice.toFixed(2)} USDT</div>
-                <div>Quantity: ${position.quantity}</div>
-                <div>Current: ${currentPrice.toFixed(2)} USDT</div>
-                <div>Unrealized P&L: ${unrealizedPnl.toFixed(2)} USDT</div>
-                <div style="display: flex; justify-content: space-between; margin-top: 10px;">
-                    <div>SL: ${position.stopLoss.toFixed(2)}</div>
-                    <div>TP: ${position.takeProfit.toFixed(2)}</div>
+                <div class="position-details">
+                    <div class="position-detail">
+                        <div class="position-detail-label">Entry Price</div>
+                        <div>${position.entryPrice.toFixed(2)} USDT</div>
+                    </div>
+                    <div class="position-detail">
+                        <div class="position-detail-label">Quantity</div>
+                        <div>${position.quantity}</div>
+                    </div>
+                    <div class="position-detail">
+                        <div class="position-detail-label">Current Price</div>
+                        <div>${currentPrice.toFixed(2)} USDT</div>
+                    </div>
+                    <div class="position-detail">
+                        <div class="position-detail-label">Unrealized P&L</div>
+                        <div class="${unrealizedPnl >= 0 ? 'profit' : 'loss'}">${unrealizedPnl.toFixed(2)} USDT</div>
+                    </div>
+                </div>
+                <div class="position-actions">
+                    <div>
+                        <div class="position-detail-label">Stop Loss</div>
+                        <div>${position.stopLoss.toFixed(2)}</div>
+                    </div>
+                    <div>
+                        <div class="position-detail-label">Take Profit</div>
+                        <div>${position.takeProfit.toFixed(2)}</div>
+                    </div>
                 </div>
             </div>
         `;
@@ -1261,6 +1691,7 @@ function updatePositionsDisplay() {
 // Update trades table
 function updateTradesTable() {
     const tbody = elements.tradesTable;
+    if (!tbody) return;
     
     // Clear current rows
     tbody.innerHTML = '';
@@ -1291,6 +1722,8 @@ function updateTradesTable() {
 
 // Update API keys
 function updateApiKeys() {
+    if (!elements.newApiKeyInput || !elements.newApiSecretInput) return;
+    
     const newApiKey = elements.newApiKeyInput.value;
     const newApiSecret = elements.newApiSecretInput.value;
     
@@ -1304,11 +1737,15 @@ function updateApiKeys() {
     localStorage.setItem('apiSecret', newApiSecret);
     
     // Update masked display
-    elements.apiKeyDisplay.textContent = '•'.repeat(8) + newApiKey.substring(newApiKey.length - 4);
-    elements.apiSecretDisplay.textContent = '•'.repeat(8) + newApiSecret.substring(newApiSecret.length - 4);
+    if (elements.apiKeyDisplay && elements.apiSecretDisplay) {
+        elements.apiKeyDisplay.textContent = '•'.repeat(8) + newApiKey.substring(newApiKey.length - 4);
+        elements.apiSecretDisplay.textContent = '•'.repeat(8) + newApiSecret.substring(newApiSecret.length - 4);
+    }
     
     // Close modal
-    elements.apiKeysModal.style.display = 'none';
+    if (elements.apiKeysModal) {
+        elements.apiKeysModal.style.display = 'none';
+    }
     
     // Clear inputs
     elements.newApiKeyInput.value = '';
@@ -1326,7 +1763,7 @@ function resetPaperBalance() {
     }
     
     // Reset balance
-    botState.balance.USDT = parseFloat(elements.initialBalanceInput.value) || 10000;
+    botState.balance.USDT = parseFloat(elements.initialBalanceInput ? elements.initialBalanceInput.value : 10000) || 10000;
     botState.balance.BTC = 0;
     botState.balance.ETH = 0;
     
@@ -1352,7 +1789,9 @@ function resetPaperBalance() {
 
 // Test notification
 function testNotification() {
-    const webhookUrl = elements.discordWebhookUrl.value;
+    if (!elements.discordWebhookInput) return;
+    
+    const webhookUrl = elements.discordWebhookInput.value;
     
     if (!webhookUrl) {
         showAlert('Please enter a Discord webhook URL', 'warning');
@@ -1372,24 +1811,28 @@ function testNotification() {
 // Save settings from UI
 function saveSettingsFromUI() {
     // Trading parameters
-    botState.settings.symbol = elements.symbolSelect.value;
-    botState.settings.timeframe = elements.timeframeSelect.value;
-    botState.settings.strategy = elements.strategySelect.value;
+    if (elements.symbolSelect) botState.settings.symbol = elements.symbolSelect.value;
+    if (elements.timeframeSelect) botState.settings.timeframe = elements.timeframeSelect.value;
+    if (elements.strategySelect) botState.settings.strategy = 'volty'; // Only volty strategy supported
+    
+    // Volty Expansion parameters
+    if (elements.voltyLengthInput) botState.settings.strategyParams.volty.length = parseInt(elements.voltyLengthInput.value) || 5;
+    if (elements.voltyAtrMultInput) botState.settings.strategyParams.volty.atrMult = parseFloat(elements.voltyAtrMultInput.value) || 0.75;
     
     // Risk management
-    botState.settings.amount = parseFloat(elements.amountInput.value);
-    botState.settings.maxPositions = parseInt(elements.maxPositionsInput.value);
-    botState.settings.stopLoss = parseFloat(elements.stopLossInput.value);
-    botState.settings.takeProfit = parseFloat(elements.takeProfitInput.value);
+    if (elements.amountInput) botState.settings.amount = parseFloat(elements.amountInput.value);
+    if (elements.maxPositionsInput) botState.settings.maxPositions = parseInt(elements.maxPositionsInput.value);
+    if (elements.stopLossInput) botState.settings.stopLoss = parseFloat(elements.stopLossInput.value);
+    if (elements.takeProfitInput) botState.settings.takeProfit = parseFloat(elements.takeProfitInput.value);
     
     // Paper trading settings
-    botState.settings.initialBalance = parseFloat(elements.initialBalanceInput.value);
+    if (elements.initialBalanceInput) botState.settings.initialBalance = parseFloat(elements.initialBalanceInput.value);
     
     // Notifications
-    botState.settings.notifications.discordWebhookUrl = elements.discordWebhookUrl.value;
-    botState.settings.notifications.notifyTrades = elements.notifyTradesCheckbox.checked;
-    botState.settings.notifications.notifySignals = elements.notifySignalsCheckbox.checked;
-    botState.settings.notifications.notifyErrors = elements.notifyErrorsCheckbox.checked;
+    if (elements.discordWebhookInput) botState.settings.notifications.discordWebhookUrl = elements.discordWebhookInput.value;
+    if (elements.notifyTradesCheckbox) botState.settings.notifications.notifyTrades = elements.notifyTradesCheckbox.checked;
+    if (elements.notifySignalsCheckbox) botState.settings.notifications.notifySignals = elements.notifySignalsCheckbox.checked;
+    if (elements.notifyErrorsCheckbox) botState.settings.notifications.notifyErrors = elements.notifyErrorsCheckbox.checked;
     
     // Save settings
     saveSettings();
@@ -1398,7 +1841,7 @@ function saveSettingsFromUI() {
     loadHistoricalData();
     
     // Update WebSocket subscriptions
-    if (webSocketHandler && webSocketHandler.isConnected) {
+    if (typeof webSocketHandler !== 'undefined' && webSocketHandler.isConnected) {
         // Unsubscribe from old streams
         webSocketHandler.unsubscribe(`${botState.settings.symbol.toLowerCase()}@kline_${botState.settings.timeframe}`);
         webSocketHandler.unsubscribe(`${botState.settings.symbol.toLowerCase()}@trade`);
@@ -1409,6 +1852,9 @@ function saveSettingsFromUI() {
         webSocketHandler.subscribe(`${botState.settings.symbol.toLowerCase()}@trade`);
         webSocketHandler.subscribe(`${botState.settings.symbol.toLowerCase()}@ticker`);
     }
+    
+    // Update JSON editor
+    updateJsonEditor();
     
     showAlert('Settings saved successfully', 'success');
     logMessage('info', 'Settings updated');
@@ -1428,6 +1874,14 @@ function loadSettings() {
         try {
             const settings = JSON.parse(savedSettings);
             botState.settings = {...botState.settings, ...settings};
+            
+            // Ensure volty params exist
+            if (!botState.settings.strategyParams.volty) {
+                botState.settings.strategyParams.volty = {
+                    length: 5,
+                    atrMult: 0.75
+                };
+            }
         } catch (error) {
             console.error('Error parsing saved settings:', error);
         }
@@ -1440,19 +1894,23 @@ function loadSettings() {
     }
     
     // Apply settings to UI
-    elements.symbolSelect.value = botState.settings.symbol;
-    elements.timeframeSelect.value = botState.settings.timeframe;
-    elements.strategySelect.value = botState.settings.strategy;
-    elements.amountInput.value = botState.settings.amount;
-    elements.maxPositionsInput.value = botState.settings.maxPositions;
-    elements.stopLossInput.value = botState.settings.stopLoss;
-    elements.takeProfitInput.value = botState.settings.takeProfit;
-    elements.initialBalanceInput.value = botState.settings.initialBalance;
-    elements.discordWebhookUrl.value = botState.settings.notifications.discordWebhookUrl;
-    elements.notifyTradesCheckbox.checked = botState.settings.notifications.notifyTrades;
-    elements.notifySignalsCheckbox.checked = botState.settings.notifications.notifySignals;
-    elements.notifyErrorsCheckbox.checked = botState.settings.notifications.notifyErrors;
-    elements.paperModeToggle.checked = !botState.isPaperTrading;
+    if (elements.symbolSelect) elements.symbolSelect.value = botState.settings.symbol;
+    if (elements.timeframeSelect) elements.timeframeSelect.value = botState.settings.timeframe;
+    if (elements.strategySelect) elements.strategySelect.value = 'volty'; // Only volty strategy supported
+    if (elements.amountInput) elements.amountInput.value = botState.settings.amount;
+    if (elements.maxPositionsInput) elements.maxPositionsInput.value = botState.settings.maxPositions;
+    if (elements.stopLossInput) elements.stopLossInput.value = botState.settings.stopLoss;
+    if (elements.takeProfitInput) elements.takeProfitInput.value = botState.settings.takeProfit;
+    if (elements.initialBalanceInput) elements.initialBalanceInput.value = botState.settings.initialBalance;
+    if (elements.discordWebhookInput) elements.discordWebhookInput.value = botState.settings.notifications.discordWebhookUrl;
+    if (elements.notifyTradesCheckbox) elements.notifyTradesCheckbox.checked = botState.settings.notifications.notifyTrades;
+    if (elements.notifySignalsCheckbox) elements.notifySignalsCheckbox.checked = botState.settings.notifications.notifySignals;
+    if (elements.notifyErrorsCheckbox) elements.notifyErrorsCheckbox.checked = botState.settings.notifications.notifyErrors;
+    if (elements.paperModeToggle) elements.paperModeToggle.checked = !botState.isPaperTrading;
+    
+    // Volty Expansion specific parameters
+    if (elements.voltyLengthInput) elements.voltyLengthInput.value = botState.settings.strategyParams.volty.length;
+    if (elements.voltyAtrMultInput) elements.voltyAtrMultInput.value = botState.settings.strategyParams.volty.atrMult;
     
     // Update trading mode display
     updateTradingMode();
@@ -1462,21 +1920,17 @@ function loadSettings() {
     
     // Display API key info if available
     const apiKey = localStorage.getItem('apiKey');
-    if (apiKey) {
+    if (apiKey && elements.apiKeyDisplay) {
         elements.apiKeyDisplay.textContent = '•'.repeat(8) + apiKey.substring(apiKey.length - 4);
     }
     
     const apiSecret = localStorage.getItem('apiSecret');
-    if (apiSecret) {
+    if (apiSecret && elements.apiSecretDisplay) {
         elements.apiSecretDisplay.textContent = '•'.repeat(8) + apiSecret.substring(apiSecret.length - 4);
     }
     
     // Set strategy JSON editor content
-    const strategyParams = botState.settings.strategyParams[botState.settings.strategy];
-    elements.jsonEditor.textContent = JSON.stringify({
-        strategy: botState.settings.strategy,
-        parameters: strategyParams
-    }, null, 2);
+    updateJsonEditor();
     
     logMessage('info', 'Settings loaded');
 }
@@ -1562,7 +2016,7 @@ function sendDiscordNotification(notification) {
                 color: notification.color || 0x0099ff,
                 timestamp: new Date().toISOString(),
                 footer: {
-                    text: 'Binance Trading Bot'
+                    text: 'CryptoTrader Pro'
                 }
             }
         ]
@@ -1605,9 +2059,14 @@ function validateSettings() {
         return false;
     }
     
-    // Check strategy
-    if (!botState.settings.strategyParams[botState.settings.strategy]) {
-        showAlert('Invalid trading strategy.', 'error');
+    // Check Volty parameters
+    if (isNaN(botState.settings.strategyParams.volty.length) || botState.settings.strategyParams.volty.length <= 0) {
+        showAlert('Invalid Volty Expansion length. Please enter a positive number.', 'error');
+        return false;
+    }
+    
+    if (isNaN(botState.settings.strategyParams.volty.atrMult) || botState.settings.strategyParams.volty.atrMult <= 0) {
+        showAlert('Invalid Volty Expansion ATR multiplier. Please enter a positive number.', 'error');
         return false;
     }
     
@@ -1616,6 +2075,8 @@ function validateSettings() {
 
 // Validate strategy JSON
 function validateStrategyJson() {
+    if (!elements.jsonEditor) return;
+    
     try {
         const jsonText = elements.jsonEditor.textContent;
         const strategyConfig = JSON.parse(jsonText);
@@ -1625,10 +2086,18 @@ function validateStrategyJson() {
             throw new Error('JSON must contain strategy and parameters fields');
         }
         
-        // Check if strategy is valid
-        const validStrategies = ['original', 'macd', 'rsi', 'bb'];
-        if (!validStrategies.includes(strategyConfig.strategy)) {
-            throw new Error(`Invalid strategy. Must be one of: ${validStrategies.join(', ')}`);
+        // Check if strategy is valid (only volty supported)
+        if (strategyConfig.strategy !== 'volty') {
+            throw new Error('Only "volty" strategy is supported');
+        }
+        
+        // Check parameters
+        if (typeof strategyConfig.parameters.length !== 'number' || strategyConfig.parameters.length <= 0) {
+            throw new Error('Length parameter must be a positive number');
+        }
+        
+        if (typeof strategyConfig.parameters.atrMult !== 'number' || strategyConfig.parameters.atrMult <= 0) {
+            throw new Error('atrMult parameter must be a positive number');
         }
         
         // Format the JSON for better readability
@@ -1647,21 +2116,23 @@ function applyStrategyJson() {
     if (!validateStrategyJson()) return;
     
     try {
+        if (!elements.jsonEditor) return;
+        
         const jsonText = elements.jsonEditor.textContent;
         const strategyConfig = JSON.parse(jsonText);
         
-        // Update strategy in settings
-        botState.settings.strategy = strategyConfig.strategy;
-        elements.strategySelect.value = strategyConfig.strategy;
-        
         // Update strategy parameters
-        botState.settings.strategyParams[strategyConfig.strategy] = strategyConfig.parameters;
+        botState.settings.strategyParams.volty = strategyConfig.parameters;
+        
+        // Update UI
+        if (elements.voltyLengthInput) elements.voltyLengthInput.value = strategyConfig.parameters.length;
+        if (elements.voltyAtrMultInput) elements.voltyAtrMultInput.value = strategyConfig.parameters.atrMult;
         
         // Save settings
         saveSettings();
         
         showAlert('Strategy applied successfully', 'success');
-        logMessage('info', `Strategy updated to ${strategyConfig.strategy}`);
+        logMessage('info', 'Volatility Expansion Close strategy parameters updated');
         
         return true;
     } catch (e) {
@@ -1670,38 +2141,35 @@ function applyStrategyJson() {
     }
 }
 
+
 // Export settings to JSON
 function exportSettings() {
     try {
-        // Create a full export of settings
         const exportData = {
             version: '1.0',
             timestamp: new Date().toISOString(),
             settings: botState.settings,
-            paperTrading: botState.isPaperTrading
+            paperTrading: botState.isPaperTrading,
         };
-        
-        // Add paper trading state if in paper mode
+
         if (botState.isPaperTrading) {
             exportData.paperTradingState = {
                 balance: botState.balance,
                 positions: botState.positions,
-                trades: botState.trades
+                trades: botState.trades,
+                pnl: botState.pnl,
             };
         }
-        
-        // Convert to JSON string
+
         const jsonString = JSON.stringify(exportData, null, 2);
-        
-        // Create download link
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonString);
+        const dataStr = `data:text/json;charset=utf-8,${encodeURIComponent(jsonString)}`;
         const downloadAnchorNode = document.createElement('a');
-        downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", `trading-bot-settings-${new Date().toISOString().slice(0,10)}.json`);
+        downloadAnchorNode.setAttribute('href', dataStr);
+        downloadAnchorNode.setAttribute('download', `trading-bot-settings-${new Date().toISOString().slice(0, 10)}.json`);
         document.body.appendChild(downloadAnchorNode);
         downloadAnchorNode.click();
         downloadAnchorNode.remove();
-        
+
         showAlert('Settings exported successfully', 'success');
     } catch (e) {
         showAlert(`Failed to export settings: ${e.message}`, 'error');
@@ -1716,45 +2184,39 @@ function importSettings() {
             showAlert('Please paste a valid JSON settings file', 'error');
             return;
         }
-        
+
         const importData = JSON.parse(jsonText);
-        
-        // Validate import data
         if (!importData.settings) {
             throw new Error('Invalid settings file format');
         }
-        
-        // Update settings
+
         botState.settings = importData.settings;
-        
-        // Update trading mode if specified
+
         if (importData.hasOwnProperty('paperTrading')) {
             botState.isPaperTrading = importData.paperTrading;
             elements.paperModeToggle.checked = !botState.isPaperTrading;
             updateTradingMode();
         }
-        
-        // Import paper trading state if available
+
         if (importData.paperTradingState && botState.isPaperTrading) {
             botState.balance = importData.paperTradingState.balance || botState.balance;
             botState.positions = importData.paperTradingState.positions || [];
             botState.trades = importData.paperTradingState.trades || [];
-            
+            botState.pnl = importData.paperTradingState.pnl || botState.pnl;
+
             updateBalanceDisplay();
             updatePositionsDisplay();
             updateTradesTable();
             savePaperTradingState();
         }
-        
-        // Update UI
+
         loadSettings();
-        
-        // Save settings
         saveSettings();
-        
-        // Close modal
-        elements.importSettingsModal.style.display = 'none';
-        
+
+        if (elements.importSettingsModal) {
+            elements.importSettingsModal.style.display = 'none';
+        }
+
         showAlert('Settings imported successfully', 'success');
     } catch (e) {
         showAlert(`Failed to import settings: ${e.message}`, 'error');
@@ -1765,49 +2227,30 @@ function importSettings() {
 function runBacktest() {
     const startDate = elements.backtestStartInput.value;
     const endDate = elements.backtestEndInput.value;
-    
+
     if (!startDate || !endDate) {
         showAlert('Please select start and end dates for backtesting', 'error');
         return;
     }
-    
-    // Validate dates
+
     if (new Date(startDate) >= new Date(endDate)) {
         showAlert('Start date must be before end date', 'error');
         return;
     }
-    
+
     showAlert('Backtest started. This may take a few moments...', 'success');
-    
-    // Start backtest in background
+
     setTimeout(async () => {
         try {
-            // Fetch historical data
-            const historicalData = await fetchHistoricalData(
-                botState.settings.symbol,
-                botState.settings.timeframe,
-                startDate,
-                endDate
-            );
-            
+            const historicalData = await fetchHistoricalData(botState.settings.symbol, botState.settings.timeframe, startDate, endDate);
+
             if (!historicalData || historicalData.length === 0) {
                 showAlert('No historical data available for the selected period', 'error');
                 return;
             }
-            
-            // Run backtest
-            const results = backtest(
-                historicalData,
-                botState.settings.strategy,
-                botState.settings.strategyParams[botState.settings.strategy],
-                botState.settings.amount,
-                botState.settings.stopLoss,
-                botState.settings.takeProfit
-            );
-            
-            // Display results
+
+            const results = backtest(historicalData, botState.settings.strategyParams.volty, botState.settings.amount, botState.settings.stopLoss, botState.settings.takeProfit);
             displayBacktestResults(results);
-            
         } catch (error) {
             console.error('Backtest error:', error);
             showAlert(`Backtest failed: ${error.message}`, 'error');
@@ -1815,259 +2258,44 @@ function runBacktest() {
     }, 100);
 }
 
-// Fetch historical data for backtesting
-async function fetchHistoricalData(symbol, timeframe, startDate, endDate) {
-    try {
-        // Convert dates to timestamps
-        const startTime = new Date(startDate).getTime();
-        const endTime = new Date(endDate).getTime();
-        
-        // Use Binance API to get historical data
-        if (botState.connection) {
-            return await botState.connection.getKlines({
-                symbol: symbol,
-                interval: timeframe,
-                startTime: startTime,
-                endTime: endTime,
-                limit: 1000 // Maximum allowed by Binance API
-            });
-        } else {
-            throw new Error('No API connection available');
-        }
-    } catch (error) {
-        console.error('Error fetching historical data:', error);
-        throw error;
-    }
-}
-
-// Run backtest with historical data
-function backtest(historicalData, strategy, strategyParams, amount, stopLossPercent, takeProfitPercent) {
-    // Initialize results
-    const results = {
-        trades: [],
-        summary: {
-            totalTrades: 0,
-            winningTrades: 0,
-            losingTrades: 0,
-            winRate: 0,
-            totalProfit: 0,
-            totalLoss: 0,
-            netProfit: 0,
-            maxDrawdown: 0,
-            profitFactor: 0
-        }
-    };
-    
-    // Initialize backtest state
-    let equity = amount;
-    let position = null;
-    let maxEquity = amount;
-    let drawdown = 0;
-    
-    // Process each candle
-    for (let i = 50; i < historicalData.length; i++) { // Skip first 50 candles for indicators to warm up
-        const candle = historicalData[i];
-        const price = parseFloat(candle.close);
-        
-        // Skip if no price
-        if (!price) continue;
-        
-        // Get subset of data for signal calculation
-        const dataSubset = historicalData.slice(0, i + 1);
-        
-        // Check for position exit (stop loss or take profit)
-        if (position) {
-            // Check stop loss
-            if (price <= position.stopLoss) {
-                // Close position at stop loss
-                const loss = (position.stopLoss - position.entryPrice) * position.quantity;
-                equity += loss;
-                
-                // Record trade
-                results.trades.push({
-                    entry: position.entryTime,
-                    exit: candle.time,
-                    entryPrice: position.entryPrice,
-                    exitPrice: position.stopLoss,
-                    quantity: position.quantity,
-                    profit: loss,
-                    type: 'STOP_LOSS'
-                });
-                
-                // Update stats
-                results.summary.totalTrades++;
-                results.summary.losingTrades++;
-                results.summary.totalLoss += Math.abs(loss);
-                
-                // Reset position
-                position = null;
-            }
-            // Check take profit
-            else if (price >= position.takeProfit) {
-                // Close position at take profit
-                const profit = (position.takeProfit - position.entryPrice) * position.quantity;
-                equity += profit;
-                
-                // Record trade
-                results.trades.push({
-                    entry: position.entryTime,
-                    exit: candle.time,
-                    entryPrice: position.entryPrice,
-                    exitPrice: position.takeProfit,
-                    quantity: position.quantity,
-                    profit: profit,
-                    type: 'TAKE_PROFIT'
-                });
-                
-                // Update stats
-                results.summary.totalTrades++;
-                results.summary.winningTrades++;
-                results.summary.totalProfit += profit;
-                
-                // Reset position
-                position = null;
-            }
-        }
-        
-        // Get signal
-        const signal = TradingStrategies.executeStrategy(strategy, strategyParams, dataSubset);
-        
-        // Process signal
-        if (signal) {
-            if (signal.action === 'BUY' && !position) {
-                // Calculate quantity
-                const quantity = amount / price;
-                
-                // Open position
-                position = {
-                    entryPrice: price,
-                    entryTime: candle.time,
-                    quantity: quantity,
-                    stopLoss: price * (1 - stopLossPercent / 100),
-                    takeProfit: price * (1 + takeProfitPercent / 100)
-                };
-            }
-            else if (signal.action === 'SELL' && position) {
-                // Close position at market
-                const profit = (price - position.entryPrice) * position.quantity;
-                equity += profit;
-                
-                // Record trade
-                results.trades.push({
-                    entry: position.entryTime,
-                    exit: candle.time,
-                    entryPrice: position.entryPrice,
-                    exitPrice: price,
-                    quantity: position.quantity,
-                    profit: profit,
-                    type: 'SIGNAL'
-                });
-                
-                // Update stats
-                results.summary.totalTrades++;
-                if (profit >= 0) {
-                    results.summary.winningTrades++;
-                    results.summary.totalProfit += profit;
-                } else {
-                    results.summary.losingTrades++;
-                    results.summary.totalLoss += Math.abs(profit);
-                }
-                
-                // Reset position
-                position = null;
-            }
-        }
-        
-        // Update max equity and drawdown
-        if (equity > maxEquity) {
-            maxEquity = equity;
-        } else {
-            const currentDrawdown = (maxEquity - equity) / maxEquity * 100;
-            if (currentDrawdown > drawdown) {
-                drawdown = currentDrawdown;
-            }
-        }
-    }
-    
-    // Calculate summary stats
-    results.summary.netProfit = results.summary.totalProfit - results.summary.totalLoss;
-    results.summary.winRate = results.summary.totalTrades > 0 
-        ? (results.summary.winningTrades / results.summary.totalTrades) * 100 
-        : 0;
-    results.summary.maxDrawdown = drawdown;
-    results.summary.profitFactor = results.summary.totalLoss > 0 
-        ? results.summary.totalProfit / results.summary.totalLoss 
-        : results.summary.totalProfit > 0 ? Infinity : 0;
-    
-    return results;
-}
-
 // Display backtest results
 function displayBacktestResults(results) {
-    // Create modal for backtest results
     const modal = document.createElement('div');
     modal.className = 'modal';
     modal.style.display = 'block';
-    
+
     const content = document.createElement('div');
     content.className = 'modal-content';
     content.style.width = '80%';
     content.style.maxWidth = '800px';
-    
-    // Add close button
+
     const closeButton = document.createElement('span');
     closeButton.className = 'close';
     closeButton.innerHTML = '&times;';
-    closeButton.onclick = function() {
+    closeButton.onclick = function () {
         document.body.removeChild(modal);
     };
-    
-    // Create content
+
     let html = `
         <h3>Backtest Results</h3>
         <div class="panel">
             <h4>Summary</h4>
             <table>
-                <tr>
-                    <td>Total Trades:</td>
-                    <td>${results.summary.totalTrades}</td>
-                </tr>
-                <tr>
-                    <td>Win Rate:</td>
-                    <td>${results.summary.winRate.toFixed(2)}%</td>
-                </tr>
-                <tr>
-                    <td>Net Profit:</td>
-                    <td class="${results.summary.netProfit >= 0 ? 'profit' : 'loss'}">${results.summary.netProfit.toFixed(2)} USDT</td>
-                </tr>
-                <tr>
-                    <td>Max Drawdown:</td>
-                    <td>${results.summary.maxDrawdown.toFixed(2)}%</td>
-                </tr>
-                <tr>
-                    <td>Profit Factor:</td>
-                    <td>${results.summary.profitFactor.toFixed(2)}</td>
-                </tr>
+                <tr><td>Total Trades:</td><td>${results.summary.totalTrades}</td></tr>
+                <tr><td>Win Rate:</td><td>${results.summary.winRate.toFixed(2)}%</td></tr>
+                <tr><td>Net Profit:</td><td class="${results.summary.netProfit >= 0 ? 'profit' : 'loss'}">${results.summary.netProfit.toFixed(2)} USDT</td></tr>
+                <tr><td>Profit Factor:</td><td>${results.summary.profitFactor.toFixed(2)}</td></tr>
             </table>
         </div>
-        
         <div class="panel">
             <h4>Trades</h4>
             <table>
                 <thead>
-                    <tr>
-                        <th>Entry Time</th>
-                        <th>Exit Time</th>
-                        <th>Entry Price</th>
-                        <th>Exit Price</th>
-                        <th>Type</th>
-                        <th>Profit</th>
-                    </tr>
+                    <tr><th>Entry Time</th><th>Exit Time</th><th>Entry Price</th><th>Exit Price</th><th>Type</th><th>Profit</th></tr>
                 </thead>
                 <tbody>
     `;
-    
-    // Add trades (limit to max 20 for display)
+
     const maxTrades = Math.min(results.trades.length, 20);
     for (let i = 0; i < maxTrades; i++) {
         const trade = results.trades[i];
@@ -2082,46 +2310,34 @@ function displayBacktestResults(results) {
             </tr>
         `;
     }
-    
+
     html += `
                 </tbody>
             </table>
-            ${results.trades.length > 20 ? `<p>Showing ${maxTrades} of ${results.trades.length} trades</p>` : ''}
         </div>
     `;
-    
-    // Set content
+
     content.innerHTML = html;
     content.prepend(closeButton);
-    
-    // Add to modal
     modal.appendChild(content);
-    
-    // Add to document
     document.body.appendChild(modal);
-    
-    // Log backtest results
+
     logMessage('info', `Backtest completed: ${results.summary.totalTrades} trades, ${results.summary.winRate.toFixed(2)}% win rate, ${results.summary.netProfit.toFixed(2)} USDT profit`);
 }
 
 // Show alert message
 function showAlert(message, type = 'success') {
-    // Create alert element
     const alertElement = document.createElement('div');
     alertElement.className = `alert ${type}`;
     alertElement.textContent = message;
-    
-    // Add to document
     document.body.appendChild(alertElement);
-    
-    // Position at the top
+
     alertElement.style.position = 'fixed';
     alertElement.style.top = '20px';
     alertElement.style.left = '50%';
     alertElement.style.transform = 'translateX(-50%)';
     alertElement.style.zIndex = '9999';
-    
-    // Remove after 3 seconds
+
     setTimeout(() => {
         alertElement.style.opacity = '0';
         setTimeout(() => {
@@ -2130,120 +2346,9 @@ function showAlert(message, type = 'success') {
     }, 3000);
 }
 
-// Log message to log container
-function logMessage(level, message) {
-    // Check if we should log this level
-    const selectedLevel = elements.logLevelSelect ? elements.logLevelSelect.value : 'info';
-    const levels = ['debug', 'info', 'warning', 'error'];
-    const selectedIndex = levels.indexOf(selectedLevel);
-    const messageIndex = levels.indexOf(level);
-    
-    if (messageIndex < selectedIndex) {
-        // Skip logs below the selected level
-        return;
-    }
-    
-    // Create log element
-    const logElement = document.createElement('div');
-    logElement.className = `log-entry ${level}`;
-    
-    // Format timestamp
-    const timestamp = new Date().toISOString();
-    
-    // Set content
-    logElement.innerHTML = `
-        <span class="log-time">${timestamp}</span>
-        <span class="log-level">[${level.toUpperCase()}]</span>
-        <span class="log-message">${message}</span>
-    `;
-    
-    // Add to container
-    if (elements.logContainer) {
-        elements.logContainer.appendChild(logElement);
-        
-        // Scroll to bottom
-        elements.logContainer.scrollTop = elements.logContainer.scrollHeight;
-    }
-    
-    // Log to console as well
-    console[level === 'warning' ? 'warn' : level](message);
-}
-
-// Update date and time
-function updateDateTime() {
-    const now = new Date();
-    const dateTimeElement = document.getElementById('current-datetime');
-    if (dateTimeElement) {
-        dateTimeElement.textContent = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
-    }
-}
-
-// Initialize the application
+// Initialize application
 document.addEventListener('DOMContentLoaded', () => {
-    // Setup authentication
     setupAuthentication();
-    
-    // Initialize date and time in footer
     updateDateTime();
     setInterval(updateDateTime, 1000);
-    
-    // Add custom styles for price info
-    const style = document.createElement('style');
-    style.textContent = `
-        .price-info {
-            background-color: #161b22;
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 20px;
-            border: 1px solid #30363d;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .current-price {
-            font-size: 24px;
-            font-weight: bold;
-        }
-        .price-change {
-            font-size: 16px;
-            font-weight: bold;
-            padding: 4px 8px;
-            border-radius: 4px;
-        }
-        .price-change.positive {
-            background-color: #238636;
-            color: white;
-        }
-        .price-change.negative {
-            background-color: #da3633;
-            color: white;
-        }
-        
-        /* Log entry styles */
-        .log-entry {
-            padding: 4px 0;
-            border-bottom: 1px solid #30363d;
-        }
-        .log-time {
-            color: #8b949e;
-            margin-right: 8px;
-        }
-        .log-level {
-            font-weight: bold;
-            margin-right: 8px;
-        }
-        .log-entry.debug .log-level {
-            color: #8b949e;
-        }
-        .log-entry.info .log-level {
-            color: #58a6ff;
-        }
-        .log-entry.warning .log-level {
-            color: #f0883e;
-        }
-        .log-entry.error .log-level {
-            color: #f85149;
-        }
-    `;
-    document.head.appendChild(style);
 });
