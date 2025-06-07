@@ -6,7 +6,7 @@ const API_URL = 'https://api.binance.com'; // Binance API base URL
 
 console.log('Constants initialized:', { API_KEY_STORAGE, API_SECRET_STORAGE, SETTINGS_STORAGE, API_URL });
 const SESSION_STORAGE_PREFIX = 'trading_session_';
-const VERSION = '1.2.0'; // Version tracking for compatibility
+const VERSION = '1.3.0'; // Version tracking for compatibility
 
 // State variables
 let apiKey = '';
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Register service worker for better offline support if supported
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(err => {
+        navigator.serviceWorker.register('./sw.js').catch(err => {
             console.log('Service Worker registration failed:', err);
         });
     }
@@ -251,6 +251,22 @@ function cacheElements() {
     
     // Test alert button
     elements.testAlertBtn = document.getElementById('test-alert-btn');
+    
+    // Email alert element
+    elements.emailAlertToggle = document.getElementById('email-alert-toggle');
+    elements.emailAddressInput = document.getElementById('email-address-input');
+    
+    // Telegram elements
+    elements.telegramAlertToggle = document.getElementById('telegram-alert-toggle');
+    elements.telegramTokenInput = document.getElementById('telegram-token-input');
+    elements.telegramChatIdInput = document.getElementById('telegram-chatid-input');
+    
+    // Sound alert elements
+    elements.soundAlertToggle = document.getElementById('sound-alert-toggle');
+    elements.soundVolumeInput = document.getElementById('sound-volume-input');
+    
+    // Browser alert element
+    elements.browserAlertToggle = document.getElementById('browser-alert-toggle');
 }
 
 // Setup event listeners
@@ -490,7 +506,7 @@ function updateBotStatus(isActive) {
         elements.botActivity.classList.remove('trading');
         elements.botActivity.classList.add('waiting');
         elements.activityStatus.textContent = 'Trading Inactive';
-            }
+    }
 }
 
 // Save the current trading session
@@ -947,7 +963,6 @@ function initializeEmptyCharts() {
         Plotly.newPlot(elements.equityChart, [trace], layout);
     }
 
-
     
     // Initialize depth chart
     if (elements.depthChart) {
@@ -1183,23 +1198,23 @@ function sendDiscordNotification(message) {
 
 // Enhanced alert system to send notifications across multiple channels
 function sendAlerts(message) {
-    if (elements.discordAlertToggle.checked) {
+    if (elements.discordAlertToggle && elements.discordAlertToggle.checked) {
         sendDiscordNotification(message);
     }
 
-    if (elements.telegramAlertToggle.checked) {
+    if (elements.telegramAlertToggle && elements.telegramAlertToggle.checked) {
         sendTelegramNotification(message);
     }
 
-    if (elements.emailAlertToggle.checked) {
+    if (elements.emailAlertToggle && elements.emailAlertToggle.checked) {
         sendEmailNotification(message);
     }
 
-    if (elements.browserAlertToggle.checked) {
+    if (elements.browserAlertToggle && elements.browserAlertToggle.checked) {
         showBrowserNotification(message);
     }
 
-    if (elements.soundAlertToggle.checked) {
+    if (elements.soundAlertToggle && elements.soundAlertToggle.checked) {
         playSoundAlert();
     }
 }
@@ -1234,7 +1249,7 @@ function sendTelegramNotification(message) {
 function playSoundAlert() {
     const audio = new Audio('https://example.com/alert.mp3');
     audio.volume = parseFloat(elements.soundVolumeInput.value);
-    audio.play();
+    audio.play().catch(e => console.error('Failed to play sound alert:', e));
 }
 
 // Show browser notification
@@ -1261,6 +1276,23 @@ function showBrowserNotification(message) {
     }
 }
 
+// Send email notification
+function sendEmailNotification(message) {
+    const email = elements.emailAddressInput.value.trim();
+    if (!email) {
+        console.warn('Email address is not set.');
+        return;
+    }
+    
+    // In a real implementation, this would connect to an email service
+    console.log(`Would send email to ${email} with title: ${message.title}`);
+    
+    // Since we can't actually send emails from client-side JavaScript directly,
+    // this is just a placeholder. In a real app, you would send a request to your server
+    // which would then use an email service to send the notification.
+    logMessage(`Email notification would be sent to ${email}`, 'info');
+}
+
 // Ensure charts render correctly after tab changes
 function ensureChartsRendered() {
     if (plotlyChart) {
@@ -1271,10 +1303,1027 @@ function ensureChartsRendered() {
     }
 }
 
+// Update plotly chart theme based on current theme
+function updatePlotlyChartTheme() {
+    const isDarkTheme = document.body.classList.contains('dark-theme');
+    
+    if (!plotlyChart) return;
+    
+    const layout = {
+        paper_bgcolor: isDarkTheme ? '#212529' : '#ffffff',
+        plot_bgcolor: isDarkTheme ? '#2a2e32' : '#f8f9fa',
+        font: {
+            color: isDarkTheme ? '#e9ecef' : '#212529'
+        }
+    };
+    
+    Plotly.relayout(elements.equityChart, layout);
+    if (elements.depthChart) {
+        Plotly.relayout(elements.depthChart, layout);
+    }
+}
+
+// Update the plotly chart with new candle data
+function updatePlotlyChart(data) {
+    if (!data || data.length === 0) return;
+    
+    // Implement chart update logic here
+    // This is a placeholder - the actual implementation would depend on your specific requirements
+    console.log('Updating plotly chart with', data.length, 'candles');
+}
+
+// Connect to Binance API with provided keys
+function connectToApi(key, secret, remember) {
+    console.log('Connecting to Binance API...');
+    
+    // Set API keys
+    apiKey = key;
+    apiSecret = secret;
+    
+    // Save API keys if remember is checked
+    if (remember) {
+        localStorage.setItem(API_KEY_STORAGE, key);
+        localStorage.setItem(API_SECRET_STORAGE, secret);
+    }
+    
+    // Test API connection
+    testApiConnection()
+        .then(isValid => {
+            if (isValid) {
+                elements.loginModal.hide();
+                updateApiStatus(true);
+                fetchInitialData();
+                logMessage('Connected to Binance API successfully.', 'success');
+                showAlert('Connected to Binance API successfully.', 'success');
+            } else {
+                updateApiStatus(false);
+                logMessage('Failed to connect to Binance API. Invalid API keys.', 'error');
+                showAlert('Failed to connect to Binance API. Please check your API keys.', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error connecting to Binance API:', error);
+            updateApiStatus(false);
+            logMessage(`Failed to connect to Binance API: ${error.message}`, 'error');
+            showAlert('Failed to connect to Binance API. Please check your connection.', 'danger');
+        });
+}
+
+// Test if API connection is valid
+async function testApiConnection() {
+    try {
+        // Ping Binance API
+        const response = await fetch(`${API_URL}/api/v3/ping`);
+        return response.ok;
+    } catch (error) {
+        console.error('Error testing API connection:', error);
+        return false;
+    }
+}
+
+// Handle username/password login
+function handleLogin(username, password) {
+    console.log(`Attempting login for user: ${username}`);
+    
+    // For demo purposes, accept "demo" / "demo" for paper trading
+    if (username === 'demo' && password === 'demo') {
+        elements.loginModal.hide();
+        initializePaperTrading(username);
+        return;
+    }
+    
+    // For regular login, you would connect to your authentication service here
+    // This is just a placeholder
+    if (username === 'gelimorto2' && password === 'password') {
+        elements.loginModal.hide();
+        
+        // If paper trading is selected, initialize paper trading
+        if (elements.tradingModeSwitch.checked) {
+            initializePaperTrading(username);
+        } else {
+            // Otherwise, prompt for API keys
+            elements.apiKeyInputs.style.display = 'block';
+            elements.standardLoginForm.style.display = 'none';
+            document.getElementById('manualKeyText').textContent = 'Use Standard Login';
+            showAlert('Please enter your Binance API keys to continue.', 'info');
+        }
+    } else {
+        showAlert('Invalid username or password.', 'danger');
+    }
+}
+
+// Update API status indicators
+function updateApiStatus(isConnected, isPaper = false) {
+    if (elements.apiStatusBadge) {
+        if (isConnected) {
+            elements.apiStatusBadge.className = 'badge bg-success me-2';
+            elements.apiStatusBadge.textContent = isPaper ? 'Paper Trading' : 'Connected';
+        } else {
+            elements.apiStatusBadge.className = 'badge bg-danger me-2';
+            elements.apiStatusBadge.textContent = 'Disconnected';
+        }
+    }
+    
+    if (elements.apiKeyMasked) {
+        if (isPaper) {
+            elements.apiKeyMasked.textContent = 'Paper Trading (No API Key needed)';
+        } else if (apiKey) {
+            const maskedKey = apiKey.substring(0, 4) + '••••••••' + apiKey.substring(apiKey.length - 4);
+            elements.apiKeyMasked.textContent = maskedKey;
+        } else {
+            elements.apiKeyMasked.textContent = 'No API Key';
+        }
+    }
+}
+
+// Fetch initial market data
+async function fetchInitialData() {
+    console.log('Fetching initial market data...');
+    
+    // Show loading indicator
+    if (elements.loadingIndicator) {
+        elements.loadingIndicator.style.display = 'flex';
+    }
+    
+    const symbol = elements.symbolSelect.value;
+    const timeframe = elements.timeframeSelect.value;
+    
+    try {
+        // Fetch candle data from Binance API
+        const response = await fetch(`${API_URL}/api/v3/klines?symbol=${symbol}&interval=${timeframe}&limit=100`);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch candle data: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Parse candle data
+        candleData = data.map(candle => ({
+            time: candle[0] / 1000,
+            open: parseFloat(candle[1]),
+            high: parseFloat(candle[2]),
+            low: parseFloat(candle[3]),
+            close: parseFloat(candle[4]),
+            volume: parseFloat(candle[5]),
+        }));
+        
+        // Set current price from latest candle
+        currentPrice = candleData[candleData.length - 1].close;
+        
+        // Update market data display
+        updateMarketData(symbol, currentPrice);
+        
+        // Initialize chart with fetched data
+        initializeChart(candleData);
+        
+        logMessage(`Fetched ${candleData.length} candles for ${symbol} ${timeframe}`, 'success');
+    } catch (error) {
+        console.error('Error fetching initial data:', error);
+        logMessage(`Failed to fetch initial data: ${error.message}`, 'error');
+        showAlert('Failed to fetch market data. Please try again.', 'danger');
+    } finally {
+        // Hide loading indicator
+        if (elements.loadingIndicator) {
+            elements.loadingIndicator.style.display = 'none';
+        }
+    }
+}
+
+// Update market data display
+function updateMarketData(symbol, price) {
+    if (!elements.marketPrice) return;
+    
+    // Format price based on symbol
+    const formattedPrice = formatPrice(price, symbol);
+    elements.marketPrice.textContent = formattedPrice;
+    
+    // You would fetch 24h change and volume from an API call in a real implementation
+    // This is a placeholder
+    elements.marketChange.textContent = '0.00%';
+    elements.marketVolume.textContent = '$0';
+    
+    // Update document title with current price
+    document.title = `${formattedPrice} | ${symbol} | Trading Bot`;
+}
+
+// Format price based on symbol (add appropriate decimal places)
+function formatPrice(price, symbol) {
+    // More decimal places for lower value assets
+    if (symbol.includes('BTC')) {
+        return `$${price.toFixed(2)}`;
+    } else if (symbol.includes('ETH')) {
+        return `$${price.toFixed(2)}`;
+    } else {
+        return `$${price.toFixed(4)}`;
+    }
+}
+
+// Initialize trading chart with data
+function initializeChart(data) {
+    if (!elements.tradingViewChart) return;
+    
+    // Clear previous chart
+    elements.tradingViewChart.innerHTML = '';
+    
+    // Create a new chart
+    const chart = LightweightCharts.createChart(elements.tradingViewChart, {
+        width: elements.tradingViewChart.clientWidth,
+        height: 500,
+        layout: {
+            backgroundColor: '#1e222d',
+            textColor: '#d1d4dc',
+        },
+        grid: {
+            vertLines: {
+                color: 'rgba(42, 46, 57, 0.5)',
+            },
+            horzLines: {
+                color: 'rgba(42, 46, 57, 0.5)',
+            },
+        },
+        crosshair: {
+            mode: LightweightCharts.CrosshairMode.Normal,
+        },
+        rightPriceScale: {
+            borderColor: 'rgba(197, 203, 206, 0.8)',
+        },
+        timeScale: {
+            borderColor: 'rgba(197, 203, 206, 0.8)',
+        },
+    });
+    
+    // Create a candlestick series
+    const candleSeries = chart.addCandlestickSeries({
+        upColor: '#4CAF50',
+        downColor: '#F44336',
+        borderDownColor: '#F44336',
+        borderUpColor: '#4CAF50',
+        wickDownColor: '#F44336',
+        wickUpColor: '#4CAF50',
+    });
+    
+    // Set data
+    candleSeries.setData(data);
+    
+    // Save chart instance for later updates
+    chartInstance = chart;
+    
+    // Handle window resize
+    window.addEventListener('resize', () => {
+        if (chartInstance) {
+            chartInstance.resize(elements.tradingViewChart.clientWidth, 500);
+        }
+    });
+}
+
+// Start trading
+function startTrading() {
+    if (isTrading) {
+        showAlert('Trading is already active.', 'info');
+        return;
+    }
+    
+    console.log('Starting trading...');
+    
+    // Confirm if in live trading mode
+    if (!isPaperTrading) {
+        if (!confirm('⚠️ WARNING: You are about to start LIVE trading with real funds. Are you sure you want to continue?')) {
+            return;
+        }
+    }
+    
+    // Initialize trading variables
+    isTrading = true;
+    updateBotStatus(true);
+    
+    // Enable/disable buttons
+    if (elements.startTradingBtn) elements.startTradingBtn.disabled = true;
+    if (elements.stopTradingBtn) elements.stopTradingBtn.disabled = false;
+    if (elements.emergencySellBtn) elements.emergencySellBtn.disabled = false;
+    
+    // Disable strategy parameters during trading
+    if (elements.symbolSelect) elements.symbolSelect.disabled = true;
+    if (elements.timeframeSelect) elements.timeframeSelect.disabled = true;
+    if (elements.atrLength) elements.atrLength.disabled = true;
+    if (elements.atrMult) elements.atrMult.disabled = true;
+    
+    // Connect to WebSocket for real-time data
+    connectToWebSocket();
+    
+    // Start periodic session saves
+    startSessionSaves();
+    
+    logMessage('Trading started.', 'success');
+    showAlert(`Trading started on ${elements.symbolSelect.value} ${elements.timeframeSelect.value}`, 'success');
+}
+
+// Connect to WebSocket for real-time data
+function connectToWebSocket() {
+    const symbol = elements.symbolSelect.value.toLowerCase();
+    const wsUrl = `wss://stream.binance.com:9443/ws/${symbol}@kline_${elements.timeframeSelect.value}`;
+    
+    console.log(`Connecting to WebSocket: ${wsUrl}`);
+    
+    // Close existing connection if any
+    if (websocket) {
+        websocket.close();
+    }
+    
+    // Create new WebSocket connection
+    websocket = new WebSocket(wsUrl);
+    
+    // Set up event handlers
+    websocket.onopen = () => {
+        console.log('WebSocket connected');
+        logMessage('WebSocket connected.', 'success');
+        
+        // Start ping interval to keep connection alive
+        pingInterval = setInterval(() => {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                const startTime = Date.now();
+                fetch(`${API_URL}/api/v3/ping`)
+                    .then(() => {
+                        apiPingLatency = Date.now() - startTime;
+                        if (elements.statPing) {
+                            elements.statPing.textContent = `${apiPingLatency}ms`;
+                        }
+                    })
+                    .catch(err => console.error('Ping error:', err));
+            }
+        }, 10000);
+    };
+    
+    websocket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        // Update last tick info
+        if (elements.lastTickInfo) {
+            elements.lastTickInfo.textContent = `Last check: ${formatTime(new Date())}`;
+        }
+        
+        // Process kline data
+        if (data.k) {
+            const candle = {
+                time: data.k.t / 1000,
+                open: parseFloat(data.k.o),
+                high: parseFloat(data.k.h),
+                low: parseFloat(data.k.l),
+                close: parseFloat(data.k.c),
+                volume: parseFloat(data.k.v)
+            };
+            
+            // Update current price
+            currentPrice = candle.close;
+            
+            // Update UI with new price
+            updatePrice(currentPrice);
+            
+            // Update chart
+            updateChart(candle);
+            
+            // Check for trade signals
+            checkSignals(candle);
+            
+            // Update position if exists
+            updatePosition();
+        }
+    };
+    
+    websocket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        logMessage('WebSocket error occurred.', 'error');
+    };
+    
+    websocket.onclose = () => {
+        console.log('WebSocket closed');
+        logMessage('WebSocket connection closed.', 'warning');
+        
+        // Clear ping interval
+        if (pingInterval) {
+            clearInterval(pingInterval);
+            pingInterval = null;
+        }
+        
+        // Reconnect if trading is still active
+        if (isTrading) {
+            logMessage('Attempting to reconnect WebSocket...', 'info');
+            setTimeout(connectToWebSocket, 1000);
+        }
+    };
+}
+
+// ... [previous code remains the same]
+
+// Update price in UI
+function updatePrice(price) {
+    const symbol = elements.symbolSelect.value;
+    const formattedPrice = formatPrice(price, symbol);
+    
+    if (elements.marketPrice) {
+        elements.marketPrice.textContent = formattedPrice;
+    }
+    
+    // Update document title
+    document.title = `${formattedPrice} | ${symbol} | Trading Bot`;
+    
+    // Update position card if we have an open position
+    if (currentPosition) {
+        updatePositionCard();
+    }
+}
+
+// Update chart with new candle data
+function updateChart(candle) {
+    if (!chartInstance) return;
+    
+    // Add new candle to chart
+    chartInstance.update({
+        time: candle.time,
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close
+    });
+}
+
+// Check for trading signals
+function checkSignals(candle) {
+    // Don't check signals if auto-trade is disabled
+    const autoTradeToggle = document.getElementById('auto-trade-toggle');
+    if (autoTradeToggle && !autoTradeToggle.checked) {
+        return;
+    }
+    
+    // Get strategy parameters
+    const atrLength = parseInt(elements.atrLength.value, 10);
+    const atrMult = parseFloat(elements.atrMult.value);
+    
+    // Calculate ATR-based volatility
+    const atr = calculateATR(atrLength);
+    
+    // Buy signal (uptrend detection)
+    if (!currentPosition && candleData.length > atrLength + 5) {
+        const signal = detectBuySignal(candle, atr, atrMult);
+        
+        if (signal) {
+            openLongPosition(candle.close, atr);
+        }
+    }
+    
+    // Sell signal (downtrend detection)
+    if (currentPosition && currentPosition.type === 'long') {
+        const exitSignal = detectSellSignal(candle, atr, atrMult);
+        
+        if (exitSignal) {
+            closePosition();
+        }
+    }
+}
+
+// Calculate Average True Range (ATR)
+function calculateATR(length) {
+    if (candleData.length < length + 1) {
+        return 0;
+    }
+    
+    let sum = 0;
+    
+    for (let i = candleData.length - length; i < candleData.length; i++) {
+        const high = candleData[i].high;
+        const low = candleData[i].low;
+        const prevClose = i > 0 ? candleData[i - 1].close : candleData[i].open;
+        
+        // True Range is the greatest of:
+        // 1. Current High - Current Low
+        // 2. |Current High - Previous Close|
+        // 3. |Current Low - Previous Close|
+        const tr = Math.max(
+            high - low,
+            Math.abs(high - prevClose),
+            Math.abs(low - prevClose)
+        );
+        
+        sum += tr;
+    }
+    
+    return sum / length;
+}
+
+// Detect buy signal based on Volatility strategy
+function detectBuySignal(candle, atr, atrMult) {
+    if (candleData.length < 10) return false;
+    
+    // Simple moving average
+    const sma5 = calculateSMA(5);
+    const sma10 = calculateSMA(10);
+    
+    // Trend condition: 5-period SMA above 10-period SMA
+    const uptrend = sma5 > sma10;
+    
+    // Volatility condition: Current candle range > ATR * multiplier
+    const volatilityBreakout = (candle.high - candle.low) > (atr * atrMult);
+    
+    // Volume condition: Current volume > average volume
+    const avgVolume = calculateAverageVolume(10);
+    const volumeIncrease = candle.volume > (avgVolume * 1.5);
+    
+    // Return buy signal if all conditions are met
+    return uptrend && volatilityBreakout && volumeIncrease;
+}
+
+// Detect sell signal based on Volatility strategy
+function detectSellSignal(candle, atr, atrMult) {
+    if (!currentPosition || candleData.length < 10) return false;
+    
+    // Simple moving average
+    const sma5 = calculateSMA(5);
+    const sma10 = calculateSMA(10);
+    
+    // Trend condition: 5-period SMA below 10-period SMA
+    const downtrend = sma5 < sma10;
+    
+    // Take profit condition
+    const takeProfitPercent = document.getElementById('take-profit-value') ? 
+        parseFloat(document.getElementById('take-profit-value').value) / 100 : 0.03;
+    const takeProfitPrice = currentPosition.entryPrice * (1 + takeProfitPercent);
+    const takeProfitHit = candle.high >= takeProfitPrice;
+    
+    // Stop loss condition
+    const stopLossPercent = document.getElementById('stop-loss-value') ? 
+        parseFloat(document.getElementById('stop-loss-value').value) / 100 : 0.02;
+    const stopLossPrice = currentPosition.entryPrice * (1 - stopLossPercent);
+    const stopLossHit = candle.low <= stopLossPrice;
+    
+    // Return sell signal if downtrend or take profit/stop loss hit
+    return downtrend || takeProfitHit || stopLossHit;
+}
+
+// Calculate Simple Moving Average (SMA)
+function calculateSMA(length) {
+    if (candleData.length < length) {
+        return 0;
+    }
+    
+    let sum = 0;
+    
+    for (let i = candleData.length - length; i < candleData.length; i++) {
+        sum += candleData[i].close;
+    }
+    
+    return sum / length;
+}
+
+// Calculate Average Volume
+function calculateAverageVolume(length) {
+    if (candleData.length < length) {
+        return 0;
+    }
+    
+    let sum = 0;
+    
+    for (let i = candleData.length - length; i < candleData.length; i++) {
+        sum += candleData[i].volume;
+    }
+    
+    return sum / length;
+}
+
+// Open a long position
+function openLongPosition(price, atr) {
+    console.log('Opening long position at', price);
+    
+    // Calculate position size
+    const accountBalanceValue = parseFloat(elements.accountBalance.value);
+    const positionSizePercent = parseFloat(elements.positionSize.value) / 100;
+    const positionValue = accountBalanceValue * positionSizePercent;
+    const positionSize = positionValue / price;
+    
+    // Calculate take profit and stop loss
+    const takeProfitPercent = document.getElementById('take-profit-value') ? 
+        parseFloat(document.getElementById('take-profit-value').value) / 100 : 0.03;
+    const stopLossPercent = document.getElementById('stop-loss-value') ? 
+        parseFloat(document.getElementById('stop-loss-value').value) / 100 : 0.02;
+    
+    const takeProfitPrice = price * (1 + takeProfitPercent);
+    const stopLossPrice = price * (1 - stopLossPercent);
+    
+    // Create position object
+    currentPosition = {
+        type: 'long',
+        entryPrice: price,
+        size: positionSize,
+        value: positionValue,
+        entryTime: new Date(),
+        takeProfitPrice,
+        stopLossPrice,
+    };
+    
+    // Update position card
+    updatePositionCard();
+    
+    // Show position card
+    if (elements.positionCard) {
+        elements.positionCard.style.display = 'block';
+    }
+    
+    // Log the trade
+    logMessage(`OPENED LONG position: ${positionSize.toFixed(8)} ${elements.symbolSelect.value} at $${price.toFixed(2)}`, 'success');
+    
+    // Send notification
+    const message = {
+        title: "New Trade: Long Position Opened",
+        content: `Opened LONG position: ${positionSize.toFixed(8)} ${elements.symbolSelect.value} at $${price.toFixed(2)}`,
+        type: "success"
+    };
+    
+    sendAlerts(message);
+}
+
+// Close the current position
+function closePosition() {
+    if (!currentPosition) return;
+    
+    console.log('Closing position');
+    
+    const exitPrice = currentPrice;
+    const profitLoss = currentPosition.type === 'long' 
+        ? (exitPrice - currentPosition.entryPrice) * currentPosition.size
+        : (currentPosition.entryPrice - exitPrice) * currentPosition.size;
+    
+    const profitLossPercent = (profitLoss / currentPosition.value) * 100;
+    
+    // Create trade history entry
+    const trade = {
+        entryTime: currentPosition.entryTime,
+        exitTime: new Date(),
+        type: currentPosition.type,
+        entryPrice: currentPosition.entryPrice,
+        exitPrice: exitPrice,
+        size: currentPosition.size,
+        profitLoss: profitLoss,
+        profitLossPercent: profitLossPercent,
+    };
+    
+    // Add to trade history
+    tradeHistory.push(trade);
+    
+    // Update trade history table
+    updateTradeHistory();
+    
+    // Update equity history
+    const balance = parseFloat(elements.accountBalance.value) + profitLoss;
+    elements.accountBalance.value = balance.toFixed(2);
+    
+    if (elements.currentBalance) {
+        elements.currentBalance.textContent = `$${formatNumber(balance)}`;
+    }
+    
+    equityHistory.push({
+        time: Math.floor(Date.now() / 1000),
+        value: balance,
+    });
+    
+    // Update equity chart
+    updateEquityChart(equityHistory);
+    
+    // Update statistics
+    updateStatistics();
+    
+    // Hide position card
+    if (elements.positionCard) {
+        elements.positionCard.style.display = 'none';
+    }
+    
+    // Reset current position
+    currentPosition = null;
+    
+    // Log the trade
+    const profitLossStr = profitLoss >= 0 
+        ? `+$${profitLoss.toFixed(2)} (+${profitLossPercent.toFixed(2)}%)`
+        : `-$${Math.abs(profitLoss).toFixed(2)} (${profitLossPercent.toFixed(2)}%)`;
+    
+    logMessage(`CLOSED ${trade.type.toUpperCase()} position: ${profitLossStr}`, profitLoss >= 0 ? 'success' : 'error');
+    
+    // Send notification
+    const message = {
+        title: `Trade Closed: ${profitLoss >= 0 ? 'Profit' : 'Loss'}`,
+        content: `Closed ${trade.type.toUpperCase()} position: ${profitLossStr}`,
+        type: profitLoss >= 0 ? 'success' : 'warning'
+    };
+    
+    sendAlerts(message);
+}
+
+// Update position card with current position details
+function updatePositionCard() {
+    if (!currentPosition || !elements.positionCard) return;
+    
+    // Calculate unrealized P&L
+    const unrealizedPL = currentPosition.type === 'long'
+        ? (currentPrice - currentPosition.entryPrice) * currentPosition.size
+        : (currentPosition.entryPrice - currentPrice) * currentPosition.size;
+    
+    const unrealizedPLPercent = (unrealizedPL / currentPosition.value) * 100;
+    
+    // Update UI elements
+    elements.positionType.textContent = currentPosition.type.toUpperCase();
+    elements.positionType.className = currentPosition.type === 'long' ? 'metric-value positive' : 'metric-value negative';
+    
+    elements.positionEntryPrice.textContent = `$${currentPosition.entryPrice.toFixed(2)}`;
+    elements.positionCurrentPrice.textContent = `$${currentPrice.toFixed(2)}`;
+    
+    const plClass = unrealizedPL >= 0 ? 'metric-value positive' : 'metric-value negative';
+    elements.positionPnl.className = plClass;
+    elements.positionPnl.textContent = `${unrealizedPL >= 0 ? '+' : ''}$${unrealizedPL.toFixed(2)} (${unrealizedPLPercent.toFixed(2)}%)`;
+    
+    elements.positionEntryTime.textContent = currentPosition.entryTime.toLocaleString();
+    elements.positionSizeInfo.textContent = currentPosition.size.toFixed(8);
+    elements.positionTp.textContent = `$${currentPosition.takeProfitPrice.toFixed(2)}`;
+    elements.positionSl.textContent = `$${currentPosition.stopLossPrice.toFixed(2)}`;
+}
+
+// Update position with current price data
+function updatePosition() {
+    if (!currentPosition) return;
+    
+    // Update position card with current price
+    updatePositionCard();
+    
+    // Check if we hit take profit or stop loss
+    if (currentPosition.type === 'long') {
+        // Check take profit
+        if (currentPrice >= currentPosition.takeProfitPrice) {
+            logMessage('Take profit level reached.', 'success');
+            closePosition();
+            return;
+        }
+        
+        // Check stop loss
+        if (currentPrice <= currentPosition.stopLossPrice) {
+            logMessage('Stop loss level reached.', 'warning');
+            closePosition();
+            return;
+        }
+    } else if (currentPosition.type === 'short') {
+        // Check take profit
+        if (currentPrice <= currentPosition.takeProfitPrice) {
+            logMessage('Take profit level reached.', 'success');
+            closePosition();
+            return;
+        }
+        
+        // Check stop loss
+        if (currentPrice >= currentPosition.stopLossPrice) {
+            logMessage('Stop loss level reached.', 'warning');
+            closePosition();
+            return;
+        }
+    }
+}
+
+// Update trade history table
+function updateTradeHistory() {
+    if (!elements.tradeHistory) return;
+    
+    // Clear existing rows
+    elements.tradeHistory.innerHTML = '';
+    
+    // Add rows for each trade
+    tradeHistory.forEach((trade, index) => {
+        const row = document.createElement('tr');
+        
+        // Format dates
+        const entryDate = new Date(trade.entryTime);
+        const exitDate = new Date(trade.exitTime);
+        
+        // Determine profit/loss class
+        const plClass = trade.profitLoss >= 0 ? 'positive' : 'negative';
+        
+        row.innerHTML = `
+            <td>${tradeHistory.length - index}</td>
+            <td>${entryDate.toLocaleString()}</td>
+            <td>${exitDate.toLocaleString()}</td>
+            <td class="${trade.type === 'long' ? 'positive' : 'negative'}">${trade.type.toUpperCase()}</td>
+            <td>$${trade.entryPrice.toFixed(2)}</td>
+            <td>$${trade.exitPrice.toFixed(2)}</td>
+            <td>${trade.size.toFixed(8)}</td>
+            <td class="${plClass}">${trade.profitLoss >= 0 ? '+' : ''}$${trade.profitLoss.toFixed(2)}</td>
+            <td class="${plClass}">${trade.profitLoss >= 0 ? '+' : ''}${trade.profitLossPercent.toFixed(2)}%</td>
+        `;
+        
+        elements.tradeHistory.appendChild(row);
+    });
+    
+    // Update daily trades count
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const todayTrades = tradeHistory.filter(trade => new Date(trade.exitTime) >= today);
+    
+    if (elements.statDailyTrades) {
+        elements.statDailyTrades.textContent = todayTrades.length;
+    }
+    
+    // Update daily P&L
+    const dailyPL = todayTrades.reduce((sum, trade) => sum + trade.profitLoss, 0);
+    
+    if (elements.statDailyPnl) {
+        elements.statDailyPnl.textContent = dailyPL >= 0 
+            ? `+$${dailyPL.toFixed(2)}`
+            : `-$${Math.abs(dailyPL).toFixed(2)}`;
+        
+        elements.statDailyPnl.className = dailyPL >= 0 ? 'stat-value positive' : 'stat-value negative';
+    }
+}
+
+// Update statistics display
+function updateStatistics() {
+    if (tradeHistory.length === 0) return;
+    
+    // Calculate statistics
+    const initialBalance = 10000; // Assuming initial balance of $10,000
+    const currentBalanceValue = parseFloat(elements.accountBalance.value);
+    
+    // Total return
+    const totalReturn = ((currentBalanceValue - initialBalance) / initialBalance) * 100;
+    const totalReturnDelta = currentBalanceValue - initialBalance;
+    
+    // Win rate
+    const winningTrades = tradeHistory.filter(trade => trade.profitLoss > 0);
+    const winRate = (winningTrades.length / tradeHistory.length) * 100;
+    
+    // Profit factor
+    const grossProfit = tradeHistory.reduce((sum, trade) => trade.profitLoss > 0 ? sum + trade.profitLoss : sum, 0);
+    const grossLoss = Math.abs(tradeHistory.reduce((sum, trade) => trade.profitLoss < 0 ? sum + trade.profitLoss : sum, 0));
+    const profitFactor = grossLoss === 0 ? grossProfit : grossProfit / grossLoss;
+    
+    // Average trade
+    const averageTrade = tradeHistory.reduce((sum, trade) => sum + trade.profitLoss, 0) / tradeHistory.length;
+    
+    // Max drawdown (simplified calculation)
+    let maxDrawdown = 0;
+    let peak = initialBalance;
+    
+    for (let i = 0; i < equityHistory.length; i++) {
+        const equity = equityHistory[i].value;
+        
+        if (equity > peak) {
+            peak = equity;
+        }
+        
+        const drawdown = ((peak - equity) / peak) * 100;
+        
+        if (drawdown > maxDrawdown) {
+            maxDrawdown = drawdown;
+        }
+    }
+    
+    // Max win and loss
+    const maxWin = Math.max(...tradeHistory.map(trade => trade.profitLoss));
+    const maxLoss = Math.min(...tradeHistory.map(trade => trade.profitLoss));
+    
+    // Update UI
+    if (elements.totalReturn) {
+        elements.totalReturn.textContent = `${totalReturn >= 0 ? '+' : ''}${totalReturn.toFixed(2)}%`;
+        elements.totalReturn.className = totalReturn >= 0 ? 'metric-value positive' : 'metric-value negative';
+    }
+    
+    if (elements.totalReturnDelta) {
+        elements.totalReturnDelta.textContent = totalReturnDelta >= 0 
+            ? `+$${totalReturnDelta.toFixed(2)}`
+            : `-$${Math.abs(totalReturnDelta).toFixed(2)}`;
+    }
+    
+    if (elements.winRate) {
+        elements.winRate.textContent = `${winRate.toFixed(1)}%`;
+    }
+    
+    if (elements.winRateDelta) {
+        elements.winRateDelta.textContent = `${winningTrades.length}/${tradeHistory.length} trades`;
+    }
+    
+    if (elements.profitFactor) {
+        elements.profitFactor.textContent = profitFactor.toFixed(2);
+    }
+    
+    if (elements.profitFactorDelta) {
+        elements.profitFactorDelta.textContent = `Avg: ${averageTrade >= 0 ? '+' : ''}$${averageTrade.toFixed(2)}`;
+    }
+    
+    if (elements.maxDrawdown) {
+        elements.maxDrawdown.textContent = `${maxDrawdown.toFixed(2)}%`;
+    }
+    
+    if (elements.maxWin) {
+        elements.maxWin.textContent = `$${maxWin.toFixed(2)}`;
+    }
+    
+    if (elements.maxLoss) {
+        elements.maxLoss.textContent = `$${Math.abs(maxLoss).toFixed(2)}`;
+    }
+    
+    if (elements.totalTrades) {
+        elements.totalTrades.textContent = tradeHistory.length;
+    }
+}
+
+// Start periodic session saves
+function startSessionSaves() {
+    // Clear any existing interval
+    if (sessionSaveInterval) {
+        clearInterval(sessionSaveInterval);
+    }
+    
+    // Save session every 5 minutes
+    sessionSaveInterval = setInterval(() => {
+        if (tradeHistory.length > 0 || equityHistory.length > 0) {
+            saveCurrentSession();
+        }
+    }, 5 * 60 * 1000);
+}
+
+// Load saved session files for modal
+function loadSavedSessionFiles() {
+    if (!elements.sessionFilesList) return;
+    
+    // Clear existing files
+    elements.sessionFilesList.innerHTML = '';
+    
+    // Get all session files from localStorage
+    const sessions = Object.keys(localStorage)
+        .filter(key => key.startsWith(SESSION_STORAGE_PREFIX))
+        .map(key => {
+            const data = JSON.parse(localStorage.getItem(key));
+            return {
+                key,
+                timestamp: data.timestamp,
+                tradeCount: data.tradeHistory.length,
+                symbol: data.settings.symbol,
+            };
+        })
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    // Add files to modal
+    sessions.forEach(session => {
+        const fileDiv = document.createElement('div');
+        fileDiv.className = 'session-file';
+        fileDiv.setAttribute('data-key', session.key);
+        
+        fileDiv.innerHTML = `
+            <div>
+                <strong>${session.symbol}</strong> - ${new Date(session.timestamp).toLocaleString()}
+                <div class="small text-muted">Trades: ${session.tradeCount}</div>
+            </div>
+            <button class="btn btn-sm btn-outline-danger delete-session">
+                <i class="bi bi-trash"></i>
+            </button>
+        `;
+        
+        elements.sessionFilesList.appendChild(fileDiv);
+        
+        // Add click handler to load session
+        fileDiv.addEventListener('click', (e) => {
+            if (e.target.closest('.delete-session')) {
+                // Delete session
+                if (confirm('Are you sure you want to delete this session?')) {
+                    localStorage.removeItem(session.key);
+                    loadSavedSessionFiles();
+                }
+                return;
+            }
+            
+            // Load session
+            loadSession(session.key);
+            elements.loadSessionModal.hide();
+        });
+    });
+    
+    // Show message if no sessions found
+    if (sessions.length === 0) {
+        elements.sessionFilesList.innerHTML = '<div class="text-center p-3">No saved sessions found.</div>';
+    }
+}
+
 // Finalize initialization
 function finalizeInitialization() {
     console.log('Trading bot initialized successfully.');
     logMessage('Bot is ready to start trading.', 'success');
+}
+
+// Service worker for offline support
+function registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(registration => {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                })
+                .catch(err => {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+        });
+    }
 }
 
 // Call this to finalize initialization after setup
