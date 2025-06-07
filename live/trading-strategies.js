@@ -1,462 +1,351 @@
 /**
  * Trading Strategies for Binance Trading Bot
- * This module contains implementations of different trading strategies
- * including the original strategy from the paper trading bot
+ * This module contains various trading strategies
  */
 
-// Original Strategy Implementation
-function executeOriginalStrategy(params, data) {
-    if (!params || !data || data.length < params.longPeriod + params.signalPeriod) {
-        return null;
-    }
-    
-    // Extract closing prices
-    const closes = data.map(candle => parseFloat(candle.close));
-    
-    // Calculate EMAs for MACD
-    const shortEMA = calculateEMA(closes, params.shortPeriod);
-    const longEMA = calculateEMA(closes, params.longPeriod);
-    
-    // Calculate MACD line
-    const macdLine = [];
-    for (let i = 0; i < closes.length; i++) {
-        if (i >= params.longPeriod - 1) {
-            const macdValue = shortEMA[i - (params.longPeriod - params.shortPeriod)] - longEMA[i];
-            macdLine.push(macdValue);
-        } else {
-            macdLine.push(null);
+class TradingStrategies {
+    /**
+     * Calculate MACD (Moving Average Convergence Divergence)
+     * @param {Array} candles - Candlestick data
+     * @param {Object} params - MACD parameters
+     * @returns {Object} - MACD values and signal
+     */
+    static macd(candles, params = {}) {
+        const { fastPeriod = 12, slowPeriod = 26, signalPeriod = 9 } = params;
+        
+        if (candles.length < slowPeriod + signalPeriod) {
+            return { values: [], signal: null };
         }
-    }
-    
-    // Calculate signal line (EMA of MACD line)
-    const validMacdValues = macdLine.filter(val => val !== null);
-    const signalLine = calculateEMA(validMacdValues, params.signalPeriod);
-    
-    // Check for signals
-    const currentCandle = data[data.length - 1];
-    const currentPrice = parseFloat(currentCandle.close);
-    
-    // Get the last two MACD and signal values for comparison
-    const macdHistoryLength = macdLine.filter(val => val !== null).length;
-    const signalHistoryLength = signalLine.length;
-    
-    if (macdHistoryLength < 2 || signalHistoryLength < 2) {
-        return null;
-    }
-    
-    const currentMACD = validMacdValues[macdHistoryLength - 1];
-    const previousMACD = validMacdValues[macdHistoryLength - 2];
-    const currentSignal = signalLine[signalHistoryLength - 1];
-    const previousSignal = signalLine[signalHistoryLength - 2];
-    
-    // MACD crosses above signal line (bullish)
-    if (previousMACD <= previousSignal && currentMACD > currentSignal) {
-        return {
-            action: 'BUY',
-            price: currentPrice,
-            reason: 'MACD crossed above signal line'
-        };
-    }
-    
-    // MACD crosses below signal line (bearish)
-    if (previousMACD >= previousSignal && currentMACD < currentSignal) {
-        return {
-            action: 'SELL',
-            price: currentPrice,
-            reason: 'MACD crossed below signal line'
-        };
-    }
-    
-    // Check for overbought/oversold conditions
-    const histogram = currentMACD - currentSignal;
-    
-    // Oversold and turning up
-    if (histogram < params.oversold && histogram > (previousMACD - previousSignal)) {
-        return {
-            action: 'BUY',
-            price: currentPrice,
-            reason: 'MACD histogram oversold and turning up'
-        };
-    }
-    
-    // Overbought and turning down
-    if (histogram > params.overbought && histogram < (previousMACD - previousSignal)) {
-        return {
-            action: 'SELL',
-            price: currentPrice,
-            reason: 'MACD histogram overbought and turning down'
-        };
-    }
-    
-    // No signal
-    return null;
-}
-
-// MACD Strategy Implementation
-function executeMACDStrategy(params, data) {
-    if (!params || !data || data.length < params.slowPeriod + params.signalPeriod) {
-        return null;
-    }
-    
-    // Calculate MACD indicator
-    const macdData = calculateMACD(data, params.fastPeriod, params.slowPeriod, params.signalPeriod);
-    
-    // Check for signals
-    const currentCandle = data[data.length - 1];
-    const currentPrice = parseFloat(currentCandle.close);
-    const currentMACD = macdData[macdData.length - 1];
-    const previousMACD = macdData[macdData.length - 2];
-    
-    // No signal if we don't have enough data
-    if (!currentMACD || !previousMACD) {
-        return null;
-    }
-    
-    // MACD crosses above signal line (bullish)
-    if (previousMACD.macd <= previousMACD.signal && currentMACD.macd > currentMACD.signal) {
-        return {
-            action: 'BUY',
-            price: currentPrice,
-            reason: 'MACD crossed above signal line'
-        };
-    }
-    
-    // MACD crosses below signal line (bearish)
-    if (previousMACD.macd >= previousMACD.signal && currentMACD.macd < currentMACD.signal) {
-        return {
-            action: 'SELL',
-            price: currentPrice,
-            reason: 'MACD crossed below signal line'
-        };
-    }
-    
-    // No signal
-    return null;
-}
-
-// RSI Strategy Implementation
-function executeRSIStrategy(params, data) {
-    if (!params || !data || data.length < params.period + 1) {
-        return null;
-    }
-    
-    // Calculate RSI indicator
-    const rsiData = calculateRSI(data, params.period);
-    
-    // Check for signals
-    const currentCandle = data[data.length - 1];
-    const currentPrice = parseFloat(currentCandle.close);
-    const currentRSI = rsiData[rsiData.length - 1];
-    const previousRSI = rsiData[rsiData.length - 2];
-    
-    // No signal if we don't have enough data
-    if (!currentRSI || !previousRSI) {
-        return null;
-    }
-    
-    // RSI crosses above oversold level (bullish)
-    if (previousRSI < params.oversold && currentRSI >= params.oversold) {
-        return {
-            action: 'BUY',
-            price: currentPrice,
-            reason: `RSI crossed above oversold level (${params.oversold})`
-        };
-    }
-    
-    // RSI crosses below overbought level (bearish)
-    if (previousRSI > params.overbought && currentRSI <= params.overbought) {
-        return {
-            action: 'SELL',
-            price: currentPrice,
-            reason: `RSI crossed below overbought level (${params.overbought})`
-        };
-    }
-    
-    // No signal
-    return null;
-}
-
-// Bollinger Bands Strategy Implementation
-function executeBollingerBandsStrategy(params, data) {
-    if (!params || !data || data.length < params.period) {
-        return null;
-    }
-    
-    // Calculate Bollinger Bands indicator
-    const bbData = calculateBollingerBands(data, params.period, params.stdDev);
-    
-    // Check for signals
-    const currentCandle = data[data.length - 1];
-    const previousCandle = data[data.length - 2];
-    const currentPrice = parseFloat(currentCandle.close);
-    const previousPrice = parseFloat(previousCandle.close);
-    const currentBB = bbData[bbData.length - 1];
-    
-    // No signal if we don't have enough data
-    if (!currentBB) {
-        return null;
-    }
-    
-    // Price crosses above lower band (bullish)
-    if (previousPrice < bbData[bbData.length - 2].lower && currentPrice >= currentBB.lower) {
-        return {
-            action: 'BUY',
-            price: currentPrice,
-            reason: 'Price crossed above lower Bollinger Band'
-        };
-    }
-    
-    // Price crosses below upper band (bearish)
-    if (previousPrice > bbData[bbData.length - 2].upper && currentPrice <= currentBB.upper) {
-        return {
-            action: 'SELL',
-            price: currentPrice,
-            reason: 'Price crossed below upper Bollinger Band'
-        };
-    }
-    
-    // No signal
-    return null;
-}
-
-// Strategy router function
-function executeStrategy(strategy, params, data) {
-    switch (strategy) {
-        case 'original':
-            return executeOriginalStrategy(params, data);
-        case 'macd':
-            return executeMACDStrategy(params, data);
-        case 'rsi':
-            return executeRSIStrategy(params, data);
-        case 'bb':
-            return executeBollingerBandsStrategy(params, data);
-        default:
-            return executeOriginalStrategy(params, data); // Default to original strategy
-    }
-}
-
-// Technical Indicator Calculations
-
-// Calculate MACD (Moving Average Convergence Divergence)
-function calculateMACD(data, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
-    // Extract closing prices
-    const closes = data.map(candle => parseFloat(candle.close));
-    
-    // Calculate EMAs
-    const fastEMA = calculateEMA(closes, fastPeriod);
-    const slowEMA = calculateEMA(closes, slowPeriod);
-    
-    // Calculate MACD line
-    const macdLine = [];
-    for (let i = 0; i < closes.length; i++) {
-        if (i >= slowPeriod - 1) {
-            macdLine.push(fastEMA[i - (slowPeriod - fastPeriod)] - slowEMA[i]);
-        } else {
-            macdLine.push(null);
+        
+        // Extract closing prices
+        const prices = candles.map(candle => parseFloat(candle.close));
+        
+        // Calculate EMAs
+        const fastEMA = this.calculateEMA(prices, fastPeriod);
+        const slowEMA = this.calculateEMA(prices, slowPeriod);
+        
+        // Calculate MACD line
+        const macdLine = [];
+        for (let i = 0; i < prices.length; i++) {
+            if (i < slowPeriod - 1) {
+                macdLine.push(null);
+            } else {
+                macdLine.push(fastEMA[i] - slowEMA[i]);
+            }
         }
-    }
-    
-    // Calculate signal line (EMA of MACD line)
-    const signalLine = calculateEMA(
-        macdLine.filter(val => val !== null), 
-        signalPeriod
-    );
-    
-    // Calculate histogram
-    const histogram = [];
-    let signalIdx = 0;
-    
-    // Combine results
-    const result = [];
-    for (let i = 0; i < macdLine.length; i++) {
-        if (macdLine[i] !== null && i >= slowPeriod + signalPeriod - 2) {
-            const hist = macdLine[i] - signalLine[signalIdx];
-            histogram.push(hist);
-            
-            result.push({
-                time: data[i].time,
-                macd: macdLine[i],
-                signal: signalLine[signalIdx],
-                histogram: hist
-            });
-            
-            signalIdx++;
-        } else {
-            result.push({
-                time: data[i].time,
-                macd: null,
-                signal: null,
-                histogram: null
-            });
+        
+        // Calculate signal line (EMA of MACD line)
+        const signalLine = this.calculateEMA(
+            macdLine.slice(slowPeriod - 1), 
+            signalPeriod
+        );
+        
+        // Add null values to match array lengths
+        const paddedSignalLine = Array(slowPeriod + signalPeriod - 2).fill(null).concat(signalLine);
+        
+        // Calculate histogram (MACD line - Signal line)
+        const histogram = [];
+        for (let i = 0; i < macdLine.length; i++) {
+            if (macdLine[i] === null || paddedSignalLine[i] === null) {
+                histogram.push(null);
+            } else {
+                histogram.push(macdLine[i] - paddedSignalLine[i]);
+            }
         }
-    }
-    
-    return result;
-}
-
-// Calculate RSI (Relative Strength Index)
-function calculateRSI(data, period = 14) {
-    // Extract closing prices
-    const closes = data.map(candle => parseFloat(candle.close));
-    
-    // Calculate price changes
-    const changes = [];
-    for (let i = 1; i < closes.length; i++) {
-        changes.push(closes[i] - closes[i - 1]);
-    }
-    
-    // Initialize arrays for gains and losses
-    const gains = [];
-    const losses = [];
-    
-    // Separate gains and losses
-    for (let i = 0; i < changes.length; i++) {
-        if (changes[i] >= 0) {
-            gains.push(changes[i]);
-            losses.push(0);
-        } else {
-            gains.push(0);
-            losses.push(Math.abs(changes[i]));
+        
+        // Generate trading signal
+        let signal = null;
+        const last = histogram.length - 1;
+        const secondLast = histogram.length - 2;
+        
+        if (histogram[last] !== null && histogram[secondLast] !== null) {
+            // Bullish crossover
+            if (histogram[secondLast] < 0 && histogram[last] > 0) {
+                signal = 'BUY';
+            }
+            // Bearish crossover
+            else if (histogram[secondLast] > 0 && histogram[last] < 0) {
+                signal = 'SELL';
+            }
         }
+        
+        return {
+            values: {
+                macdLine,
+                signalLine: paddedSignalLine,
+                histogram
+            },
+            signal
+        };
     }
     
-    // Calculate average gains and losses
-    let avgGain = 0;
-    let avgLoss = 0;
-    
-    // First average gain and loss
-    for (let i = 0; i < period; i++) {
-        avgGain += gains[i];
-        avgLoss += losses[i];
-    }
-    
-    avgGain /= period;
-    avgLoss /= period;
-    
-    // Calculate RS and RSI
-    const rsiData = [];
-    
-    // Add null values for the first period
-    for (let i = 0; i < period; i++) {
-        rsiData.push(null);
-    }
-    
-    // Calculate first RSI
-    let rs = avgGain / (avgLoss === 0 ? 0.001 : avgLoss); // Avoid division by zero
-    let rsi = 100 - (100 / (1 + rs));
-    rsiData.push(rsi);
-    
-    // Calculate remaining RSI values
-    for (let i = period; i < changes.length; i++) {
-        // Smooth averages
-        avgGain = ((avgGain * (period - 1)) + gains[i]) / period;
-        avgLoss = ((avgLoss * (period - 1)) + losses[i]) / period;
+    /**
+     * Calculate RSI (Relative Strength Index)
+     * @param {Array} candles - Candlestick data
+     * @param {Object} params - RSI parameters
+     * @returns {Object} - RSI values and signal
+     */
+    static rsi(candles, params = {}) {
+        const { period = 14, overbought = 70, oversold = 30 } = params;
+        
+        if (candles.length < period + 1) {
+            return { values: [], signal: null };
+        }
+        
+        // Extract closing prices
+        const prices = candles.map(candle => parseFloat(candle.close));
+        
+        // Calculate price changes
+        const changes = [];
+        for (let i = 1; i < prices.length; i++) {
+            changes.push(prices[i] - prices[i - 1]);
+        }
+        
+        // Calculate gains and losses
+        const gains = changes.map(change => change > 0 ? change : 0);
+        const losses = changes.map(change => change < 0 ? -change : 0);
+        
+        // Calculate average gains and losses
+        const avgGain = this.calculateSMA(gains, period);
+        const avgLoss = this.calculateSMA(losses, period);
         
         // Calculate RS and RSI
-        rs = avgGain / (avgLoss === 0 ? 0.001 : avgLoss);
-        rsi = 100 - (100 / (1 + rs));
+        const rs = [];
+        const rsi = [];
         
-        rsiData.push(rsi);
-    }
-    
-    // Combine with timestamps
-    const result = [];
-    for (let i = 0; i < rsiData.length; i++) {
-        result.push({
-            time: data[i].time,
-            rsi: rsiData[i]
-        });
-    }
-    
-    return result;
-}
-
-// Calculate Bollinger Bands
-function calculateBollingerBands(data, period = 20, stdDevMultiplier = 2) {
-    // Extract closing prices
-    const closes = data.map(candle => parseFloat(candle.close));
-    
-    // Calculate SMA
-    const sma = calculateSMA(closes, period);
-    
-    // Calculate Bollinger Bands
-    const bbData = [];
-    
-    // Add null values for the first period - 1
-    for (let i = 0; i < period - 1; i++) {
-        bbData.push({
-            time: data[i].time,
-            middle: null,
-            upper: null,
-            lower: null
-        });
-    }
-    
-    // Calculate bands for the rest of the data
-    for (let i = period - 1; i < closes.length; i++) {
-        // Get the subset of prices for this period
-        const periodPrices = closes.slice(i - period + 1, i + 1);
-        
-        // Calculate standard deviation
-        const mean = sma[i - period + 1];
-        let sumSquaredDiff = 0;
-        
-        for (let j = 0; j < periodPrices.length; j++) {
-            sumSquaredDiff += Math.pow(periodPrices[j] - mean, 2);
-        }
-        
-        const stdDev = Math.sqrt(sumSquaredDiff / period);
-        
-        // Calculate bands
-        bbData.push({
-            time: data[i].time,
-            middle: mean,
-            upper: mean + (stdDevMultiplier * stdDev),
-            lower: mean - (stdDevMultiplier * stdDev)
-        });
-    }
-    
-    return bbData;
-}
-
-// Calculate Simple Moving Average (SMA)
-function calculateSMA(data, period) {
-    const result = [];
-    
-    for (let i = 0; i < data.length; i++) {
-        if (i < period - 1) {
-            result.push(null);
-        } else {
-            let sum = 0;
-            for (let j = 0; j < period; j++) {
-                sum += data[i - j];
+        for (let i = 0; i < avgGain.length; i++) {
+            if (avgLoss[i] === 0) {
+                rs.push(100);
+                rsi.push(100);
+            } else {
+                rs.push(avgGain[i] / avgLoss[i]);
+                rsi.push(100 - (100 / (1 + rs[i])));
             }
-            result.push(sum / period);
         }
+        
+        // Add null values for the beginning periods
+        const paddedRSI = Array(period).fill(null).concat(rsi);
+        
+        // Generate trading signal
+        let signal = null;
+        const lastRSI = paddedRSI[paddedRSI.length - 1];
+        const prevRSI = paddedRSI[paddedRSI.length - 2];
+        
+        if (lastRSI !== null && prevRSI !== null) {
+            // Oversold to normal (buy signal)
+            if (prevRSI < oversold && lastRSI > oversold) {
+                signal = 'BUY';
+            }
+            // Overbought to normal (sell signal)
+            else if (prevRSI > overbought && lastRSI < overbought) {
+                signal = 'SELL';
+            }
+        }
+        
+        return {
+            values: paddedRSI,
+            signal
+        };
     }
     
-    return result;
-}
-
-// Calculate Exponential Moving Average (EMA)
-function calculateEMA(data, period) {
-    const result = [];
-    const multiplier = 2 / (period + 1);
-    
-    // First value is SMA
-    let smaFirst = 0;
-    for (let i = 0; i < period; i++) {
-        smaFirst += data[i];
+    /**
+     * Calculate Bollinger Bands
+     * @param {Array} candles - Candlestick data
+     * @param {Object} params - Bollinger Bands parameters
+     * @returns {Object} - Bollinger Bands values and signal
+     */
+    static bollingerBands(candles, params = {}) {
+        const { period = 20, stdDev = 2 } = params;
+        
+        if (candles.length < period) {
+            return { values: [], signal: null };
+        }
+        
+        // Extract closing prices
+        const prices = candles.map(candle => parseFloat(candle.close));
+        
+        // Calculate middle band (SMA)
+        const middleBand = this.calculateSMA(prices, period);
+        
+        // Calculate standard deviation and bands
+        const upperBand = [];
+        const lowerBand = [];
+        const bandwidth = [];
+        
+        for (let i = period - 1; i < prices.length; i++) {
+            const windowPrices = prices.slice(i - period + 1, i + 1);
+            const sma = middleBand[i - period + 1];
+            
+            // Calculate standard deviation
+            const squaredDiffs = windowPrices.map(price => Math.pow(price - sma, 2));
+            const variance = squaredDiffs.reduce((sum, val) => sum + val, 0) / period;
+            const sd = Math.sqrt(variance);
+            
+            // Calculate bands
+            upperBand.push(sma + (stdDev * sd));
+            lowerBand.push(sma - (stdDev * sd));
+            
+            // Calculate bandwidth
+            bandwidth.push((upperBand[i - period + 1] - lowerBand[i - period + 1]) / sma);
+        }
+        
+        // Add null values for the beginning periods
+        const paddedMiddleBand = Array(period - 1).fill(null).concat(middleBand);
+        const paddedUpperBand = Array(period - 1).fill(null).concat(upperBand);
+        const paddedLowerBand = Array(period - 1).fill(null).concat(lowerBand);
+        const paddedBandwidth = Array(period - 1).fill(null).concat(bandwidth);
+        
+        // Generate trading signal
+        let signal = null;
+        const lastPrice = prices[prices.length - 1];
+        const lastUpper = paddedUpperBand[paddedUpperBand.length - 1];
+        const lastLower = paddedLowerBand[paddedLowerBand.length - 1];
+        const prevPrice = prices[prices.length - 2];
+        
+        if (lastPrice !== null && prevPrice !== null) {
+            // Price crosses below lower band (buy signal)
+            if (prevPrice < lastLower && lastPrice >= lastLower) {
+                signal = 'BUY';
+            }
+            // Price crosses above upper band (sell signal)
+            else if (prevPrice > lastUpper && lastPrice <= lastUpper) {
+                signal = 'SELL';
+            }
+        }
+        
+        return {
+            values: {
+                middle: paddedMiddleBand,
+                upper: paddedUpperBand,
+                lower: paddedLowerBand,
+                bandwidth: paddedBandwidth
+            },
+            signal
+        };
     }
-    smaFirst /= period;
     
-    result.push(smaFirst);
-    
-    // Calculate EMA for the rest
-    for (let i = 1; i < data.length - period + 1; i++) {
-        const ema = (data[i + period - 1] - result[i - 1]) * multiplier + result[i - 1];
-        result.push(ema);
+    /**
+     * Calculate Simple Moving Average (SMA)
+     * @param {Array} values - Input values
+     * @param {number} period - Period
+     * @returns {Array} - SMA values
+     */
+    static calculateSMA(values, period) {
+        const sma = [];
+        
+        for (let i = period - 1; i < values.length; i++) {
+            const windowValues = values.slice(i - period + 1, i + 1);
+            const sum = windowValues.reduce((total, value) => total + value, 0);
+            sma.push(sum / period);
+        }
+        
+        return sma;
     }
     
-    return result;
+    /**
+     * Calculate Exponential Moving Average (EMA)
+     * @param {Array} values - Input values
+     * @param {number} period - Period
+     * @returns {Array} - EMA values
+     */
+    static calculateEMA(values, period) {
+        const ema = [];
+        const multiplier = 2 / (period + 1);
+        
+        // Start with SMA for the first period
+        const firstSMA = values.slice(0, period).reduce((sum, price) => sum + price, 0) / period;
+        ema.push(firstSMA);
+        
+        // Calculate EMA for the rest
+        for (let i = period; i < values.length; i++) {
+            const prevEMA = ema[ema.length - 1];
+            const newEMA = (values[i] - prevEMA) * multiplier + prevEMA;
+            ema.push(newEMA);
+        }
+        
+        // Add null values for the beginning periods
+        return Array(period - 1).fill(null).concat(ema);
+    }
+    
+    /**
+     * Execute trading strategy based on type and parameters
+     * @param {string} strategy - Strategy type
+     * @param {Object} params - Strategy parameters
+     * @param {Array} candles - Candlestick data
+     * @returns {Object|null} - Trading signal or null
+     */
+    static executeStrategy(strategy, params, candles) {
+        if (!candles || candles.length === 0) {
+            return null;
+        }
+        
+        let result;
+        
+        switch (strategy) {
+            case 'macd':
+                result = this.macd(candles, params);
+                break;
+            case 'rsi':
+                result = this.rsi(candles, params);
+                break;
+            case 'bb':
+                result = this.bollingerBands(candles, params);
+                break;
+            default:
+                // Original/custom strategy
+                result = this.customStrategy(candles, params);
+                break;
+        }
+        
+        if (result && result.signal) {
+            const currentPrice = parseFloat(candles[candles.length - 1].close);
+            
+            return {
+                action: result.signal,
+                price: currentPrice,
+                reason: `${strategy.toUpperCase()}_SIGNAL`
+            };
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Custom combined strategy
+     * @param {Array} candles - Candlestick data
+     * @param {Object} params - Strategy parameters
+     * @returns {Object} - Signal
+     */
+    static customStrategy(candles, params) {
+        const { shortPeriod = 12, longPeriod = 26, signalPeriod = 9, overbought = 0.5, oversold = -0.5 } = params;
+        
+        // Combine MACD and RSI for more reliable signals
+        const macdResult = this.macd(candles, { fastPeriod: shortPeriod, slowPeriod: longPeriod, signalPeriod });
+        const rsiResult = this.rsi(candles, { period: 14, overbought: 70, oversold: 30 });
+        
+        let signal = null;
+        
+        // Get the latest MACD histogram value
+        const histogram = macdResult.values.histogram;
+        const lastHistogram = histogram[histogram.length - 1];
+        const prevHistogram = histogram[histogram.length - 2];
+        
+        // Get the latest RSI value
+        const rsi = rsiResult.values;
+        const lastRSI = rsi[rsi.length - 1];
+        
+        // Generate signals based on combined indicators
+        if (lastHistogram !== null && prevHistogram !== null && lastRSI !== null) {
+            // Bullish signal: MACD crosses above 0 and RSI is not overbought
+            if (prevHistogram < oversold && lastHistogram > oversold && lastRSI < 70) {
+                signal = 'BUY';
+            }
+            // Bearish signal: MACD crosses below 0 and RSI is not oversold
+            else if (prevHistogram > overbought && lastHistogram < overbought && lastRSI > 30) {
+                signal = 'SELL';
+            }
+        }
+        
+        return { values: {}, signal };
+    }
 }

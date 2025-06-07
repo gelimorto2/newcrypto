@@ -3,354 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Binance Trading Bot</title>
+    <title>Binance Trading Bot Pro</title>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #0d1117;
-            color: #e6edf3;
-        }
-        .container {
-            width: 95%;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #30363d;
-        }
-        .title {
-            font-size: 24px;
-            font-weight: bold;
-            color: #58a6ff;
-        }
-        .controls {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-        .settings-section {
-            background-color: #161b22;
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 20px;
-            border: 1px solid #30363d;
-        }
-        .panel {
-            background-color: #161b22;
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 20px;
-            border: 1px solid #30363d;
-        }
-        .grid {
+        /* ... Keep existing styles ... */
+        
+        /* Additional styles for pro version */
+        .market-stats {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-        }
-        .button {
-            background-color: #238636;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-        .button:hover {
-            background-color: #2ea043;
-        }
-        .button.stop {
-            background-color: #da3633;
-        }
-        .button.stop:hover {
-            background-color: #f85149;
-        }
-        .input-group {
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
             margin-bottom: 15px;
         }
-        label {
-            display: block;
+        
+        .market-stat {
+            background-color: #161b22;
+            border-radius: 6px;
+            padding: 10px;
+            border: 1px solid #30363d;
+            text-align: center;
+        }
+        
+        .market-stat-label {
+            font-size: 12px;
+            color: #8b949e;
             margin-bottom: 5px;
-            font-weight: 600;
+        }
+        
+        .market-stat-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .technical-indicators {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .indicator {
+            background-color: #161b22;
+            border-radius: 6px;
+            padding: 15px;
+            border: 1px solid #30363d;
+        }
+        
+        .indicator-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
             color: #8b949e;
         }
-        input, select, textarea {
+        
+        .indicator-value {
+            font-size: 20px;
+            font-weight: bold;
+        }
+        
+        .indicator-signal {
+            margin-top: 10px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            display: inline-block;
+        }
+        
+        .signal-buy {
+            background-color: #238636;
+            color: white;
+        }
+        
+        .signal-sell {
+            background-color: #da3633;
+            color: white;
+        }
+        
+        .signal-neutral {
+            background-color: #30363d;
+            color: #8b949e;
+        }
+        
+        .search-container {
+            margin-bottom: 15px;
+        }
+        
+        #pair-search {
             width: 100%;
             padding: 8px;
             border-radius: 6px;
             border: 1px solid #30363d;
             background-color: #0d1117;
             color: #e6edf3;
-            box-sizing: border-box;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-        th, td {
-            text-align: left;
-            padding: 12px;
-            border-bottom: 1px solid #30363d;
-        }
-        th {
-            background-color: #161b22;
-            color: #8b949e;
-        }
-        .tab-container {
-            margin-bottom: 20px;
-        }
-        .tab-buttons {
-            display: flex;
-            border-bottom: 1px solid #30363d;
-            margin-bottom: 15px;
-        }
-        .tab-button {
-            padding: 10px 20px;
-            background: none;
-            border: none;
-            color: #8b949e;
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-        }
-        .tab-button.active {
-            color: #58a6ff;
-            border-bottom: 2px solid #58a6ff;
-        }
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-        }
-        .status {
-            padding: 4px 8px;
-            border-radius: 10px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        .status.running {
-            background-color: #238636;
-            color: white;
-        }
-        .status.stopped {
-            background-color: #da3633;
-            color: white;
-        }
-        .status.paper {
-            background-color: #58a6ff;
-            color: white;
-        }
-        .chart-container {
-            width: 100%;
-            height: 400px;
-            margin-bottom: 20px;
-        }
-        .alert {
-            padding: 10px 15px;
-            border-radius: 6px;
-            margin-bottom: 15px;
-        }
-        .alert.success {
-            background-color: rgba(46, 160, 67, 0.2);
-            border: 1px solid #238636;
-            color: #7ee787;
-        }
-        .alert.error {
-            background-color: rgba(218, 54, 51, 0.2);
-            border: 1px solid #da3633;
-            color: #f85149;
-        }
-        #login-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.8);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        #login-form {
-            background-color: #161b22;
-            border-radius: 8px;
-            padding: 30px;
-            width: 350px;
-            border: 1px solid #30363d;
-        }
-        .form-title {
-            text-align: center;
-            font-size: 24px;
-            margin-bottom: 20px;
-            color: #58a6ff;
-        }
-        .form-footer {
-            text-align: center;
-            margin-top: 20px;
-        }
-        .api-key-mask {
-            font-family: monospace;
-            letter-spacing: 1px;
-        }
-        #json-editor {
-            width: 100%;
-            height: 300px;
-            font-family: monospace;
-            white-space: pre;
-            overflow: auto;
-        }
-        .badge {
-            display: inline-block;
-            padding: 3px 7px;
-            font-size: 12px;
-            border-radius: 10px;
-            margin-left: 5px;
-        }
-        .badge.profit {
-            background-color: #238636;
-            color: white;
-        }
-        .badge.loss {
-            background-color: #da3633;
-            color: white;
-        }
-        .position-card {
-            background-color: #0d1117;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 15px;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-        }
-        .modal-content {
-            background-color: #161b22;
-            margin: 10% auto;
-            padding: 20px;
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            width: 50%;
-            max-width: 500px;
-        }
-        .close {
-            color: #8b949e;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        .close:hover {
-            color: #e6edf3;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 30px;
-            padding-top: 15px;
-            border-top: 1px solid #30363d;
-            color: #8b949e;
-            font-size: 12px;
-        }
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 60px;
-            height: 28px;
-        }
-        .switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #30363d;
-            transition: .4s;
-            border-radius: 34px;
-        }
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 20px;
-            width: 20px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-        input:checked + .slider {
-            background-color: #58a6ff;
-        }
-        input:checked + .slider:before {
-            transform: translateX(32px);
-        }
-        .mode-label {
-            margin-right: 10px;
-        }
-        /* Websocket status indicator */
-        .websocket-status {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 5px;
-        }
-        .websocket-status.connected {
-            background-color: #238636;
-        }
-        .websocket-status.disconnected {
-            background-color: #da3633;
-        }
-        .websocket-status.connecting {
-            background-color: #f0883e;
-        }
-        /* Tooltip styles */
-        .tooltip {
-            position: relative;
-            display: inline-block;
-        }
-        .tooltip .tooltip-text {
-            visibility: hidden;
-            width: 200px;
-            background-color: #161b22;
-            color: #e6edf3;
-            text-align: center;
-            border-radius: 6px;
-            padding: 5px;
-            position: absolute;
-            z-index: 1;
-            bottom: 125%;
-            left: 50%;
-            margin-left: -100px;
-            opacity: 0;
-            transition: opacity 0.3s;
-            border: 1px solid #30363d;
-        }
-        .tooltip:hover .tooltip-text {
-            visibility: visible;
-            opacity: 1;
         }
     </style>
 </head>
@@ -358,7 +102,7 @@
     <!-- Login Overlay -->
     <div id="login-overlay">
         <div id="login-form">
-            <h2 class="form-title">Login to Trading Bot</h2>
+            <h2 class="form-title">Login to Trading Bot Pro</h2>
             <div class="input-group">
                 <label for="username">Username</label>
                 <input type="text" id="username" placeholder="Enter your username">
@@ -378,7 +122,7 @@
 
     <div class="container">
         <div class="header">
-            <div class="title">Crypto Trading Bot</div>
+            <div class="title">Crypto Trading Bot Pro</div>
             <div class="controls">
                 <span class="mode-label">Trading Mode:</span>
                 <label class="switch">
@@ -432,7 +176,13 @@
 
                 <div class="panel">
                     <h3>Market Data</h3>
+                    <div class="market-stats" id="market-stats-container">
+                        <!-- Market stats will be populated here -->
+                    </div>
                     <div class="chart-container" id="price-chart"></div>
+                    <div class="technical-indicators" id="indicators-container">
+                        <!-- Technical indicators will be populated here -->
+                    </div>
                 </div>
 
                 <div class="panel">
@@ -484,6 +234,9 @@
                     <h3>Trading Parameters</h3>
                     <div class="input-group">
                         <label for="symbol">Trading Pair</label>
+                        <div class="search-container">
+                            <input type="text" id="pair-search" placeholder="Search trading pairs...">
+                        </div>
                         <select id="symbol">
                             <option value="BTCUSDT">BTC/USDT</option>
                             <option value="ETHUSDT">ETH/USDT</option>
@@ -507,7 +260,7 @@
                     <div class="input-group">
                         <label for="strategy">Trading Strategy</label>
                         <select id="strategy">
-                            <option value="original">Original Strategy</option>
+                            <option value="original">Combined Strategy</option>
                             <option value="macd">MACD</option>
                             <option value="rsi">RSI</option>
                             <option value="bb">Bollinger Bands</option>
@@ -659,8 +412,8 @@
         </div>
         
         <div class="footer">
-            <p>Binance Trading Bot by @gelimorto2 - Last Updated: 2025-06-07</p>
-            <p id="current-datetime">2025-06-07 10:50:53</p>
+            <p>Binance Trading Bot Pro by @gelimorto2 - Last Updated: 2025-06-07 15:00:46</p>
+            <p id="current-datetime">2025-06-07 15:00:46</p>
         </div>
     </div>
 
@@ -714,16 +467,15 @@
         </div>
     </div>
 
-    <!-- Load Chart.js for charts -->
+    <!-- Load necessary libraries -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@2.3.1/build/global/luxon.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.1.0/dist/chartjs-adapter-luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/dist/chartjs-chart-financial.min.js"></script>
     
     <!-- JavaScript files loaded with defer -->
     <script src="binance-api.js" defer></script>
     <script src="trading-strategies.js" defer></script>
-    <script src="notifications.js" defer></script>
-    <script src="config.js" defer></script>
     <script src="websocket-handler.js" defer></script>
     <script src="live.js" defer></script>
 </body>
