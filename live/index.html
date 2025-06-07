@@ -3,436 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Volty Strategy Live Paper Trading</title>
+    <title>Volty Strategy Live Binance Trading</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <style>
-        :root {
-            --primary-color: #3b82f6;
-            --secondary-color: #8b5cf6;
-            --success-color: #22c55e;
-            --danger-color: #ef4444;
-            --background-dark: #0c1426;
-            --background-medium: #1a1a2e;
-            --background-light: #16213e;
-            --text-light: #f1f5f9;
-            --card-bg: rgba(255, 255, 255, 0.05);
-            --card-border: rgba(255, 255, 255, 0.1);
-            --input-bg: rgba(255, 255, 255, 0.1);
-            --input-disabled-bg: rgba(100, 100, 100, 0.2);
-            --input-disabled-text: rgba(255, 255, 255, 0.6);
-        }
-        
-        body {
-            background: linear-gradient(135deg, var(--background-dark) 0%, var(--background-medium) 50%, var(--background-light) 100%);
-            color: var(--text-light);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-        }
-        
-        .gradient-header {
-            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            font-size: 2.5rem;
-            text-align: center;
-            margin: 1.5rem 0;
-        }
-        
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: 10px;
-            padding: 1rem;
-            margin: 0.5rem 0;
-            backdrop-filter: blur(10px);
-        }
-        
-        .metric-card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: 10px;
-            padding: 1rem;
-            margin: 0.5rem 0;
-            backdrop-filter: blur(10px);
-            text-align: center;
-        }
-        
-        .metric-value {
-            font-size: 1.5rem;
-            font-weight: bold;
-        }
-        
-        .metric-label {
-            font-size: 0.875rem;
-            opacity: 0.8;
-        }
-        
-        .metric-delta {
-            font-size: 0.75rem;
-            margin-top: 0.25rem;
-        }
-        
-        .sidebar {
-            background: var(--background-medium);
-            border-right: 1px solid var(--card-border);
-            padding: 1.5rem;
-            height: 100vh;
-            position: fixed;
-            overflow-y: auto;
-        }
-        
-        .status-indicator {
-            display: inline-block;
-            background-color: var(--success-color);
-            color: white;
-            padding: 0.25rem 0.75rem;
-            border-radius: 9999px;
-            font-size: 0.875rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-        }
-        
-        .status-indicator.live {
-            background-color: #dc2626;
-            animation: pulse 2s infinite;
-        }
-
-        .status-indicator.active {
-            background-color: var(--success-color);
-            animation: pulse 2s infinite;
-        }
-
-        .status-indicator.idle {
-            background-color: #f59e0b;
-        }
-        
-        @keyframes pulse {
-            0% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.6;
-            }
-            100% {
-                opacity: 1;
-            }
-        }
-        
-        /* Form controls - ensuring text is visible even when disabled */
-        .form-control, .form-select {
-            background-color: var(--input-bg);
-            border: 1px solid var(--card-border);
-            color: var(--text-light);
-        }
-        
-        .form-control:focus, .form-select:focus {
-            background-color: rgba(255, 255, 255, 0.15);
-            border-color: var(--primary-color);
-            color: var(--text-light);
-            box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
-        }
-        
-        /* Fix for disabled inputs - ensure text is visible */
-        .form-control:disabled, .form-select:disabled {
-            background-color: var(--input-disabled-bg);
-            color: var(--input-disabled-text);
-            cursor: not-allowed;
-            opacity: 0.8;
-        }
-        
-        /* Fix for placeholder text in disabled inputs */
-        .form-control:disabled::placeholder {
-            color: var(--input-disabled-text);
-            opacity: 0.7;
-        }
-        
-        /* Fix for input group text */
-        .input-group-text {
-            background-color: rgba(70, 70, 100, 0.3);
-            color: var(--text-light);
-            border: 1px solid var(--card-border);
-        }
-        
-        .btn-primary {
-            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
-            border: none;
-        }
-        
-        .btn-primary:hover {
-            background: linear-gradient(90deg, var(--secondary-color), var(--primary-color));
-        }
-        
-        .trade-long {
-            background-color: rgba(34, 197, 94, 0.1);
-            border-left: 4px solid var(--success-color);
-        }
-        
-        .trade-short {
-            background-color: rgba(239, 68, 68, 0.1);
-            border-left: 4px solid var(--danger-color);
-        }
-        
-        .tab-content {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: 0 0 10px 10px;
-            padding: 1rem;
-        }
-        
-        .nav-tabs {
-            border-bottom: 1px solid var(--card-border);
-        }
-        
-        .nav-tabs .nav-link {
-            color: var(--text-light);
-            border: none;
-        }
-        
-        .nav-tabs .nav-link.active {
-            background-color: var(--card-bg);
-            color: var(--primary-color);
-            border: 1px solid var(--card-border);
-            border-bottom: none;
-        }
-        
-        table.trade-history {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        .trade-history th, .trade-history td {
-            padding: 0.75rem;
-            text-align: left;
-            border-bottom: 1px solid var(--card-border);
-        }
-        
-        .trade-history th {
-            font-weight: 600;
-            opacity: 0.8;
-        }
-        
-        .positive {
-            color: var(--success-color);
-        }
-        
-        .negative {
-            color: var(--danger-color);
-        }
-
-        #priceChart, #equityChart {
-            width: 100%;
-            height: 100%;
-        }
-        
-        .loading-indicator {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            z-index: 9999;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: var(--primary-color);
-            animation: spin 1s ease-in-out infinite;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        .form-switch .form-check-input {
-            width: 3em;
-            height: 1.5em;
-            margin-left: -3.5em;
-        }
-        
-        .form-switch .form-check-input:checked {
-            background-color: var(--success-color);
-            border-color: var(--success-color);
-        }
-        
-        .mobile-info {
-            background-color: rgba(239, 68, 68, 0.2);
-            border: 1px solid var(--danger-color);
-            border-radius: 10px;
-            padding: 1rem;
-            margin: 1rem 0;
-        }
-        
-        /* Light theme overrides */
-        body.light-theme {
-            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 50%, #bae6fd 100%);
-            color: #334155;
-        }
-        
-        .light-theme .card, 
-        .light-theme .metric-card {
-            background: rgba(255, 255, 255, 0.7);
-            border: 1px solid rgba(203, 213, 225, 0.5);
-        }
-        
-        .light-theme .sidebar {
-            background: rgba(255, 255, 255, 0.8);
-            border-right: 1px solid rgba(203, 213, 225, 0.5);
-        }
-        
-        .light-theme .form-control, 
-        .light-theme .form-select {
-            background-color: rgba(255, 255, 255, 0.8);
-            color: #334155;
-            border: 1px solid rgba(203, 213, 225, 0.5);
-        }
-        
-        .light-theme .form-control:disabled, 
-        .light-theme .form-select:disabled {
-            background-color: rgba(200, 200, 200, 0.5);
-            color: #555555;
-        }
-        
-        .light-theme .input-group-text {
-            background-color: rgba(200, 200, 220, 0.5);
-            color: #334155;
-            border: 1px solid rgba(203, 213, 225, 0.5);
-        }
-        
-        /* Toggle switch styling */
-        .form-check-input:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        /* Alert styling */
-        .alert {
-            background-color: rgba(59, 130, 246, 0.1);
-            border: 1px solid rgba(59, 130, 246, 0.3);
-            color: var(--text-light);
-        }
-        
-        .light-theme .alert {
-            color: #334155;
-        }
-
-        /* Clock and date display */
-        .clock-display {
-            font-size: 1.2rem;
-            font-weight: bold;
-            text-align: center;
-            margin-bottom: 1rem;
-            padding: 0.5rem;
-            background: var(--card-bg);
-            border-radius: 10px;
-            border: 1px solid var(--card-border);
-        }
-
-        /* Bot activity indicator */
-        .bot-activity {
-            margin-top: 1rem;
-            padding: 0.5rem;
-            border-radius: 8px;
-            font-size: 0.9rem;
-        }
-
-        .bot-activity.scanning {
-            background-color: rgba(59, 130, 246, 0.1);
-            border-left: 4px solid var(--primary-color);
-        }
-
-        .bot-activity.trading {
-            background-color: rgba(34, 197, 94, 0.1);
-            border-left: 4px solid var(--success-color);
-        }
-
-        .bot-activity.waiting {
-            background-color: rgba(245, 158, 11, 0.1);
-            border-left: 4px solid #f59e0b;
-        }
-
-        /* Last tick information */
-        .last-tick-info {
-            font-size: 0.85rem;
-            margin-top: 0.5rem;
-            opacity: 0.8;
-        }
-
-        /* Statistics panel */
-        .stats-panel {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-top: 1rem;
-        }
-
-        .stat-item {
-            flex: 1;
-            min-width: 100px;
-            background: rgba(0, 0, 0, 0.2);
-            padding: 0.5rem;
-            border-radius: 5px;
-            text-align: center;
-        }
-
-        .stat-value {
-            font-weight: bold;
-            font-size: 1.1rem;
-        }
-
-        .stat-label {
-            font-size: 0.75rem;
-            opacity: 0.7;
-        }
-
-        /* Real-time market data section */
-        .market-data {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .market-data-item {
-            min-width: 120px;
-            padding: 0.5rem;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 5px;
-            margin-bottom: 0.5rem;
-        }
-
-        .market-label {
-            font-size: 0.7rem;
-            opacity: 0.7;
-        }
-
-        .market-value {
-            font-weight: bold;
-        }
-
-        .up {
-            color: var(--success-color);
-        }
-
-        .down {
-            color: var(--danger-color);
-        }
-    </style>
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body class="dark-theme">
     <div class="loading-indicator" id="loadingIndicator">
         <div class="spinner"></div>
+    </div>
+
+    <!-- Login Modal -->
+    <div class="modal fade" id="loginModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="loginModalLabel">Binance API Authentication</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <strong>Note:</strong> Your API keys are stored locally in your browser and are never sent to our servers.
+                    </div>
+                    <form id="apiKeyForm">
+                        <div class="mb-3">
+                            <label for="apiKey" class="form-label">API Key</label>
+                            <input type="text" class="form-control" id="apiKey" placeholder="Enter your Binance API Key" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="apiSecret" class="form-label">API Secret</label>
+                            <input type="password" class="form-control" id="apiSecret" placeholder="Enter your Binance API Secret" required>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="rememberKeys">
+                            <label class="form-check-label" for="rememberKeys">
+                                Remember API keys (encrypted)
+                            </label>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">Connect to Binance</button>
+                            <a href="https://www.binance.com/en/my/settings/api-management" target="_blank" class="btn btn-outline-secondary">Get API Keys from Binance</a>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="usePaperTradingBtn">Switch to Paper Trading</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="container-fluid">
@@ -443,7 +62,7 @@
                 
                 <!-- Live Clock Display -->
                 <div class="clock-display" id="clock-display">
-                    2025-06-04 17:25:39 UTC
+                    2025-06-07 19:45:19 UTC
                 </div>
                 
                 <div class="status-indicator live" id="bot-status">
@@ -531,16 +150,22 @@
                 <h6 class="mt-4">💰 Trading Settings</h6>
                 
                 <div class="mb-3">
-                    <label for="initial-capital" class="form-label">Initial Capital ($)</label>
-                    <input type="number" class="form-control" id="initial-capital" min="1000" max="1000000" value="10000">
+                    <label for="account-balance" class="form-label">Account Balance</label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="text" class="form-control" id="account-balance" value="0.00" disabled>
+                        <button class="btn btn-outline-secondary" type="button" id="refresh-balance-btn">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="mb-3">
                     <label for="position-size" class="form-label">Position Size (%)</label>
-                    <input type="range" class="form-range" id="position-size" min="1" max="100" value="10">
+                    <input type="range" class="form-range" id="position-size" min="1" max="100" value="5">
                     <div class="d-flex justify-content-between">
                         <small>1%</small>
-                        <small id="position-size-value">10%</small>
+                        <small id="position-size-value">5%</small>
                         <small>100%</small>
                     </div>
                 </div>
@@ -566,12 +191,13 @@
                 
                 <button id="start-trading-btn" class="btn btn-primary w-100 mb-3">🚀 Start Trading</button>
                 <button id="stop-trading-btn" class="btn btn-danger w-100 mb-3" disabled>⏹️ Stop Trading</button>
-                <button id="reset-trading-btn" class="btn btn-warning w-100" disabled>🔄 Reset</button>
+                <button id="emergency-sell-btn" class="btn btn-warning w-100 mb-3" disabled>⚠️ EMERGENCY SELL</button>
+                <button id="logout-btn" class="btn btn-secondary w-100">🔒 Logout</button>
             </div>
             
             <!-- Main content -->
             <div class="col-md-9 col-lg-10 ms-auto">
-                <h1 class="gradient-header">Volty Strategy Live Paper Trading</h1>
+                <h1 class="gradient-header">Volty Strategy Live Binance Trading</h1>
                 
                 <!-- Performance Metrics -->
                 <div class="row">
@@ -620,8 +246,8 @@
                     </div>
                     <div class="col-md-3">
                         <div class="metric-card">
-                            <div class="metric-value" id="final-capital">$10,000.00</div>
-                            <div class="metric-label">💼 Current Capital</div>
+                            <div class="metric-value" id="current-balance">$0.00</div>
+                            <div class="metric-label">💼 Current Balance</div>
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -710,6 +336,11 @@
                                         💹 Equity Curve
                                     </button>
                                 </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="depth-tab" data-bs-toggle="tab" data-bs-target="#depth-content" type="button" role="tab" aria-controls="depth-content" aria-selected="false">
+                                        📊 Market Depth
+                                    </button>
+                                </li>
                             </ul>
                             <div class="tab-content" id="chartTabContent">
                                 <div class="tab-pane fade show active" id="price-content" role="tabpanel" aria-labelledby="price-tab">
@@ -720,6 +351,11 @@
                                 <div class="tab-pane fade" id="equity-content" role="tabpanel" aria-labelledby="equity-tab">
                                     <div class="chart-container" style="position: relative; height: 40vh;">
                                         <div id="equityChart"></div>
+                                    </div>
+                                </div>
+                                <div class="tab-pane fade" id="depth-content" role="tabpanel" aria-labelledby="depth-tab">
+                                    <div class="chart-container" style="position: relative; height: 40vh;">
+                                        <div id="depthChart"></div>
                                     </div>
                                 </div>
                             </div>
@@ -805,7 +441,7 @@
                                         
                                         <!-- Risk Management -->
                                         <div class="form-check form-switch mb-2">
-                                            <input class="form-check-input" type="checkbox" id="risk-management-toggle">
+                                            <input class="form-check-input" type="checkbox" id="risk-management-toggle" checked>
                                             <label class="form-check-label" for="risk-management-toggle">
                                                 Risk Management Limits
                                             </label>
@@ -819,6 +455,22 @@
                                                 <label for="max-daily-loss-value" class="form-label">Max Daily Loss %</label>
                                                 <input type="number" class="form-control" id="max-daily-loss-value" value="5" min="1" max="20" step="1">
                                             </div>
+                                        </div>
+                                        
+                                        <h6 class="mt-4">API Settings</h6>
+                                        
+                                        <!-- API Key Management -->
+                                        <div class="mb-3">
+                                            <label class="form-label">API Key Status</label>
+                                            <div class="d-flex align-items-center">
+                                                <span class="badge bg-success me-2" id="api-status-badge">Connected</span>
+                                                <span id="api-key-masked">••••••••••••••••</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <button class="btn btn-sm btn-outline-secondary" id="update-api-keys-btn">Update API Keys</button>
+                                            <button class="btn btn-sm btn-outline-danger" id="remove-api-keys-btn">Remove API Keys</button>
                                         </div>
                                         
                                         <h6 class="mt-4">Interface Settings</h6>
@@ -935,38 +587,7 @@
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="app.js"></script>
-    
-    <!-- Add this script to fix the settings tab toggle behavior -->
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Fix toggling behavior for settings inputs
-        function setupToggle(toggleId, inputId) {
-            const toggle = document.getElementById(toggleId);
-            const input = document.getElementById(inputId);
-            
-            if (toggle && input) {
-                toggle.addEventListener('change', function() {
-                    input.disabled = !this.checked;
-                });
-                
-                // Initialize state
-                input.disabled = !toggle.checked;
-            }
-        }
-        
-        // Setup all toggles
-        setupToggle('trailing-stop-toggle', 'trailing-stop-value');
-        setupToggle('take-profit-toggle', 'take-profit-value');
-        setupToggle('stop-loss-toggle', 'stop-loss-value');
-        setupToggle('risk-management-toggle', 'max-drawdown-value');
-        setupToggle('risk-management-toggle', 'max-daily-loss-value');
-        setupToggle('discord-alert-toggle', 'discord-webhook-input');
-        setupToggle('telegram-alert-toggle', 'telegram-token-input');
-        setupToggle('telegram-alert-toggle', 'telegram-chatid-input');
-        setupToggle('email-alert-toggle', 'email-address-input');
-        setupToggle('sound-alert-toggle', 'sound-volume-input');
-    });
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.js"></script>
+    <script src="live.js"></script>
 </body>
 </html>

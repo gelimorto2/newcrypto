@@ -1,0 +1,507 @@
+:root {
+    --primary-color: #3b82f6;
+    --secondary-color: #8b5cf6;
+    --success-color: #22c55e;
+    --danger-color: #ef4444;
+    --warning-color: #f59e0b;
+    --background-dark: #0c1426;
+    --background-medium: #1a1a2e;
+    --background-light: #16213e;
+    --text-light: #f1f5f9;
+    --card-bg: rgba(255, 255, 255, 0.05);
+    --card-border: rgba(255, 255, 255, 0.1);
+    --input-bg: rgba(255, 255, 255, 0.1);
+    --input-disabled-bg: rgba(100, 100, 100, 0.2);
+    --input-disabled-text: rgba(255, 255, 255, 0.6);
+}
+
+body {
+    background: linear-gradient(135deg, var(--background-dark) 0%, var(--background-medium) 50%, var(--background-light) 100%);
+    color: var(--text-light);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+}
+
+.gradient-header {
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 2.5rem;
+    text-align: center;
+    margin: 1.5rem 0;
+}
+
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 1rem;
+    margin: 0.5rem 0;
+    backdrop-filter: blur(10px);
+}
+
+.metric-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 1rem;
+    margin: 0.5rem 0;
+    backdrop-filter: blur(10px);
+    text-align: center;
+}
+
+.metric-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.metric-label {
+    font-size: 0.875rem;
+    opacity: 0.8;
+}
+
+.metric-delta {
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.sidebar {
+    background: var(--background-medium);
+    border-right: 1px solid var(--card-border);
+    padding: 1.5rem;
+    height: 100vh;
+    position: fixed;
+    overflow-y: auto;
+}
+
+.status-indicator {
+    display: inline-block;
+    background-color: var(--success-color);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+.status-indicator.live {
+    background-color: #dc2626;
+    animation: pulse 2s infinite;
+}
+
+.status-indicator.active {
+    background-color: var(--success-color);
+    animation: pulse 2s infinite;
+}
+
+.status-indicator.idle {
+    background-color: #f59e0b;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+/* Form controls - ensuring text is visible even when disabled */
+.form-control, .form-select {
+    background-color: var(--input-bg);
+    border: 1px solid var(--card-border);
+    color: var(--text-light);
+}
+
+.form-control:focus, .form-select:focus {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-color: var(--primary-color);
+    color: var(--text-light);
+    box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
+}
+
+/* Fix for disabled inputs - ensure text is visible */
+.form-control:disabled, .form-select:disabled {
+    background-color: var(--input-disabled-bg);
+    color: var(--input-disabled-text);
+    cursor: not-allowed;
+    opacity: 0.8;
+}
+
+/* Fix for placeholder text in disabled inputs */
+.form-control:disabled::placeholder {
+    color: var(--input-disabled-text);
+    opacity: 0.7;
+}
+
+/* Fix for input group text */
+.input-group-text {
+    background-color: rgba(70, 70, 100, 0.3);
+    color: var(--text-light);
+    border: 1px solid var(--card-border);
+}
+
+.btn-primary {
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    border: none;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(90deg, var(--secondary-color), var(--primary-color));
+}
+
+.btn-warning {
+    background-color: var(--warning-color);
+    border: none;
+    color: white;
+}
+
+#emergency-sell-btn {
+    background-color: #ff4d4d;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+}
+
+#emergency-sell-btn:hover {
+    background-color: #ff0000;
+    transform: scale(1.05);
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+}
+
+.trade-long {
+    background-color: rgba(34, 197, 94, 0.1);
+    border-left: 4px solid var(--success-color);
+}
+
+.trade-short {
+    background-color: rgba(239, 68, 68, 0.1);
+    border-left: 4px solid var(--danger-color);
+}
+
+.tab-content {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 0 0 10px 10px;
+    padding: 1rem;
+}
+
+.nav-tabs {
+    border-bottom: 1px solid var(--card-border);
+}
+
+.nav-tabs .nav-link {
+    color: var(--text-light);
+    border: none;
+}
+
+.nav-tabs .nav-link.active {
+    background-color: var(--card-bg);
+    color: var(--primary-color);
+    border: 1px solid var(--card-border);
+    border-bottom: none;
+}
+
+table.trade-history {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.trade-history th, .trade-history td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.trade-history th {
+    font-weight: 600;
+    opacity: 0.8;
+}
+
+.positive {
+    color: var(--success-color);
+}
+
+.negative {
+    color: var(--danger-color);
+}
+
+#priceChart, #equityChart, #depthChart {
+    width: 100%;
+    height: 100%;
+}
+
+.loading-indicator {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: var(--primary-color);
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.form-switch .form-check-input {
+    width: 3em;
+    height: 1.5em;
+    margin-left: -3.5em;
+}
+
+.form-switch .form-check-input:checked {
+    background-color: var(--success-color);
+    border-color: var(--success-color);
+}
+
+.mobile-info {
+    background-color: rgba(239, 68, 68, 0.2);
+    border: 1px solid var(--danger-color);
+    border-radius: 10px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+/* Light theme overrides */
+body.light-theme {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 50%, #bae6fd 100%);
+    color: #334155;
+}
+
+.light-theme .card, 
+.light-theme .metric-card {
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(203, 213, 225, 0.5);
+}
+
+.light-theme .sidebar {
+    background: rgba(255, 255, 255, 0.8);
+    border-right: 1px solid rgba(203, 213, 225, 0.5);
+}
+
+.light-theme .form-control, 
+.light-theme .form-select {
+    background-color: rgba(255, 255, 255, 0.8);
+    color: #334155;
+    border: 1px solid rgba(203, 213, 225, 0.5);
+}
+
+.light-theme .form-control:disabled, 
+.light-theme .form-select:disabled {
+    background-color: rgba(200, 200, 200, 0.5);
+    color: #555555;
+}
+
+.light-theme .input-group-text {
+    background-color: rgba(200, 200, 220, 0.5);
+    color: #334155;
+    border: 1px solid rgba(203, 213, 225, 0.5);
+}
+
+/* Toggle switch styling */
+.form-check-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Alert styling */
+.alert {
+    background-color: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: var(--text-light);
+}
+
+.light-theme .alert {
+    color: #334155;
+}
+
+/* Clock and date display */
+.clock-display {
+    font-size: 1.2rem;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background: var(--card-bg);
+    border-radius: 10px;
+    border: 1px solid var(--card-border);
+}
+
+/* Bot activity indicator */
+.bot-activity {
+    margin-top: 1rem;
+    padding: 0.5rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.bot-activity.scanning {
+    background-color: rgba(59, 130, 246, 0.1);
+    border-left: 4px solid var(--primary-color);
+}
+
+.bot-activity.trading {
+    background-color: rgba(34, 197, 94, 0.1);
+    border-left: 4px solid var(--success-color);
+}
+
+.bot-activity.waiting {
+    background-color: rgba(245, 158, 11, 0.1);
+    border-left: 4px solid #f59e0b;
+}
+
+/* Last tick information */
+.last-tick-info {
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+    opacity: 0.8;
+}
+
+/* Statistics panel */
+.stats-panel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.stat-item {
+    flex: 1;
+    min-width: 100px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.5rem;
+    border-radius: 5px;
+    text-align: center;
+}
+
+.stat-value {
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+/* Real-time market data section */
+.market-data {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+}
+
+.market-data-item {
+    min-width: 120px;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 5px;
+    margin-bottom: 0.5rem;
+}
+
+.market-label {
+    font-size: 0.7rem;
+    opacity: 0.7;
+}
+
+.market-value {
+    font-weight: bold;
+}
+
+.up {
+    color: var(--success-color);
+}
+
+.down {
+    color: var(--danger-color);
+}
+
+/* Modal styling */
+.modal-content {
+    background: var(--background-medium);
+    border: 1px solid var(--card-border);
+    color: var(--text-light);
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--card-border);
+}
+
+.modal-footer {
+    border-top: 1px solid var(--card-border);
+}
+
+/* API Key display */
+#api-key-masked {
+    font-family: monospace;
+    letter-spacing: 1px;
+}
+
+/* Enhanced button styles */
+.btn {
+    border-radius: 6px;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    transition: all 0.2s ease;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+/* Tooltip styling */
+.tooltip {
+    position: relative;
+    display: inline-block;
+}
+
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 120px;
+    background-color: var(--background-dark);
+    color: var(--text-light);
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -60px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
