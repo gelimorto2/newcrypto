@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Trading Bot by gelimorto2</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #0d1117;
+            color: #e6edf3;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            width: 90%;
+            padding: 40px;
+            background-color: #161b22;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            color: #58a6ff;
+            margin-bottom: 20px;
+        }
+        p {
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+        .buttons {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #238636;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        .button:hover {
+            background-color: #2ea043;
+        }
+        .button.paper {
+            background-color: #58a6ff;
+        }
+        .button.paper:hover {
+            background-color: #79c0ff;
+        }
+        .disclaimer {
+            font-size: 0.8rem;
+            margin-top: 40px;
+            color: #8b949e;
+        }
+        .footer {
+            margin-top: 50px;
+            font-size: 0.9rem;
+            color: #8b949e;
+        }
+        .current-time {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: #8b949e;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Crypto Trading Bot</h1>
+        <p>A multi-platform crypto trading bot with paper trading and live Binance integration.</p>
+        <p>Choose a trading mode to get started:</p>
+        
+        <div class="buttons">
+            <a href="live/live.html" class="button">Live Trading</a>
+            <a href="paper/paper.html" class="button paper">Paper Trading</a>
+        </div>
+        
+        <div class="disclaimer">
+            <p>⚠️ <strong>Disclaimer:</strong> Trading cryptocurrencies involves risk. This tool is provided for educational purposes only. Always do your own research before trading real funds.</p>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>Created by <a href="https://github.com/gelimorto2" style="color: #58a6ff;">@gelimorto2</a></p>
+        <p class="current-time">Last updated: 2025-06-07 10:04:05 UTC</p>
+    </div>
+
+    <script>
+        // Display current time
+        function updateDateTime() {
+            const now = new Date();
+            const formatted = now.toISOString().replace('T', ' ').split('.')[0] + ' UTC';
+            document.getElementById('current-time').textContent = formatted;
+        }
+        
+        // Update time when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            const timeElement = document.createElement('p');
+            timeElement.id = 'current-time';
+            timeElement.className = 'current-time';
+            document.querySelector('.footer').appendChild(timeElement);
+            updateDateTime();
+        });
+    </script>
+</body>
+</html>

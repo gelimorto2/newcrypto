@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Binance Live Trading Bot</title>
+    <title>Binance Trading Bot</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -33,6 +33,7 @@
         .controls {
             display: flex;
             gap: 10px;
+            align-items: center;
         }
         .settings-section {
             background-color: #161b22;
@@ -141,6 +142,10 @@
         }
         .status.stopped {
             background-color: #da3633;
+            color: white;
+        }
+        .status.paper {
+            background-color: #58a6ff;
             color: white;
         }
         .chart-container {
@@ -262,6 +267,48 @@
             color: #8b949e;
             font-size: 12px;
         }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 28px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #30363d;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #58a6ff;
+        }
+        input:checked + .slider:before {
+            transform: translateX(32px);
+        }
+        .mode-label {
+            margin-right: 10px;
+        }
     </style>
 </head>
 <body>
@@ -270,30 +317,32 @@
         <div id="login-form">
             <h2 class="form-title">Login to Trading Bot</h2>
             <div class="input-group">
-                <label for="apiKey">Binance API Key</label>
-                <input type="password" id="apiKey" placeholder="Enter your API Key">
+                <label for="username">Username</label>
+                <input type="text" id="username" placeholder="Enter your username">
             </div>
             <div class="input-group">
-                <label for="apiSecret">Binance API Secret</label>
-                <input type="password" id="apiSecret" placeholder="Enter your API Secret">
-            </div>
-            <div class="input-group">
-                <label for="discordWebhook">Discord Webhook URL (Optional)</label>
-                <input type="text" id="discordWebhook" placeholder="Enter Discord webhook URL">
+                <label for="password">Password</label>
+                <input type="password" id="password" placeholder="Enter your password">
             </div>
             <div class="input-group">
                 <button class="button" id="login-button">Login</button>
             </div>
             <div class="form-footer">
-                <small>Your API keys are stored locally and never sent to any server.</small>
+                <small>Default credentials: username: "admin", password: "admin"</small>
             </div>
         </div>
     </div>
 
     <div class="container">
         <div class="header">
-            <div class="title">Binance Live Trading Bot</div>
+            <div class="title">Crypto Trading Bot</div>
             <div class="controls">
+                <span class="mode-label">Trading Mode:</span>
+                <label class="switch">
+                    <input type="checkbox" id="paper-mode-toggle">
+                    <span class="slider"></span>
+                </label>
+                <span id="mode-display" class="status paper">Paper Trading</span>
                 <span id="connection-status" class="status stopped">Disconnected</span>
                 <button id="logout-button" class="button">Logout</button>
             </div>
@@ -369,7 +418,7 @@
 
             <!-- Settings Tab -->
             <div id="settings" class="tab-content">
-                <div class="settings-section">
+                <div id="binance-api-settings" class="settings-section">
                     <h3>API Configuration</h3>
                     <div class="input-group">
                         <label>API Key</label>
@@ -440,9 +489,20 @@
                 </div>
 
                 <div class="settings-section">
+                    <h3>Paper Trading Settings</h3>
+                    <div class="input-group">
+                        <label for="initialBalance">Initial Balance (USDT)</label>
+                        <input type="number" id="initialBalance" min="100" step="100" value="10000">
+                    </div>
+                    <div class="input-group">
+                        <button id="reset-paper-balance" class="button">Reset Paper Balance</button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
                     <h3>Notifications</h3>
                     <div class="input-group">
-                        <label for="discordWebhookUrl">Discord Webhook URL</label>
+                        <label for="discordWebhookUrl">Discord Webhook URL (Optional)</label>
                         <input type="text" id="discordWebhookUrl" placeholder="Enter Discord webhook URL">
                     </div>
                     <div class="input-group">
@@ -501,8 +561,8 @@
                         <pre id="json-editor" contenteditable="true">{
   "strategy": "original",
   "parameters": {
-    "longPeriod": 26,
     "shortPeriod": 12,
+    "longPeriod": 26,
     "signalPeriod": 9,
     "overbought": 0.5,
     "oversold": -0.5
