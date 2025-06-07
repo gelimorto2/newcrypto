@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Volty Strategy Live Paper Trading</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #3b82f6;
+            --secondary-color: #8b5cf6;
+            --success-color: #22c55e;
+            --danger-color: #ef4444;
+            --background-dark: #0c1426;
+            --background-medium: #1a1a2e;
+            --background-light: #16213e;
+            --text-light: #f1f5f9;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --input-bg: rgba(255, 255, 255, 0.1);
+            --input-disabled-bg: rgba(100, 100, 100, 0.2);
+            --input-disabled-text: rgba(255, 255, 255, 0.6);
+        }
+        
+        body {
+            background: linear-gradient(135deg, var(--background-dark) 0%, var(--background-medium) 50%, var(--background-light) 100%);
+            color: var(--text-light);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+        
+        .gradient-header {
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.5rem;
+            text-align: center;
+            margin: 1.5rem 0;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            backdrop-filter: blur(10px);
+        }
+        
+        .metric-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            backdrop-filter: blur(10px);
+            text-align: center;
+        }
+        
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+        .metric-label {
+            font-size: 0.875rem;
+            opacity: 0.8;
+        }
+        
+        .metric-delta {
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+        }
+        
+        .sidebar {
+            background: var(--background-medium);
+            border-right: 1px solid var(--card-border);
+            padding: 1.5rem;
+            height: 100vh;
+            position: fixed;
+            overflow-y: auto;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            background-color: var(--success-color);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+        
+        .status-indicator.live {
+            background-color: #dc2626;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.active {
+            background-color: var(--success-color);
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.idle {
+            background-color: #f59e0b;
+        }
+        
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.6;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+        
+        /* Form controls - ensuring text is visible even when disabled */
+        .form-control, .form-select {
+            background-color: var(--input-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-light);
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background-color: rgba(255, 255, 255, 0.15);
+            border-color: var(--primary-color);
+            color: var(--text-light);
+            box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25);
+        }
+        
+        /* Fix for disabled inputs - ensure text is visible */
+        .form-control:disabled, .form-select:disabled {
+            background-color: var(--input-disabled-bg);
+            color: var(--input-disabled-text);
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+        
+        /* Fix for placeholder text in disabled inputs */
+        .form-control:disabled::placeholder {
+            color: var(--input-disabled-text);
+            opacity: 0.7;
+        }
+        
+        /* Fix for input group text */
+        .input-group-text {
+            background-color: rgba(70, 70, 100, 0.3);
+            color: var(--text-light);
+            border: 1px solid var(--card-border);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(90deg, var(--secondary-color), var(--primary-color));
+        }
+        
+        .trade-long {
+            background-color: rgba(34, 197, 94, 0.1);
+            border-left: 4px solid var(--success-color);
+        }
+        
+        .trade-short {
+            background-color: rgba(239, 68, 68, 0.1);
+            border-left: 4px solid var(--danger-color);
+        }
+        
+        .tab-content {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 0 0 10px 10px;
+            padding: 1rem;
+        }
+        
+        .nav-tabs {
+            border-bottom: 1px solid var(--card-border);
+        }
+        
+        .nav-tabs .nav-link {
+            color: var(--text-light);
+            border: none;
+        }
+        
+        .nav-tabs .nav-link.active {
+            background-color: var(--card-bg);
+            color: var(--primary-color);
+            border: 1px solid var(--card-border);
+            border-bottom: none;
+        }
+        
+        table.trade-history {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .trade-history th, .trade-history td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--card-border);
+        }
+        
+        .trade-history th {
+            font-weight: 600;
+            opacity: 0.8;
+        }
+        
+        .positive {
+            color: var(--success-color);
+        }
+        
+        .negative {
+            color: var(--danger-color);
+        }
+
+        #priceChart, #equityChart {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .loading-indicator {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--primary-color);
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .form-switch .form-check-input {
+            width: 3em;
+            height: 1.5em;
+            margin-left: -3.5em;
+        }
+        
+        .form-switch .form-check-input:checked {
+            background-color: var(--success-color);
+            border-color: var(--success-color);
+        }
+        
+        .mobile-info {
+            background-color: rgba(239, 68, 68, 0.2);
+            border: 1px solid var(--danger-color);
+            border-radius: 10px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        
+        /* Light theme overrides */
+        body.light-theme {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 50%, #bae6fd 100%);
+            color: #334155;
+        }
+        
+        .light-theme .card, 
+        .light-theme .metric-card {
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(203, 213, 225, 0.5);
+        }
+        
+        .light-theme .sidebar {
+            background: rgba(255, 255, 255, 0.8);
+            border-right: 1px solid rgba(203, 213, 225, 0.5);
+        }
+        
+        .light-theme .form-control, 
+        .light-theme .form-select {
+            background-color: rgba(255, 255, 255, 0.8);
+            color: #334155;
+            border: 1px solid rgba(203, 213, 225, 0.5);
+        }
+        
+        .light-theme .form-control:disabled, 
+        .light-theme .form-select:disabled {
+            background-color: rgba(200, 200, 200, 0.5);
+            color: #555555;
+        }
+        
+        .light-theme .input-group-text {
+            background-color: rgba(200, 200, 220, 0.5);
+            color: #334155;
+            border: 1px solid rgba(203, 213, 225, 0.5);
+        }
+        
+        /* Toggle switch styling */
+        .form-check-input:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        /* Alert styling */
+        .alert {
+            background-color: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: var(--text-light);
+        }
+        
+        .light-theme .alert {
+            color: #334155;
+        }
+
+        /* Clock and date display */
+        .clock-display {
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+            background: var(--card-bg);
+            border-radius: 10px;
+            border: 1px solid var(--card-border);
+        }
+
+        /* Bot activity indicator */
+        .bot-activity {
+            margin-top: 1rem;
+            padding: 0.5rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .bot-activity.scanning {
+            background-color: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .bot-activity.trading {
+            background-color: rgba(34, 197, 94, 0.1);
+            border-left: 4px solid var(--success-color);
+        }
+
+        .bot-activity.waiting {
+            background-color: rgba(245, 158, 11, 0.1);
+            border-left: 4px solid #f59e0b;
+        }
+
+        /* Last tick information */
+        .last-tick-info {
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            opacity: 0.8;
+        }
+
+        /* Statistics panel */
+        .stats-panel {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .stat-item {
+            flex: 1;
+            min-width: 100px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 0.5rem;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        /* Real-time market data section */
+        .market-data {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .market-data-item {
+            min-width: 120px;
+            padding: 0.5rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .market-label {
+            font-size: 0.7rem;
+            opacity: 0.7;
+        }
+
+        .market-value {
+            font-weight: bold;
+        }
+
+        .up {
+            color: var(--success-color);
+        }
+
+        .down {
+            color: var(--danger-color);
+        }
+    </style>
+</head>
+<body class="dark-theme">
+    <div class="loading-indicator" id="loadingIndicator">
+        <div class="spinner"></div>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 sidebar">
+                <h5 class="mb-3">⚙️ Strategy Configuration</h5>
+                
+                <!-- Live Clock Display -->
+                <div class="clock-display" id="clock-display">
+                    2025-06-04 17:25:39 UTC
+                </div>
+                
+                <div class="status-indicator live" id="bot-status">
+                    🔴 LIVE TRADING
+                </div>
+                
+                <div id="mobile-info" class="mobile-info" style="display: none;">
+                    <h6>📱 Mobile Device Detected</h6>
+                    <p>This app is optimized for desktop. Some features may be limited on mobile devices.</p>
+                </div>
+                
+                <!-- Bot Activity Section -->
+                <div class="bot-activity scanning" id="bot-activity">
+                    <div><strong>Bot Activity:</strong> <span id="activity-status">Initializing</span></div>
+                    <div class="last-tick-info" id="last-tick-info">Last check: Never</div>
+                </div>
+                
+                <!-- Market Data Summary -->
+                <div class="market-data" id="market-data">
+                    <div class="market-data-item">
+                        <div class="market-label">PRICE</div>
+                        <div class="market-value" id="market-price">$0.00</div>
+                    </div>
+                    <div class="market-data-item">
+                        <div class="market-label">24H CHANGE</div>
+                        <div class="market-value" id="market-change">0.00%</div>
+                    </div>
+                    <div class="market-data-item">
+                        <div class="market-label">VOLUME</div>
+                        <div class="market-value" id="market-volume">$0</div>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <h6>📊 Data Settings</h6>
+                <div class="mb-3">
+                    <label for="symbol" class="form-label">Symbol</label>
+                    <select class="form-select" id="symbol">
+                        <option value="BTCUSDT">BTCUSDT</option>
+                        <option value="ETHUSDT">ETHUSDT</option>
+                        <option value="ADAUSDT">ADAUSDT</option>
+                        <option value="SOLUSDT">SOLUSDT</option>
+                        <option value="BNBUSDT">BNBUSDT</option>
+                        <option value="XRPUSDT">XRPUSDT</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="timeframe" class="form-label">Timeframe</label>
+                    <select class="form-select" id="timeframe">
+                        <option value="1m">1m</option>
+                        <option value="5m">5m</option>
+                        <option value="15m">15m</option>
+                        <option value="30m">30m</option>
+                        <option value="1h" selected>1h</option>
+                        <option value="4h">4h</option>
+                        <option value="1d">1d</option>
+                        <option value="1w">1w</option>
+                    </select>
+                </div>
+                
+                <h6 class="mt-4">⚙️ Strategy Parameters</h6>
+                
+                <div class="mb-3">
+                    <label for="atr-length" class="form-label">ATR Length</label>
+                    <input type="range" class="form-range" id="atr-length" min="1" max="50" value="5">
+                    <div class="d-flex justify-content-between">
+                        <small>1</small>
+                        <small id="atr-length-value">5</small>
+                        <small>50</small>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="atr-mult" class="form-label">ATR Multiplier</label>
+                    <input type="range" class="form-range" id="atr-mult" min="0.1" max="5.0" step="0.05" value="0.75">
+                    <div class="d-flex justify-content-between">
+                        <small>0.1</small>
+                        <small id="atr-mult-value">0.75</small>
+                        <small>5.0</small>
+                    </div>
+                </div>
+                
+                <h6 class="mt-4">💰 Trading Settings</h6>
+                
+                <div class="mb-3">
+                    <label for="initial-capital" class="form-label">Initial Capital ($)</label>
+                    <input type="number" class="form-control" id="initial-capital" min="1000" max="1000000" value="10000">
+                </div>
+                
+                <div class="mb-3">
+                    <label for="position-size" class="form-label">Position Size (%)</label>
+                    <input type="range" class="form-range" id="position-size" min="1" max="100" value="10">
+                    <div class="d-flex justify-content-between">
+                        <small>1%</small>
+                        <small id="position-size-value">10%</small>
+                        <small>100%</small>
+                    </div>
+                </div>
+                
+                <!-- Trading Statistics -->
+                <h6 class="mt-4">📊 Trading Statistics</h6>
+                <div class="stats-panel">
+                    <div class="stat-item">
+                        <div class="stat-value" id="stat-daily-trades">0</div>
+                        <div class="stat-label">Today's Trades</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="stat-daily-pnl">$0.00</div>
+                        <div class="stat-label">Today's P&L</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="stat-execution">0ms</div>
+                        <div class="stat-label">Execution Time</div>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <button id="start-trading-btn" class="btn btn-primary w-100 mb-3">🚀 Start Trading</button>
+                <button id="stop-trading-btn" class="btn btn-danger w-100 mb-3" disabled>⏹️ Stop Trading</button>
+                <button id="reset-trading-btn" class="btn btn-warning w-100" disabled>🔄 Reset</button>
+            </div>
+            
+            <!-- Main content -->
+            <div class="col-md-9 col-lg-10 ms-auto">
+                <h1 class="gradient-header">Volty Strategy Live Paper Trading</h1>
+                
+                <!-- Performance Metrics -->
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value" id="total-return">0.00%</div>
+                            <div class="metric-label">💰 Total Return</div>
+                            <div class="metric-delta" id="total-return-delta">$0.00</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value" id="win-rate">0.0%</div>
+                            <div class="metric-label">🎯 Win Rate</div>
+                            <div class="metric-delta" id="win-rate-delta">0 trades</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value" id="profit-factor">0.00</div>
+                            <div class="metric-label">📈 Profit Factor</div>
+                            <div class="metric-delta" id="profit-factor-delta">Avg: $0.00</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value" id="max-drawdown">0.00%</div>
+                            <div class="metric-label">📉 Max Drawdown</div>
+                            <div class="metric-delta" id="max-drawdown-delta">Sharpe: 0.00</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value" id="max-win">$0.00</div>
+                            <div class="metric-label">🏆 Max Win</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value" id="max-loss">$0.00</div>
+                            <div class="metric-label">💸 Max Loss</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value" id="final-capital">$10,000.00</div>
+                            <div class="metric-label">💼 Current Capital</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value" id="total-trades">0</div>
+                            <div class="metric-label">⚡ Total Trades</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Live Position Card -->
+                <div class="card mt-4" id="position-card" style="display: none;">
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h5>🔴 Current Position</h5>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="metric-label">Type</div>
+                                    <div class="metric-value" id="position-type">-</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="metric-label">Entry Price</div>
+                                    <div class="metric-value" id="position-entry-price">$0.00</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="metric-label">Current Price</div>
+                                    <div class="metric-value" id="position-current-price">$0.00</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="metric-label">Unrealized P&L</div>
+                                    <div class="metric-value" id="position-pnl">$0.00 (0.00%)</div>
+                                </div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-md-3">
+                                    <div class="metric-label">Entry Time</div>
+                                    <div class="small" id="position-entry-time">-</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="metric-label">Position Size</div>
+                                    <div class="small" id="position-size-info">0.00000000</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="metric-label">Take Profit</div>
+                                    <div class="small" id="position-tp">$0.00</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="metric-label">Stop Loss</div>
+                                    <div class="small" id="position-sl">$0.00</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Charts -->
+                <div class="card mt-4">
+                    <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="charts-tab" data-bs-toggle="tab" data-bs-target="#charts-content" type="button" role="tab" aria-controls="charts-content" aria-selected="true">
+                                📊 Charts
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="trades-tab" data-bs-toggle="tab" data-bs-target="#trades-content" type="button" role="tab" aria-controls="trades-content" aria-selected="false">
+                                🧾 Trade History
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings-content" type="button" role="tab" aria-controls="settings-content" aria-selected="false">
+                                ⚙️ Settings
+                            </button>
+                        </li>
+                    </ul>
+                    <div class="tab-content" id="mainTabContent">
+                        <!-- Charts Tab -->
+                        <div class="tab-pane fade show active" id="charts-content" role="tabpanel" aria-labelledby="charts-tab">
+                            <ul class="nav nav-tabs mt-3" id="chartTabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="price-tab" data-bs-toggle="tab" data-bs-target="#price-content" type="button" role="tab" aria-controls="price-content" aria-selected="true">
+                                        📈 Price Chart & Signals
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="equity-tab" data-bs-toggle="tab" data-bs-target="#equity-content" type="button" role="tab" aria-controls="equity-content" aria-selected="false">
+                                        💹 Equity Curve
+                                    </button>
+                                </li>
+                            </ul>
+                            <div class="tab-content" id="chartTabContent">
+                                <div class="tab-pane fade show active" id="price-content" role="tabpanel" aria-labelledby="price-tab">
+                                    <div class="chart-container" style="position: relative; height: 60vh;">
+                                        <div id="priceChart"></div>
+                                    </div>
+                                </div>
+                                <div class="tab-pane fade" id="equity-content" role="tabpanel" aria-labelledby="equity-tab">
+                                    <div class="chart-container" style="position: relative; height: 40vh;">
+                                        <div id="equityChart"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Trade History Tab -->
+                        <div class="tab-pane fade" id="trades-content" role="tabpanel" aria-labelledby="trades-tab">
+                            <h5 class="mt-3 mb-3">📋 Trade History</h5>
+                            <div class="table-responsive">
+                                <table class="trade-history" id="tradeHistory">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Entry Time</th>
+                                            <th>Exit Time</th>
+                                            <th>Type</th>
+                                            <th>Entry Price</th>
+                                            <th>Exit Price</th>
+                                            <th>Size</th>
+                                            <th>P&L</th>
+                                            <th>P&L %</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Trade history will be populated here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Settings Tab -->
+                        <div class="tab-pane fade" id="settings-content" role="tabpanel" aria-labelledby="settings-tab">
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <div class="card mb-4">
+                                        <h5 class="mb-3">⚙️ Trading Settings</h5>
+                                        
+                                        <!-- Auto Trade Toggle -->
+                                        <div class="form-check form-switch mb-3">
+                                            <input class="form-check-input" type="checkbox" id="auto-trade-toggle" checked>
+                                            <label class="form-check-label" for="auto-trade-toggle">
+                                                <strong>Auto Trade</strong> - Automatically execute trades based on signals
+                                            </label>
+                                        </div>
+                                        
+                                        <h6 class="mt-4">Risk Management</h6>
+                                        
+                                        <!-- Trailing Stop -->
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="trailing-stop-toggle">
+                                            <label class="form-check-label" for="trailing-stop-toggle">
+                                                Trailing Stop
+                                            </label>
+                                        </div>
+                                        <div class="input-group mb-3">
+                                            <input type="number" class="form-control" id="trailing-stop-value" value="1.5" min="0.1" max="10" step="0.1">
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                        
+                                        <!-- Take Profit -->
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="take-profit-toggle" checked>
+                                            <label class="form-check-label" for="take-profit-toggle">
+                                                Take Profit
+                                            </label>
+                                        </div>
+                                        <div class="input-group mb-3">
+                                            <input type="number" class="form-control" id="take-profit-value" value="3.0" min="0.1" max="50" step="0.1">
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                        
+                                        <!-- Stop Loss -->
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="stop-loss-toggle" checked>
+                                            <label class="form-check-label" for="stop-loss-toggle">
+                                                Stop Loss
+                                            </label>
+                                        </div>
+                                        <div class="input-group mb-3">
+                                            <input type="number" class="form-control" id="stop-loss-value" value="2.0" min="0.1" max="20" step="0.1">
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                        
+                                        <!-- Risk Management -->
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="risk-management-toggle">
+                                            <label class="form-check-label" for="risk-management-toggle">
+                                                Risk Management Limits
+                                            </label>
+                                        </div>
+                                        <div class="row mb-3">
+                                            <div class="col-6">
+                                                <label for="max-drawdown-value" class="form-label">Max Drawdown %</label>
+                                                <input type="number" class="form-control" id="max-drawdown-value" value="10" min="1" max="50" step="1">
+                                            </div>
+                                            <div class="col-6">
+                                                <label for="max-daily-loss-value" class="form-label">Max Daily Loss %</label>
+                                                <input type="number" class="form-control" id="max-daily-loss-value" value="5" min="1" max="20" step="1">
+                                            </div>
+                                        </div>
+                                        
+                                        <h6 class="mt-4">Interface Settings</h6>
+                                        
+                                        <!-- Theme Setting -->
+                                        <div class="mb-3">
+                                            <label for="theme-select" class="form-label">Theme</label>
+                                            <select class="form-select" id="theme-select">
+                                                <option value="dark" selected>Dark Theme</option>
+                                                <option value="light">Light Theme</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <!-- Chart Update Frequency -->
+                                        <div class="mb-3">
+                                            <label for="chart-update-frequency" class="form-label">Chart Update Frequency</label>
+                                            <div class="input-group">
+                                                <input type="number" class="form-control" id="chart-update-frequency" value="5" min="1" max="60">
+                                                <span class="input-group-text">seconds</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="card mb-4">
+                                        <h5 class="mb-3">🔔 Alert Settings</h5>
+                                        
+                                        <!-- Discord Webhook -->
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="discord-alert-toggle">
+                                            <label class="form-check-label" for="discord-alert-toggle">
+                                                Discord Alerts
+                                            </label>
+                                        </div>
+                                        <div class="mb-3">
+                                            <input type="text" class="form-control" id="discord-webhook-input" placeholder="Discord Webhook URL">
+                                        </div>
+                                        
+                                        <!-- Telegram Bot -->
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="telegram-alert-toggle">
+                                            <label class="form-check-label" for="telegram-alert-toggle">
+                                                Telegram Alerts
+                                            </label>
+                                        </div>
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <input type="text" class="form-control" id="telegram-token-input" placeholder="Bot Token">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <input type="text" class="form-control" id="telegram-chatid-input" placeholder="Chat ID">
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Email Alerts -->
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="email-alert-toggle">
+                                            <label class="form-check-label" for="email-alert-toggle">
+                                                Email Alerts
+                                            </label>
+                                        </div>
+                                        <div class="mb-3">
+                                            <input type="email" class="form-control" id="email-address-input" placeholder="Email Address">
+                                        </div>
+                                        
+                                        <!-- Browser Notifications -->
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="browser-alert-toggle" checked>
+                                            <label class="form-check-label" for="browser-alert-toggle">
+                                                Browser Notifications
+                                            </label>
+                                        </div>
+                                        
+                                        <!-- Sound Alerts -->
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="sound-alert-toggle" checked>
+                                            <label class="form-check-label" for="sound-alert-toggle">
+                                                Sound Alerts
+                                            </label>
+                                        </div>
+                                        <div class="mb-4">
+                                            <label for="sound-volume-input" class="form-label">Volume</label>
+                                            <input type="range" class="form-range" id="sound-volume-input" min="0" max="1" step="0.1" value="0.5">
+                                        </div>
+                                        
+                                        <!-- Test Alert Button -->
+                                        <button id="test-alert-btn" class="btn btn-primary mb-3">Test Alerts</button>
+                                        
+                                        <div class="alert alert-info" role="alert">
+                                            <strong>Note:</strong> Discord and Telegram alerts require valid webhook URLs and API tokens. Browser notifications require permission.
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Save Button -->
+                                    <button id="save-settings-btn" class="btn btn-success w-100">💾 Save Settings</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Log Messages -->
+                <div class="card mt-4">
+                    <h5 class="mb-3">📝 Trading Log</h5>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        <div id="logMessages">
+                            <!-- Log messages will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="app.js"></script>
+    
+    <!-- Add this script to fix the settings tab toggle behavior -->
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Fix toggling behavior for settings inputs
+        function setupToggle(toggleId, inputId) {
+            const toggle = document.getElementById(toggleId);
+            const input = document.getElementById(inputId);
+            
+            if (toggle && input) {
+                toggle.addEventListener('change', function() {
+                    input.disabled = !this.checked;
+                });
+                
+                // Initialize state
+                input.disabled = !toggle.checked;
+            }
+        }
+        
+        // Setup all toggles
+        setupToggle('trailing-stop-toggle', 'trailing-stop-value');
+        setupToggle('take-profit-toggle', 'take-profit-value');
+        setupToggle('stop-loss-toggle', 'stop-loss-value');
+        setupToggle('risk-management-toggle', 'max-drawdown-value');
+        setupToggle('risk-management-toggle', 'max-daily-loss-value');
+        setupToggle('discord-alert-toggle', 'discord-webhook-input');
+        setupToggle('telegram-alert-toggle', 'telegram-token-input');
+        setupToggle('telegram-alert-toggle', 'telegram-chatid-input');
+        setupToggle('email-alert-toggle', 'email-address-input');
+        setupToggle('sound-alert-toggle', 'sound-volume-input');
+    });
+    </script>
+</body>
+</html>
