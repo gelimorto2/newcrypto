@@ -309,6 +309,49 @@
         .mode-label {
             margin-right: 10px;
         }
+        /* Websocket status indicator */
+        .websocket-status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .websocket-status.connected {
+            background-color: #238636;
+        }
+        .websocket-status.disconnected {
+            background-color: #da3633;
+        }
+        .websocket-status.connecting {
+            background-color: #f0883e;
+        }
+        /* Tooltip styles */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltip-text {
+            visibility: hidden;
+            width: 200px;
+            background-color: #161b22;
+            color: #e6edf3;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            border: 1px solid #30363d;
+        }
+        .tooltip:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -343,7 +386,11 @@
                     <span class="slider"></span>
                 </label>
                 <span id="mode-display" class="status paper">Paper Trading</span>
-                <span id="connection-status" class="status stopped">Disconnected</span>
+                <div class="tooltip">
+                    <span id="connection-status" class="status stopped">Disconnected</span>
+                    <span class="tooltip-text" id="connection-details">WebSocket status: Not connected</span>
+                </div>
+                <span class="websocket-status disconnected" id="ws-indicator"></span>
                 <button id="logout-button" class="button">Logout</button>
             </div>
         </div>
@@ -397,7 +444,7 @@
 
                 <div class="panel">
                     <h3>Recent Trades</h3>
-                    <table id="trades-table">
+                    <table>
                         <thead>
                             <tr>
                                 <th>Time</th>
@@ -409,7 +456,7 @@
                                 <th>PnL</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="trades-table">
                             <!-- Trade rows will be inserted here -->
                         </tbody>
                     </table>
@@ -597,12 +644,23 @@
                         <button id="import-settings" class="button">Import Settings</button>
                     </div>
                 </div>
+                
+                <div class="settings-section">
+                    <h3>WebSocket Connection</h3>
+                    <div class="input-group">
+                        <label for="websocket-url">WebSocket URL</label>
+                        <input type="text" id="websocket-url" value="wss://stream.binance.com:9443/ws">
+                    </div>
+                    <div class="input-group">
+                        <button id="reconnect-websocket" class="button">Reconnect WebSocket</button>
+                    </div>
+                </div>
             </div>
         </div>
         
         <div class="footer">
             <p>Binance Trading Bot by @gelimorto2 - Last Updated: 2025-06-07</p>
-            <p id="current-datetime"></p>
+            <p id="current-datetime">2025-06-07 10:50:53</p>
         </div>
     </div>
 
@@ -640,6 +698,22 @@
         </div>
     </div>
 
+    <!-- Connection Status Modal -->
+    <div id="connection-status-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3>Connection Details</h3>
+            <div id="connection-details-content">
+                <p>WebSocket Status: <span id="ws-status">Disconnected</span></p>
+                <p>Last Message: <span id="last-message-time">Never</span></p>
+                <p>API Status: <span id="api-status">Not connected</span></p>
+            </div>
+            <div class="input-group">
+                <button id="reconnect-ws-button" class="button">Reconnect</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Load Chart.js for charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@2.3.1/build/global/luxon.min.js"></script>
@@ -650,6 +724,7 @@
     <script src="trading-strategies.js" defer></script>
     <script src="notifications.js" defer></script>
     <script src="config.js" defer></script>
+    <script src="websocket-handler.js" defer></script>
     <script src="live.js" defer></script>
 </body>
 </html>
