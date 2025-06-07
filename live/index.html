@@ -10,6 +10,64 @@
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <link rel="stylesheet" href="styles.css">
+    
+    <!-- Add this in the head section -->
+    <style>
+        /* Trading Mode Indicators */
+        .paper-trading-mode .positive { color: #4caf50 !important; }
+        .paper-trading-mode .negative { color: #f44336 !important; }
+        
+        /* Trading Mode Indicator */
+        .status-indicator.paper {
+            background-color: #2196f3;
+            color: white;
+            border-color: #0d6efd;
+        }
+        
+        /* Fix contrast issues */
+        .dark-theme .metric-value.positive { color: #4caf50; }
+        .dark-theme .metric-value.negative { color: #f44336; }
+        .light-theme .metric-value.positive { color: #00a020; }
+        .light-theme .metric-value.negative { color: #d32f2f; }
+        
+        /* Make log messages more readable */
+        .log-message {
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+        }
+        
+        .log-message.success { background-color: rgba(76, 175, 80, 0.1); }
+        .log-message.info { background-color: rgba(33, 150, 243, 0.1); }
+        .log-message.warning { background-color: rgba(255, 152, 0, 0.1); }
+        .log-message.error { background-color: rgba(244, 67, 54, 0.1); }
+        
+        /* Trading mode toggle switch */
+        .form-switch-lg .form-check-input {
+            width: 3em;
+            height: 1.5em;
+            margin-top: 0.1em;
+        }
+        
+        /* Paper trading mode visual indicators */
+        .paper-trading-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            background-color: #2196f3;
+            color: white;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        
+        /* Emphasize trading mode toggle */
+        .trading-mode-toggle {
+            background-color: rgba(0,0,0,0.05);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
 </head>
 <body class="dark-theme">
     <div class="loading-indicator" id="loadingIndicator">
@@ -21,35 +79,67 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="loginModalLabel">Binance API Authentication</h5>
+                    <h5 class="modal-title" id="loginModalLabel">Login to Trading Platform</h5>
                 </div>
                 <div class="modal-body">
-                    <div class="alert alert-info">
-                        <strong>Note:</strong> Your API keys are stored locally in your browser and are never sent to our servers.
-                    </div>
-                    <form id="apiKeyForm">
-                        <div class="mb-3">
-                            <label for="apiKey" class="form-label">API Key</label>
-                            <input type="text" class="form-control" id="apiKey" placeholder="Enter your Binance API Key" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="apiSecret" class="form-label">API Secret</label>
-                            <input type="password" class="form-control" id="apiSecret" placeholder="Enter your Binance API Secret" required>
-                        </div>
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" id="rememberKeys">
-                            <label class="form-check-label" for="rememberKeys">
-                                Remember API keys (encrypted)
+                    <div class="trading-mode-toggle mb-4">
+                        <div class="form-check form-switch form-switch-lg d-flex justify-content-center align-items-center">
+                            <input class="form-check-input me-3" type="checkbox" id="tradingModeSwitch">
+                            <label class="form-check-label" for="tradingModeSwitch">
+                                <span class="badge bg-danger me-2">LIVE Trading</span>
+                                <span class="badge bg-info">PAPER Trading</span>
                             </label>
                         </div>
-                        <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary">Connect to Binance</button>
-                            <a href="https://www.binance.com/en/my/settings/api-management" target="_blank" class="btn btn-outline-secondary">Get API Keys from Binance</a>
+                        <div class="text-center mt-2 text-muted small" id="tradingModeDesc">
+                            Paper trading uses simulated funds with real market data
                         </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" id="usePaperTradingBtn">Switch to Paper Trading</button>
+                    </div>
+                    
+                    <div id="apiKeyForm" class="needs-validation">
+                        <div id="standardLoginForm">
+                            <div class="mb-3">
+                                <label for="username" class="form-label">Username</label>
+                                <input type="text" class="form-control" id="username" placeholder="Enter your username" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Password</label>
+                                <input type="password" class="form-control" id="password" placeholder="Enter your password" required>
+                                <div class="form-text text-muted">Use "demo" / "demo" for paper trading demo</div>
+                            </div>
+                        </div>
+                        
+                        <div id="apiKeyInputs" style="display:none;">
+                            <div class="mb-3">
+                                <label for="apiKey" class="form-label">API Key</label>
+                                <input type="text" class="form-control" id="apiKey" placeholder="Enter your Binance API Key">
+                            </div>
+                            <div class="mb-3">
+                                <label for="apiSecret" class="form-label">API Secret</label>
+                                <input type="password" class="form-control" id="apiSecret" placeholder="Enter your Binance API Secret">
+                            </div>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="rememberLogin">
+                            <label class="form-check-label" for="rememberLogin">
+                                Remember login (encrypted)
+                            </label>
+                        </div>
+                        
+                        <div class="alert alert-warning" id="liveModeWarning" style="display:none;">
+                            <i class="bi bi-exclamation-triangle-fill"></i> 
+                            <strong>CAUTION:</strong> Live trading uses real funds. Only trade with amounts you can afford to lose.
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="button" id="loginButton" class="btn btn-primary">
+                                <span id="loginButtonText">Login</span>
+                            </button>
+                            <button type="button" id="manualApiKeyButton" class="btn btn-outline-secondary">
+                                <span id="manualKeyText">Use API Keys Directly</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -68,6 +158,10 @@
                 
                 <div class="status-indicator idle" id="bot-status">
                     🔴 LIVE TRADING - IDLE
+                </div>
+                
+                <div id="trading-mode-indicator" class="status-indicator paper">
+                    📝 PAPER TRADING
                 </div>
                 
                 <div id="mobile-info" class="mobile-info" style="display: none;">
@@ -198,6 +292,11 @@
                 <button id="stop-trading-btn" class="btn btn-danger w-100 mb-3" disabled>⏹️ Stop Trading</button>
                 <button id="emergency-sell-btn" class="btn btn-warning w-100 mb-3" disabled>⚠️ EMERGENCY SELL</button>
                 <button id="logout-btn" class="btn btn-secondary w-100">🔒 Logout</button>
+                
+                <!-- Add a toggle button in the sidebar -->
+                <button id="switch-trading-mode-btn" class="btn btn-outline-secondary w-100 mb-3">
+                    <i class="bi bi-arrow-repeat"></i> Switch to Live Trading
+                </button>
             </div>
             
             <!-- Main content -->
@@ -259,6 +358,29 @@
                         <div class="metric-card">
                             <div class="metric-value" id="total-trades">0</div>
                             <div class="metric-label">⚡ Total Trades</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Add this before the charts section -->
+                <div class="card mt-4" id="account-overview">
+                    <h5 class="mb-3">💼 Account Overview</h5>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="metric-label">USDT Balance</div>
+                            <div class="metric-value" id="usdt-balance">$0.00</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric-label">BTC Balance</div>
+                            <div class="metric-value" id="btc-balance">0.00000000</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric-label">ETH Balance</div>
+                            <div class="metric-value" id="eth-balance">0.00000000</div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric-label">Total Value (USDT)</div>
+                            <div class="metric-value" id="total-value">$0.00</div>
                         </div>
                     </div>
                 </div>

@@ -6,6 +6,7 @@ const SETTINGS_STORAGE = 'trading_settings';
 // State variables
 let apiKey = '';
 let apiSecret = '';
+let isPaperTrading = false; // New variable to track trading mode
 let chartInstance = null;
 let equityChartInstance = null;
 let depthChartInstance = null;
@@ -75,6 +76,7 @@ function cacheElements() {
     elements.botActivity = document.getElementById('bot-activity');
     elements.activityStatus = document.getElementById('activity-status');
     elements.lastTickInfo = document.getElementById('last-tick-info');
+    elements.tradingModeIndicator = document.getElementById('trading-mode-indicator');
     
     // Market data elements
     elements.marketPrice = document.getElementById('market-price');
@@ -149,6 +151,18 @@ function cacheElements() {
     
     // Loading indicator
     elements.loadingIndicator = document.getElementById('loadingIndicator');
+    
+    // Cache new elements
+    elements.usernameInput = document.getElementById('username');
+    elements.passwordInput = document.getElementById('password');
+    elements.loginButton = document.getElementById('loginButton');
+    elements.tradingModeSwitch = document.getElementById('tradingModeSwitch');
+    elements.tradingModeIndicator = document.getElementById('trading-mode-indicator');
+    elements.switchTradingModeBtn = document.getElementById('switch-trading-mode-btn');
+    elements.manualApiKeyButton = document.getElementById('manualApiKeyButton');
+    elements.apiKeyInputs = document.getElementById('apiKeyInputs');
+    elements.standardLoginForm = document.getElementById('standardLoginForm');
+    elements.liveModeWarning = document.getElementById('liveModeWarning');
 }
 
 // Setup event listeners
@@ -229,6 +243,53 @@ function setupEventListeners() {
         document.body.className = `${theme}-theme`;
         saveSettings();
     });
+    
+    // Add login button handler
+    elements.loginButton.addEventListener('click', () => {
+        const isApiMode = elements.apiKeyInputs.style.display !== 'none';
+        
+        if (isApiMode) {
+            // Direct API key login
+            const key = elements.apiKeyInput.value.trim();
+            const secret = elements.apiSecretInput.value.trim();
+            if (key && secret) {
+                connectToApi(key, secret, elements.rememberKeysCheckbox.checked);
+            }
+        } else {
+            // Username/password login
+            const username = elements.usernameInput.value.trim();
+            const password = elements.passwordInput.value.trim();
+            if (username && password) {
+                handleLogin(username, password);
+            }
+        }
+    });
+    
+    // Trading mode switch
+    elements.tradingModeSwitch.addEventListener('change', (e) => {
+        const isPaperMode = e.target.checked;
+        document.getElementById('loginButtonText').textContent = isPaperMode ? 
+            'Start Paper Trading' : 'Login to Live Trading';
+        elements.liveModeWarning.style.display = isPaperMode ? 'none' : 'block';
+    });
+    
+    // Switch between API key input and standard login
+    elements.manualApiKeyButton.addEventListener('click', () => {
+        const isApiMode = elements.apiKeyInputs.style.display !== 'none';
+        
+        if (isApiMode) {
+            elements.apiKeyInputs.style.display = 'none';
+            elements.standardLoginForm.style.display = 'block';
+            document.getElementById('manualKeyText').textContent = 'Use API Keys Directly';
+        } else {
+            elements.apiKeyInputs.style.display = 'block';
+            elements.standardLoginForm.style.display = 'none';
+            document.getElementById('manualKeyText').textContent = 'Use Standard Login';
+        }
+    });
+    
+    // Trading mode switch button
+    elements.switchTradingModeBtn.addEventListener('click', toggleTradingMode);
 }
 
 // Update bot status display
@@ -315,114 +376,109 @@ function checkStoredApiKeys() {
 // Show the login modal
 function showLoginModal() {
     elements.loginModal.show();
+    
+    // Focus on username input
+    setTimeout(() => {
+        if (elements.usernameInput) {
+            elements.usernameInput.focus();
+        }
+    }, 500);
 }
 
-// Connect to Binance API
-function connectToApi(key, secret, remember) {
+// Add simplified login handling
+function handleLogin(username, password) {
     showLoading(true);
     
-    // Validate the API keys by making a test request
-    validateApiKeys(key, secret)
-        .then(() => {
-            apiKey = key;
-            apiSecret = secret;
-            
-            if (remember) {
-                // Store encrypted API keys in local storage
-                const encrypted = btoa(JSON.stringify({ key, secret }));
-                localStorage.setItem(API_KEY_STORAGE, encrypted);
-            }
-            
-            elements.loginModal.hide();
-            initializeApp();
-            
-            // Start API ping interval
-            startApiPingInterval();
-        })
-        .catch(error => {
-            console.error('API connection error:', error);
-            showAlert('Failed to connect to Binance API. Please check your API keys.', 'danger');
-        })
-        .finally(() => {
-            showLoading(false);
-        });
-}
-
-// Start interval to ping Binance API and measure latency
-function startApiPingInterval() {
-    if (pingInterval) {
-        clearInterval(pingInterval);
+    // Demo version can use simplified auth
+    if (username === 'demo' && password === 'demo') {
+        // Use paper trading mode
+        initializePaperTrading(username);
+        elements.loginModal.hide();
+        return;
     }
     
-    pingInterval = setInterval(pingApi, 30000); // 30 seconds
-    pingApi(); // Run immediately once
+    // For real accounts, attempt to get API key from server
+    fetch('https://api.yourtrading.com/auth', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            username,
+            password
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            connectToApi(data.apiKey, data.apiSecret, true);
+        } else {
+            showAlert('Invalid username or password', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Login error:', error);
+        showAlert('Failed to connect to authentication server', 'danger');
+    })
+    .finally(() => {
+        showLoading(false);
+    });
 }
 
-// Ping Binance API to measure latency
-async function pingApi() {
-    if (!apiKey) return;
+// Initialize paper trading mode
+function initializePaperTrading(username) {
+    // Set paper trading mode
+    isPaperTrading = true;
     
-    try {
-        const startTime = performance.now();
-        const response = await fetch(`${API_URL}/api/v3/ping`);
-        const endTime = performance.now();
-        
-        if (response.ok) {
-            apiPingLatency = Math.round(endTime - startTime);
-            if (elements.statPing) {
-                elements.statPing.textContent = `${apiPingLatency}ms`;
-            }
-        }
-    } catch (error) {
-        console.error('API ping error:', error);
-    }
-}
-
-// Validate API keys by making a test request
-async function validateApiKeys(key, secret) {
-    try {
-        const timestamp = Date.now();
-        const queryString = `timestamp=${timestamp}`;
-        const signature = createSignature(queryString, secret);
-        
-        const response = await fetch(`${API_URL}/api/v3/account?${queryString}&signature=${signature}`, {
-            method: 'GET',
-            headers: {
-                'X-MBX-APIKEY': key
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`API request failed with status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        console.error('API validation error:', error);
-        throw error;
-    }
-}
-
-// Create HMAC SHA256 signature for API requests
-function createSignature(queryString, secret) {
-    return CryptoJS.HmacSHA256(queryString, secret).toString(CryptoJS.enc.Hex);
-}
-
-// Initialize the app after successful API connection
-function initializeApp() {
-    updateApiStatus(true);
-    fetchAccountBalance();
+    // Update UI for paper trading
+    elements.tradingModeIndicator.textContent = '📝 PAPER TRADING';
+    elements.tradingModeIndicator.className = 'paper-trading-badge';
+    document.body.classList.add('paper-trading-mode');
+    
+    // Set demo balance
+    elements.accountBalance.value = '10000.00';
+    elements.currentBalance.textContent = '$10,000.00';
+    
+    // Initialize the app in paper trading mode
+    logMessage(`Logged in as ${username} (Paper Trading Mode)`, 'success');
+    showAlert('Paper Trading Mode active. No real funds will be used.', 'info');
+    
+    // Initialize charts and other components
     fetchInitialData();
-    logMessage('Connected to Binance API successfully', 'success');
+    updateApiStatus(true, true);
 }
 
-// Update API connection status display
-function updateApiStatus(connected) {
+// Toggle between paper and live trading
+function toggleTradingMode() {
+    if (isTrading) {
+        showAlert('Please stop trading before switching modes', 'warning');
+        return;
+    }
+    
+    // If currently in paper mode, prompt for login
+    if (isPaperTrading) {
+        if (confirm('Switch to LIVE trading mode? This will use real funds.')) {
+            isPaperTrading = false;
+            logout();
+            showLoginModal();
+        }
+    } else {
+        // If in live mode, confirm switch to paper
+        if (confirm('Switch to PAPER trading mode? Your current session will be ended.')) {
+            logout();
+            initializePaperTrading('paper');
+        }
+    }
+}
+
+// Update API status display with trading mode indicator
+function updateApiStatus(connected, isPaperMode = false) {
     if (connected) {
-        elements.apiStatusBadge.textContent = 'Connected';
-        elements.apiStatusBadge.className = 'badge bg-success me-2';
-        elements.apiKeyMasked.textContent = `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}`;
+        elements.apiStatusBadge.textContent = isPaperMode ? 'Paper Mode' : 'Connected';
+        elements.apiStatusBadge.className = `badge ${isPaperMode ? 'bg-info' : 'bg-success'} me-2`;
+        elements.apiKeyMasked.textContent = isPaperMode ? 
+            'Paper Trading - No API Key Used' : 
+            `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}`;
     } else {
         elements.apiStatusBadge.textContent = 'Disconnected';
         elements.apiStatusBadge.className = 'badge bg-danger me-2';
@@ -432,6 +488,13 @@ function updateApiStatus(connected) {
 
 // Fetch account balance from Binance
 async function fetchAccountBalance() {
+    if (isPaperTrading) {
+        // For paper trading, we use the stored balance
+        const balance = parseFloat(elements.accountBalance.value);
+        elements.currentBalance.textContent = `$${formatNumber(balance)}`;
+        return;
+    }
+    
     if (!apiKey || !apiSecret) {
         showAlert('API keys are required to fetch balance', 'warning');
         return;
@@ -457,14 +520,58 @@ async function fetchAccountBalance() {
         
         const data = await response.json();
         
-        // Find USDT balance
-        const usdtBalance = data.balances.find(b => b.asset === 'USDT');
-        const balance = parseFloat(usdtBalance ? usdtBalance.free : 0).toFixed(2);
+        // Find USDT and other stablecoin balances
+        const stablecoins = ['USDT', 'BUSD', 'USDC', 'DAI'];
+        let totalBalance = 0;
         
-        elements.accountBalance.value = balance;
-        elements.currentBalance.textContent = `$${formatNumber(balance)}`;
+        stablecoins.forEach(coin => {
+            const coinBalance = data.balances.find(b => b.asset === coin);
+            if (coinBalance) {
+                totalBalance += parseFloat(coinBalance.free) + parseFloat(coinBalance.locked);
+            }
+        });
         
-        logMessage(`Account balance updated: $${balance}`, 'info');
+        // Also fetch BTC and ETH balances and their prices
+        let btcBalance = 0;
+        let ethBalance = 0;
+        
+        const btcData = data.balances.find(b => b.asset === 'BTC');
+        const ethData = data.balances.find(b => b.asset === 'ETH');
+        
+        if (btcData) {
+            btcBalance = parseFloat(btcData.free) + parseFloat(btcData.locked);
+        }
+        
+        if (ethData) {
+            ethBalance = parseFloat(ethData.free) + parseFloat(ethData.locked);
+        }
+        
+        // Fetch current prices for BTC and ETH
+        if (btcBalance > 0 || ethBalance > 0) {
+            const pricesResponse = await fetch(`${API_URL}/api/v3/ticker/price?symbols=["BTCUSDT","ETHUSDT"]`);
+            if (pricesResponse.ok) {
+                const pricesData = await pricesResponse.json();
+                
+                const btcPrice = pricesData.find(p => p.symbol === 'BTCUSDT')?.price || 0;
+                const ethPrice = pricesData.find(p => p.symbol === 'ETHUSDT')?.price || 0;
+                
+                totalBalance += btcBalance * parseFloat(btcPrice);
+                totalBalance += ethBalance * parseFloat(ethPrice);
+            }
+        }
+        
+        // Update balance displays
+        const formattedBalance = totalBalance.toFixed(2);
+        elements.accountBalance.value = formattedBalance;
+        elements.currentBalance.textContent = `$${formatNumber(formattedBalance)}`;
+        
+        // Update additional balance display
+        if (elements.btcBalanceValue) {
+            elements.btcBalanceValue.textContent = btcBalance.toFixed(8);
+            elements.ethBalanceValue.textContent = ethBalance.toFixed(8);
+        }
+        
+        logMessage(`Account balance updated: $${formattedBalance}`, 'info');
     } catch (error) {
         console.error('Error fetching account balance:', error);
         showAlert('Failed to fetch account balance', 'danger');
