@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binance Live Trading Bot</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #0d1117;
+            color: #e6edf3;
+        }
+        .container {
+            width: 95%;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #30363d;
+        }
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #58a6ff;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+        }
+        .settings-section {
+            background-color: #161b22;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid #30363d;
+        }
+        .panel {
+            background-color: #161b22;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid #30363d;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .button {
+            background-color: #238636;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .button:hover {
+            background-color: #2ea043;
+        }
+        .button.stop {
+            background-color: #da3633;
+        }
+        .button.stop:hover {
+            background-color: #f85149;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #8b949e;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+            background-color: #0d1117;
+            color: #e6edf3;
+            box-sizing: border-box;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #30363d;
+        }
+        th {
+            background-color: #161b22;
+            color: #8b949e;
+        }
+        .tab-container {
+            margin-bottom: 20px;
+        }
+        .tab-buttons {
+            display: flex;
+            border-bottom: 1px solid #30363d;
+            margin-bottom: 15px;
+        }
+        .tab-button {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            color: #8b949e;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+        .tab-button.active {
+            color: #58a6ff;
+            border-bottom: 2px solid #58a6ff;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .status {
+            padding: 4px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.running {
+            background-color: #238636;
+            color: white;
+        }
+        .status.stopped {
+            background-color: #da3633;
+            color: white;
+        }
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            margin-bottom: 20px;
+        }
+        .alert {
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+        .alert.success {
+            background-color: rgba(46, 160, 67, 0.2);
+            border: 1px solid #238636;
+            color: #7ee787;
+        }
+        .alert.error {
+            background-color: rgba(218, 54, 51, 0.2);
+            border: 1px solid #da3633;
+            color: #f85149;
+        }
+        #login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #login-form {
+            background-color: #161b22;
+            border-radius: 8px;
+            padding: 30px;
+            width: 350px;
+            border: 1px solid #30363d;
+        }
+        .form-title {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #58a6ff;
+        }
+        .form-footer {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .api-key-mask {
+            font-family: monospace;
+            letter-spacing: 1px;
+        }
+        #json-editor {
+            width: 100%;
+            height: 300px;
+            font-family: monospace;
+            white-space: pre;
+            overflow: auto;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 7px;
+            font-size: 12px;
+            border-radius: 10px;
+            margin-left: 5px;
+        }
+        .badge.profit {
+            background-color: #238636;
+            color: white;
+        }
+        .badge.loss {
+            background-color: #da3633;
+            color: white;
+        }
+        .position-card {
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        .modal-content {
+            background-color: #161b22;
+            margin: 10% auto;
+            padding: 20px;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            width: 50%;
+            max-width: 500px;
+        }
+        .close {
+            color: #8b949e;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: #e6edf3;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Overlay -->
+    <div id="login-overlay">
+        <div id="login-form">
+            <h2 class="form-title">Login to Trading Bot</h2>
+            <div class="input-group">
+                <label for="apiKey">Binance API Key</label>
+                <input type="password" id="apiKey" placeholder="Enter your API Key">
+            </div>
+            <div class="input-group">
+                <label for="apiSecret">Binance API Secret</label>
+                <input type="password" id="apiSecret" placeholder="Enter your API Secret">
+            </div>
+            <div class="input-group">
+                <label for="discordWebhook">Discord Webhook URL (Optional)</label>
+                <input type="text" id="discordWebhook" placeholder="Enter Discord webhook URL">
+            </div>
+            <div class="input-group">
+                <button class="button" id="login-button">Login</button>
+            </div>
+            <div class="form-footer">
+                <small>Your API keys are stored locally and never sent to any server.</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <div class="title">Binance Live Trading Bot</div>
+            <div class="controls">
+                <span id="connection-status" class="status stopped">Disconnected</span>
+                <button id="logout-button" class="button">Logout</button>
+            </div>
+        </div>
+
+        <div class="tab-container">
+            <div class="tab-buttons">
+                <button class="tab-button active" data-tab="dashboard">Dashboard</button>
+                <button class="tab-button" data-tab="settings">Settings</button>
+                <button class="tab-button" data-tab="logs">Logs</button>
+                <button class="tab-button" data-tab="advanced">Advanced</button>
+            </div>
+
+            <!-- Dashboard Tab -->
+            <div id="dashboard" class="tab-content active">
+                <div class="panel">
+                    <h3>Trading Overview</h3>
+                    <div class="grid">
+                        <div class="panel">
+                            <h4>Balance</h4>
+                            <div id="balance-display">Loading...</div>
+                        </div>
+                        <div class="panel">
+                            <h4>Open Positions</h4>
+                            <div id="positions-count">0</div>
+                        </div>
+                        <div class="panel">
+                            <h4>PnL Today</h4>
+                            <div id="pnl-today">0.00 USDT</div>
+                        </div>
+                        <div class="panel">
+                            <h4>Status</h4>
+                            <div>
+                                <button id="start-bot" class="button">Start Bot</button>
+                                <button id="stop-bot" class="button stop" style="display: none;">Stop Bot</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>Market Data</h3>
+                    <div class="chart-container" id="price-chart"></div>
+                </div>
+
+                <div class="panel">
+                    <h3>Active Positions</h3>
+                    <div id="positions-container">
+                        <p>No active positions.</p>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>Recent Trades</h3>
+                    <table id="trades-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Symbol</th>
+                                <th>Type</th>
+                                <th>Side</th>
+                                <th>Price</th>
+                                <th>Quantity</th>
+                                <th>PnL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Trade rows will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="settings" class="tab-content">
+                <div class="settings-section">
+                    <h3>API Configuration</h3>
+                    <div class="input-group">
+                        <label>API Key</label>
+                        <div class="api-key-mask" id="api-key-display">••••••••••••••••</div>
+                    </div>
+                    <div class="input-group">
+                        <label>API Secret</label>
+                        <div class="api-key-mask" id="api-secret-display">••••••••••••••••</div>
+                    </div>
+                    <div class="input-group">
+                        <button id="update-api-keys" class="button">Update API Keys</button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Trading Parameters</h3>
+                    <div class="input-group">
+                        <label for="symbol">Trading Pair</label>
+                        <select id="symbol">
+                            <option value="BTCUSDT">BTC/USDT</option>
+                            <option value="ETHUSDT">ETH/USDT</option>
+                            <option value="BNBUSDT">BNB/USDT</option>
+                            <option value="SOLUSDT">SOL/USDT</option>
+                            <option value="ADAUSDT">ADA/USDT</option>
+                            <option value="DOGEUSDT">DOGE/USDT</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label for="timeframe">Timeframe</label>
+                        <select id="timeframe">
+                            <option value="1m">1 minute</option>
+                            <option value="5m">5 minutes</option>
+                            <option value="15m">15 minutes</option>
+                            <option value="1h" selected>1 hour</option>
+                            <option value="4h">4 hours</option>
+                            <option value="1d">1 day</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label for="strategy">Trading Strategy</label>
+                        <select id="strategy">
+                            <option value="macd">MACD</option>
+                            <option value="rsi">RSI</option>
+                            <option value="bb">Bollinger Bands</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Risk Management</h3>
+                    <div class="input-group">
+                        <label for="amount">Amount per Trade (USDT)</label>
+                        <input type="number" id="amount" min="10" step="1" value="100">
+                    </div>
+                    <div class="input-group">
+                        <label for="maxPositions">Max Concurrent Positions</label>
+                        <input type="number" id="maxPositions" min="1" max="10" value="3">
+                    </div>
+                    <div class="input-group">
+                        <label for="stopLoss">Stop Loss (%)</label>
+                        <input type="number" id="stopLoss" min="0.1" max="20" step="0.1" value="2">
+                    </div>
+                    <div class="input-group">
+                        <label for="takeProfit">Take Profit (%)</label>
+                        <input type="number" id="takeProfit" min="0.1" max="50" step="0.1" value="5">
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Notifications</h3>
+                    <div class="input-group">
+                        <label for="discordWebhookUrl">Discord Webhook URL</label>
+                        <input type="text" id="discordWebhookUrl" placeholder="Enter Discord webhook URL">
+                    </div>
+                    <div class="input-group">
+                        <label>Notification Events</label>
+                        <div>
+                            <input type="checkbox" id="notifyTrades" checked>
+                            <label for="notifyTrades" style="display: inline;">Trades</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="notifySignals" checked>
+                            <label for="notifySignals" style="display: inline;">Signals</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="notifyErrors" checked>
+                            <label for="notifyErrors" style="display: inline;">Errors</label>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <button id="test-notification" class="button">Test Notification</button>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <button id="save-settings" class="button">Save Settings</button>
+                </div>
+            </div>
+
+            <!-- Logs Tab -->
+            <div id="logs" class="tab-content">
+                <div class="panel">
+                    <h3>Activity Logs</h3>
+                    <div class="input-group">
+                        <label for="log-level">Log Level</label>
+                        <select id="log-level">
+                            <option value="debug">Debug</option>
+                            <option value="info" selected>Info</option>
+                            <option value="warning">Warning</option>
+                            <option value="error">Error</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <button id="clear-logs" class="button">Clear Logs</button>
+                    </div>
+                    <div id="log-container" style="height: 500px; overflow-y: auto; background-color: #0d1117; padding: 10px; border-radius: 4px; font-family: monospace;">
+                        <!-- Logs will be appended here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Advanced Tab -->
+            <div id="advanced" class="tab-content">
+                <div class="settings-section">
+                    <h3>Strategy Configuration (JSON)</h3>
+                    <p>Edit the JSON below to customize your trading strategy parameters.</p>
+                    <div class="input-group">
+                        <pre id="json-editor" contenteditable="true">{
+  "strategy": "macd",
+  "parameters": {
+    "fastPeriod": 12,
+    "slowPeriod": 26,
+    "signalPeriod": 9,
+    "overbought": 0.5,
+    "oversold": -0.5
+  }
+}</pre>
+                    </div>
+                    <div class="input-group">
+                        <button id="validate-json" class="button">Validate JSON</button>
+                        <button id="apply-json" class="button">Apply Strategy</button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Backtesting</h3>
+                    <div class="input-group">
+                        <label for="backtest-start">Start Date</label>
+                        <input type="date" id="backtest-start">
+                    </div>
+                    <div class="input-group">
+                        <label for="backtest-end">End Date</label>
+                        <input type="date" id="backtest-end">
+                    </div>
+                    <div class="input-group">
+                        <button id="run-backtest" class="button">Run Backtest</button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Data Import/Export</h3>
+                    <div class="input-group">
+                        <button id="export-settings" class="button">Export Settings</button>
+                        <button id="import-settings" class="button">Import Settings</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update API Keys Modal -->
+    <div id="api-keys-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3>Update API Keys</h3>
+            <div class="input-group">
+                <label for="new-api-key">New API Key</label>
+                <input type="password" id="new-api-key" placeholder="Enter new API Key">
+            </div>
+            <div class="input-group">
+                <label for="new-api-secret">New API Secret</label>
+                <input type="password" id="new-api-secret" placeholder="Enter new API Secret">
+            </div>
+            <div class="input-group">
+                <button id="save-new-api-keys" class="button">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Settings Modal -->
+    <div id="import-settings-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3>Import Settings</h3>
+            <div class="input-group">
+                <label for="import-json">Paste your settings JSON here</label>
+                <textarea id="import-json" rows="10"></textarea>
+            </div>
+            <div class="input-group">
+                <button id="confirm-import" class="button">Import</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Chart.js for charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@2.3.1/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.1.0/dist/chartjs-adapter-luxon.min.js"></script>
+    
+    <!-- Load Binance Trading Bot JS -->
+    <script src="live.js"></script>
+    <script src="binance-api.js"></script>
+    <script src="trading-strategies.js"></script>
+    <script src="notifications.js"></script>
+    <script src="config.js"></script>
+</body>
+</html>
