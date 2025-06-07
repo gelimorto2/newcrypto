@@ -16,6 +16,8 @@ let tradeHistory = [];
 let equityHistory = [];
 let currentPosition = null;
 let websocket = null;
+let pingInterval = null;
+let apiPingLatency = 0;
 let orderBook = {
     bids: [],
     asks: []
@@ -28,11 +30,33 @@ const elements = {};
 document.addEventListener('DOMContentLoaded', () => {
     cacheElements();
     setupEventListeners();
-    updateClock();
-    setInterval(updateClock, 1000);
+    startLiveClock();
     checkMobileDevice();
     loadSettings();
+    
+    // Initialize with trading inactive
+    updateBotStatus(false);
+    
+    // Load initial empty chart
+    initializeEmptyCharts();
+    
+    // Check for stored API keys
     checkStoredApiKeys();
+    
+    // Add mutation observer to detect tab changes that might affect chart visibility
+    const tabContent = document.querySelector('.tab-content');
+    if (tabContent) {
+        const observer = new MutationObserver(() => {
+            // When tabs change, ensure charts render correctly
+            setTimeout(ensureChartsRendered, 100);
+        });
+        
+        observer.observe(tabContent, {
+            attributes: true,
+            childList: true,
+            subtree: true
+        });
+    }
 });
 
 // Cache frequently used DOM elements
@@ -98,6 +122,7 @@ function cacheElements() {
     elements.statDailyTrades = document.getElementById('stat-daily-trades');
     elements.statDailyPnl = document.getElementById('stat-daily-pnl');
     elements.statExecution = document.getElementById('stat-execution');
+    elements.statPing = document.getElementById('stat-ping');
     
     // Position card elements
     elements.positionCard = document.getElementById('position-card');
@@ -206,6 +231,69 @@ function setupEventListeners() {
     });
 }
 
+// Update bot status display
+function updateBotStatus(isActive) {
+    if (isActive) {
+        elements.botStatus.textContent = '🔴 LIVE TRADING - ACTIVE';
+        elements.botStatus.classList.remove('idle');
+        elements.botStatus.classList.add('active');
+        elements.botActivity.classList.remove('scanning', 'waiting');
+        elements.botActivity.classList.add('trading');
+        elements.activityStatus.textContent = 'Trading Active';
+    } else {
+        elements.botStatus.textContent = '🔴 LIVE TRADING - IDLE';
+        elements.botStatus.classList.remove('active');
+        elements.botStatus.classList.add('idle');
+        elements.botActivity.classList.remove('trading');
+        elements.botActivity.classList.add('waiting');
+        elements.activityStatus.textContent = 'Trading Inactive';
+    }
+}
+
+// Start the live clock
+function startLiveClock() {
+    updateClock();
+    setInterval(updateClock, 1000);
+}
+
+// Improved function to initialize empty charts
+function initializeEmptyCharts() {
+    // Default empty data point for charts
+    const defaultData = [{
+        time: Math.floor(Date.now() / 1000),
+        value: 0
+    }];
+    
+    // Initialize with empty but valid data structures
+    initializePriceChart([]);
+    initializeEquityChart(defaultData);
+    initializeDepthChart();
+    
+    // Add fallback timeout to ensure charts render
+    setTimeout(() => {
+        if (chartInstance && chartInstance.chart) {
+            chartInstance.chart.applyOptions({
+                width: elements.priceChart.clientWidth,
+                height: elements.priceChart.clientHeight
+            });
+        }
+        
+        if (equityChartInstance && equityChartInstance.chart) {
+            equityChartInstance.chart.applyOptions({
+                width: elements.equityChart.clientWidth,
+                height: elements.equityChart.clientHeight
+            });
+        }
+        
+        if (depthChartInstance && depthChartInstance.chart) {
+            depthChartInstance.chart.applyOptions({
+                width: elements.depthChart.clientWidth,
+                height: elements.depthChart.clientHeight
+            });
+        }
+    }, 500);
+}
+
 // Check for stored API keys
 function checkStoredApiKeys() {
     const storedKeys = localStorage.getItem(API_KEY_STORAGE);
@@ -247,6 +335,9 @@ function connectToApi(key, secret, remember) {
             
             elements.loginModal.hide();
             initializeApp();
+            
+            // Start API ping interval
+            startApiPingInterval();
         })
         .catch(error => {
             console.error('API connection error:', error);
@@ -255,6 +346,36 @@ function connectToApi(key, secret, remember) {
         .finally(() => {
             showLoading(false);
         });
+}
+
+// Start interval to ping Binance API and measure latency
+function startApiPingInterval() {
+    if (pingInterval) {
+        clearInterval(pingInterval);
+    }
+    
+    pingInterval = setInterval(pingApi, 30000); // 30 seconds
+    pingApi(); // Run immediately once
+}
+
+// Ping Binance API to measure latency
+async function pingApi() {
+    if (!apiKey) return;
+    
+    try {
+        const startTime = performance.now();
+        const response = await fetch(`${API_URL}/api/v3/ping`);
+        const endTime = performance.now();
+        
+        if (response.ok) {
+            apiPingLatency = Math.round(endTime - startTime);
+            if (elements.statPing) {
+                elements.statPing.textContent = `${apiPingLatency}ms`;
+            }
+        }
+    } catch (error) {
+        console.error('API ping error:', error);
+    }
 }
 
 // Validate API keys by making a test request
@@ -464,13 +585,13 @@ async function updateMarketData(symbol) {
 
 // Initialize charts
 function initializeCharts() {
-    initializePriceChart();
-    initializeEquityChart();
+    initializePriceChart(candleData);
+    initializeEquityChart(equityHistory);
     initializeDepthChart();
 }
 
 // Initialize price chart
-function initializePriceChart() {
+function initializePriceChart(data) {
     if (chartInstance) {
         chartInstance.remove();
     }
@@ -507,43 +628,45 @@ function initializePriceChart() {
         wickDownColor: '#ef5350',
     });
 
-    candleSeries.setData(candleData);
-    
-    // Add volume series
-    const volumeSeries = chart.addHistogramSeries({
-        color: '#26a69a',
-        priceFormat: {
-            type: 'volume',
-        },
-        priceScaleId: '',
-        scaleMargins: {
-            top: 0.8,
-            bottom: 0,
-        },
-    });
-    
-    // Set volume data
-    const volumeData = candleData.map(candle => ({
-        time: candle.time,
-        value: candle.volume,
-        color: candle.close > candle.open ? '#26a69a' : '#ef5350',
-    }));
-    
-    volumeSeries.setData(volumeData);
-    
-    // Add markers for trades
-    if (tradeHistory.length > 0) {
-        const markers = tradeHistory.map(trade => {
-            return {
-                time: trade.entryTime / 1000,
-                position: trade.type === 'long' ? 'belowBar' : 'aboveBar',
-                color: trade.type === 'long' ? '#26a69a' : '#ef5350',
-                shape: trade.type === 'long' ? 'arrowUp' : 'arrowDown',
-                text: trade.type === 'long' ? 'BUY' : 'SELL',
-            };
+    if (data && data.length > 0) {
+        candleSeries.setData(data);
+        
+        // Add volume series
+        const volumeSeries = chart.addHistogramSeries({
+            color: '#26a69a',
+            priceFormat: {
+                type: 'volume',
+            },
+            priceScaleId: '',
+            scaleMargins: {
+                top: 0.8,
+                bottom: 0,
+            },
         });
         
-        candleSeries.setMarkers(markers);
+        // Set volume data
+        const volumeData = data.map(candle => ({
+            time: candle.time,
+            value: candle.volume,
+            color: candle.close > candle.open ? '#26a69a' : '#ef5350',
+        }));
+        
+        volumeSeries.setData(volumeData);
+        
+        // Add markers for trades
+        if (tradeHistory.length > 0) {
+            const markers = tradeHistory.map(trade => {
+                return {
+                    time: trade.entryTime / 1000,
+                    position: trade.type === 'long' ? 'belowBar' : 'aboveBar',
+                    color: trade.type === 'long' ? '#26a69a' : '#ef5350',
+                    shape: trade.type === 'long' ? 'arrowUp' : 'arrowDown',
+                    text: trade.type === 'long' ? 'BUY' : 'SELL',
+                };
+            });
+            
+            candleSeries.setMarkers(markers);
+        }
     }
     
     // Handle window resize
@@ -556,11 +679,18 @@ function initializePriceChart() {
     
     resizeObserver.observe(elements.priceChart);
     
-    chartInstance = chart;
+    chartInstance = {
+        chart,
+        candleSeries,
+        remove: () => {
+            chart.remove();
+            resizeObserver.disconnect();
+        }
+    };
 }
 
 // Initialize equity chart
-function initializeEquityChart() {
+function initializeEquityChart(data) {
     if (equityChartInstance) {
         equityChartInstance.remove();
     }
@@ -590,16 +720,21 @@ function initializeEquityChart() {
         lineWidth: 2,
     });
     
-    // Initialize with starting balance if no equity history
-    if (equityHistory.length === 0) {
+    // Initialize with starting balance if equity history is empty
+    if (data.length === 0 && elements.accountBalance.value) {
         const startingBalance = parseFloat(elements.accountBalance.value);
-        equityHistory.push({
-            time: Math.floor(Date.now() / 1000),
-            value: startingBalance
-        });
+        if (startingBalance > 0) {
+            equityHistory.push({
+                time: Math.floor(Date.now() / 1000),
+                value: startingBalance
+            });
+            data = equityHistory;
+        }
     }
     
-    lineSeries.setData(equityHistory);
+    if (data && data.length > 0) {
+        lineSeries.setData(data);
+    }
     
     // Handle window resize
     const resizeObserver = new ResizeObserver(() => {
@@ -611,7 +746,14 @@ function initializeEquityChart() {
     
     resizeObserver.observe(elements.equityChart);
     
-    equityChartInstance = chart;
+    equityChartInstance = {
+        chart,
+        lineSeries,
+        remove: () => {
+            chart.remove();
+            resizeObserver.disconnect();
+        }
+    };
 }
 
 // Initialize depth chart
@@ -673,49 +815,62 @@ function initializeDepthChart() {
     updateDepthChart();
 }
 
-// Update depth chart with order book data
+// Improved depth chart update function with error handling
 function updateDepthChart() {
     if (!depthChartInstance) return;
     
-    const { bidSeries, askSeries } = depthChartInstance;
-    
-    // Calculate cumulative volumes
-    let cumulativeBids = [];
-    let cumulativeAsks = [];
-    
-    let bidVolume = 0;
-    let askVolume = 0;
-    
-    for (let i = 0; i < orderBook.bids.length; i++) {
-        bidVolume += orderBook.bids[i].volume;
-        cumulativeBids.push({
-            value: bidVolume,
-            price: orderBook.bids[i].price
-        });
+    try {
+        const { bidSeries, askSeries } = depthChartInstance;
+        
+        // If orderbook is empty, don't try to update
+        if (!orderBook.bids.length && !orderBook.asks.length) return;
+        
+        // Calculate cumulative volumes
+        let cumulativeBids = [];
+        let cumulativeAsks = [];
+        
+        let bidVolume = 0;
+        let askVolume = 0;
+        
+        for (let i = 0; i < orderBook.bids.length; i++) {
+            bidVolume += orderBook.bids[i].volume;
+            cumulativeBids.push({
+                value: bidVolume,
+                price: orderBook.bids[i].price
+            });
+        }
+        
+        for (let i = 0; i < orderBook.asks.length; i++) {
+            askVolume += orderBook.asks[i].volume;
+            cumulativeAsks.push({
+                value: askVolume,
+                price: orderBook.asks[i].price
+            });
+        }
+        
+        // Convert to series data
+        const bidData = cumulativeBids.map(bid => ({
+            value: bid.value,
+            time: bid.price
+        }));
+        
+        const askData = cumulativeAsks.map(ask => ({
+            value: ask.value,
+            time: ask.price
+        }));
+        
+        // Set data to series with error handling
+        if (bidData.length > 0) {
+            bidSeries.setData(bidData);
+        }
+        
+        if (askData.length > 0) {
+            askSeries.setData(askData);
+        }
+    } catch (error) {
+        console.error('Error updating depth chart:', error);
+        logMessage('Failed to update order book visualization', 'error');
     }
-    
-    for (let i = 0; i < orderBook.asks.length; i++) {
-        askVolume += orderBook.asks[i].volume;
-        cumulativeAsks.push({
-            value: askVolume,
-            price: orderBook.asks[i].price
-        });
-    }
-    
-    // Convert to series data
-    const bidData = cumulativeBids.map(bid => ({
-        value: bid.value,
-        time: bid.price
-    }));
-    
-    const askData = cumulativeAsks.map(ask => ({
-        value: ask.value,
-        time: ask.price
-    }));
-    
-    // Set data to series
-    bidSeries.setData(bidData);
-    askSeries.setData(askData);
 }
 
 // Start trading
@@ -735,12 +890,7 @@ function startTrading() {
     
     // Update UI
     isTrading = true;
-    elements.botStatus.textContent = '🔴 LIVE TRADING - ACTIVE';
-    elements.botStatus.classList.remove('idle');
-    elements.botStatus.classList.add('active');
-    elements.botActivity.classList.remove('scanning', 'waiting');
-    elements.botActivity.classList.add('trading');
-    elements.activityStatus.textContent = 'Trading Active';
+    updateBotStatus(true);
     
     // Enable/disable buttons
     elements.startTradingBtn.disabled = true;
@@ -757,8 +907,9 @@ function startTrading() {
     showAlert('Live trading started. Be cautious with real funds!', 'info');
 }
 
-// Connect to WebSocket for real-time data
+// Improved WebSocket connection with reconnection
 function connectToWebSocket(symbol) {
+    // Close existing socket if any
     if (websocket) {
         websocket.close();
     }
@@ -766,44 +917,80 @@ function connectToWebSocket(symbol) {
     const streamName = `${symbol}@kline_1m`;
     websocket = new WebSocket(`wss://stream.binance.com:9443/ws/${streamName}`);
     
+    // Track reconnection attempts
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    let reconnectTimeout = null;
+    
     websocket.onopen = () => {
         console.log('WebSocket connected');
         logMessage('Connected to Binance WebSocket', 'info');
+        reconnectAttempts = 0; // Reset reconnect counter on successful connection
     };
     
     websocket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        
-        if (data.e === 'kline') {
-            const candle = data.k;
-            const currentTime = new Date().toISOString();
+        try {
+            const data = JSON.parse(event.data);
             
-            // Update current price
-            currentPrice = parseFloat(candle.c);
-            elements.marketPrice.textContent = `$${formatNumber(currentPrice)}`;
-            
-            // Update last tick info
-            elements.lastTickInfo.textContent = `Last update: ${formatTime(new Date())}`;
-            
-            // Update position if exists
-            if (currentPosition) {
-                updatePositionCard();
+            if (data.e === 'kline') {
+                const candle = data.k;
+                
+                // Update current price
+                currentPrice = parseFloat(candle.c);
+                elements.marketPrice.textContent = `$${formatNumber(currentPrice)}`;
+                
+                // Update last tick info
+                elements.lastTickInfo.textContent = `Last update: ${formatTime(new Date())}`;
+                
+                // Update position if exists
+                if (currentPosition) {
+                    updatePositionCard();
+                }
+                
+                // Execute trading strategy
+                if (isTrading) {
+                    executeStrategy();
+                }
             }
-            
-            // Execute trading strategy
-            if (isTrading) {
-                executeStrategy();
-            }
+        } catch (error) {
+            console.error('Error processing WebSocket message:', error);
+            logMessage('Error processing market data', 'error');
         }
     };
     
-    websocket.onclose = () => {
-        console.log('WebSocket disconnected');
+    websocket.onclose = (event) => {
+        console.log('WebSocket disconnected', event.code, event.reason);
+        
+        // Only attempt to reconnect if we're still in trading mode
+        if (isTrading && reconnectAttempts < maxReconnectAttempts) {
+            logMessage(`WebSocket disconnected. Attempting to reconnect (${reconnectAttempts + 1}/${maxReconnectAttempts})...`, 'warning');
+            
+            // Exponential backoff for reconnect attempts
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+            reconnectAttempts++;
+            
+            reconnectTimeout = setTimeout(() => {
+                connectToWebSocket(symbol);
+            }, delay);
+        } else if (reconnectAttempts >= maxReconnectAttempts) {
+            logMessage('Failed to reconnect to WebSocket after maximum attempts. Trading stopped.', 'error');
+            stopTrading();
+        }
     };
     
     websocket.onerror = (error) => {
         console.error('WebSocket error:', error);
         logMessage('WebSocket connection error', 'error');
+    };
+    
+    // Add cleanup function to clear any pending reconnect attempts
+    return function cleanup() {
+        if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout);
+        }
+        if (websocket) {
+            websocket.close();
+        }
     };
 }
 
@@ -1299,9 +1486,8 @@ function updateEquityHistory() {
     });
     
     // Update equity chart
-    if (equityChartInstance) {
-        const lineSeries = equityChartInstance.series()[0];
-        lineSeries.setData(equityHistory);
+    if (equityChartInstance && equityChartInstance.lineSeries) {
+        equityChartInstance.lineSeries.setData(equityHistory);
     }
 }
 
@@ -1382,20 +1568,16 @@ function updateStatistics() {
 function stopTrading() {
     if (!isTrading) return;
     
-    // Disconnect WebSocket
+    // Disconnect WebSocket with proper cleanup
     if (websocket) {
+        // We need to set a flag to prevent reconnection attempts
+        isTrading = false;
         websocket.close();
         websocket = null;
     }
     
     // Update UI
-    isTrading = false;
-    elements.botStatus.textContent = '🔴 LIVE TRADING - IDLE';
-    elements.botStatus.classList.remove('active');
-    elements.botStatus.classList.add('idle');
-    elements.botActivity.classList.remove('trading');
-    elements.botActivity.classList.add('waiting');
-    elements.activityStatus.textContent = 'Trading Stopped';
+    updateBotStatus(false);
     
     // Enable/disable buttons
     elements.startTradingBtn.disabled = false;
@@ -1417,6 +1599,11 @@ function logout() {
     // Disconnect WebSocket
     if (websocket) {
         websocket.close();
+    }
+    
+    // Stop ping interval
+    if (pingInterval) {
+        clearInterval(pingInterval);
     }
     
     // Stop trading if active
@@ -1476,8 +1663,7 @@ function saveSettings() {
     localStorage.setItem(SETTINGS_STORAGE, JSON.stringify(settings));
     showAlert('Settings saved successfully', 'success');
 }
-
-// Load settings from local storage
+// Continuation of loadSettings function
 function loadSettings() {
     const storedSettings = localStorage.getItem(SETTINGS_STORAGE);
     if (!storedSettings) return;
@@ -1500,8 +1686,8 @@ function loadSettings() {
         elements.atrMultValue.textContent = settings.atrMult || 0.75;
         
         // Apply trading settings
-        elements.positionSize.value = settings.positionSize || 10;
-        elements.positionSizeValue.textContent = `${settings.positionSize || 10}%`;
+        elements.positionSize.value = settings.positionSize || 5;
+        elements.positionSizeValue.textContent = `${settings.positionSize || 5}%`;
         
         document.getElementById('take-profit-value').value = settings.takeProfit || 3.0;
         document.getElementById('stop-loss-value').value = settings.stopLoss || 2.0;
@@ -1538,10 +1724,11 @@ function loadSettings() {
     }
 }
 
-// Update the clock display
+// Update the clock display with real-time
 function updateClock() {
     const now = new Date();
-    elements.clockDisplay.textContent = formatDateTime(now);
+    const formattedDate = now.toISOString().replace('T', ' ').split('.')[0] + ' UTC';
+    elements.clockDisplay.textContent = formattedDate;
 }
 
 // Check if the device is mobile
@@ -1623,56 +1810,72 @@ function formatLargeNumber(number) {
     }
 }
 
-// Window resize event handler
-window.addEventListener('resize', () => {
-    if (chartInstance) {
-        chartInstance.applyOptions({
+// Add this throttling function for chart updates
+function throttle(func, delay) {
+    let lastCall = 0;
+    return function(...args) {
+        const now = Date.now();
+        if (now - lastCall >= delay) {
+            lastCall = now;
+            return func.apply(this, args);
+        }
+    };
+}
+
+// Create a throttled resize handler to prevent excessive updates
+const throttledResizeHandler = throttle(() => {
+    if (chartInstance && chartInstance.chart) {
+        chartInstance.chart.applyOptions({
             width: elements.priceChart.clientWidth,
             height: elements.priceChart.clientHeight
         });
     }
     
-    if (equityChartInstance) {
-        equityChartInstance.applyOptions({
+    if (equityChartInstance && equityChartInstance.chart) {
+        equityChartInstance.chart.applyOptions({
             width: elements.equityChart.clientWidth,
             height: elements.equityChart.clientHeight
         });
     }
     
-    if (depthChartInstance) {
+    if (depthChartInstance && depthChartInstance.chart) {
         depthChartInstance.chart.applyOptions({
             width: elements.depthChart.clientWidth,
             height: elements.depthChart.clientHeight
         });
     }
-});
+}, 100); // 100ms throttle
 
-// Fix for settings tab toggle behavior
-document.addEventListener('DOMContentLoaded', function() {
-    // Fix toggling behavior for settings inputs
-    function setupToggle(toggleId, inputId) {
-        const toggle = document.getElementById(toggleId);
-        const input = document.getElementById(inputId);
-        
-        if (toggle && input) {
-            toggle.addEventListener('change', function() {
-                input.disabled = !this.checked;
-            });
-            
-            // Initialize state
-            input.disabled = !toggle.checked;
-        }
+// Replace the resize event listener
+window.removeEventListener('resize', window.resizeHandler); // Remove if exists
+window.resizeHandler = throttledResizeHandler;
+window.addEventListener('resize', window.resizeHandler);
+
+// Add a periodic check to ensure charts are properly sized
+function ensureChartsRendered() {
+    if (chartInstance && chartInstance.chart) {
+        chartInstance.chart.applyOptions({
+            width: elements.priceChart.clientWidth,
+            height: elements.priceChart.clientHeight
+        });
+        chartInstance.chart.timeScale().fitContent();
     }
     
-    // Setup all toggles
-    setupToggle('trailing-stop-toggle', 'trailing-stop-value');
-    setupToggle('take-profit-toggle', 'take-profit-value');
-    setupToggle('stop-loss-toggle', 'stop-loss-value');
-    setupToggle('risk-management-toggle', 'max-drawdown-value');
-    setupToggle('risk-management-toggle', 'max-daily-loss-value');
-    setupToggle('discord-alert-toggle', 'discord-webhook-input');
-    setupToggle('telegram-alert-toggle', 'telegram-token-input');
-    setupToggle('telegram-alert-toggle', 'telegram-chatid-input');
-    setupToggle('email-alert-toggle', 'email-address-input');
-    setupToggle('sound-alert-toggle', 'sound-volume-input');
-});
+    if (equityChartInstance && equityChartInstance.chart) {
+        equityChartInstance.chart.applyOptions({
+            width: elements.equityChart.clientWidth,
+            height: elements.equityChart.clientHeight
+        });
+        equityChartInstance.chart.timeScale().fitContent();
+    }
+    
+    if (depthChartInstance && depthChartInstance.chart) {
+        depthChartInstance.chart.applyOptions({
+            width: elements.depthChart.clientWidth,
+            height: elements.depthChart.clientHeight
+        });
+    }
+}
+
+// Call this periodically to ensure charts are rendered correctly
+setInterval(ensureChartsRendered, 60000); // Check every minute
