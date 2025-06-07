@@ -1,203 +1,183 @@
 /**
- * WebSocket Handler for Binance Trading Bot
- * Handles real-time data streams from Binance WebSocket API
+ * Enhanced WebSocket Handler for Binance Stream
+ * Handles WebSocket connections with auto-reconnect and error handling
  */
 
-class WebSocketHandler {
-    constructor() {
+class BinanceWebSocketHandler {
+    constructor(baseUrl = 'wss://stream.binance.com:9443/ws') {
+        this.baseUrl = baseUrl;
         this.socket = null;
-        this.isConnected = false;
+        this.subscriptions = new Map();
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
-        this.reconnectDelay = 5000; // 5 seconds
-        this.baseUrl = 'wss://stream.binance.com:9443/ws';
-        this.subscriptions = [];
-        this.callbacks = {};
-        this.lastMessageTime = 0;
-        this.pingInterval = null;
+        this.reconnectDelay = 1000;
+        this.isConnected = false;
+        this.heartbeatInterval = null;
+        this.listeners = {
+            connected: [],
+            disconnected: [],
+            error: [],
+            message: [],
+            kline: [],
+            trade: [],
+            ticker: [],
+            depth: []
+        };
     }
 
     /**
-     * Initialize WebSocket connection
+     * Connect to WebSocket server
+     * @returns {Promise} - Resolves when connection is established
      */
-    init() {
-        if (this.socket) {
-            this.close();
-        }
-
-        this.socket = new WebSocket(this.baseUrl);
-        this.setupEventListeners();
-        this.startPingInterval();
-
-        this.emit('connecting');
-        logMessage('info', 'Connecting to Binance WebSocket...');
-    }
-
-    /**
-     * Set up WebSocket event listeners
-     */
-    setupEventListeners() {
-        this.socket.addEventListener('open', () => {
-            this.isConnected = true;
-            this.reconnectAttempts = 0;
-            this.emit('connected');
-            logMessage('info', 'WebSocket connected');
-
-            // Resubscribe to previous streams if any
-            if (this.subscriptions.length > 0) {
-                this.subscribeToStreams(this.subscriptions);
+    connect() {
+        return new Promise((resolve, reject) => {
+            if (this.socket && this.isConnected) {
+                resolve();
+                return;
             }
-        });
 
-        this.socket.addEventListener('message', (event) => {
-            this.lastMessageTime = Date.now();
-            try {
-                const data = JSON.parse(event.data);
+            this.socket = new WebSocket(this.baseUrl);
+
+            this.socket.onopen = () => {
+                console.log('WebSocket connected');
+                this.isConnected = true;
+                this.reconnectAttempts = 0;
+                this._startHeartbeat();
+                this._resubscribeAll();
+                this._triggerEvent('connected');
+                resolve();
+            };
+
+            this.socket.onclose = (event) => {
+                console.log(`WebSocket disconnected: ${event.code} ${event.reason}`);
+                this.isConnected = false;
+                this._stopHeartbeat();
+                this._triggerEvent('disconnected', event);
                 
-                // Handle different message types
-                if (data.e === 'kline') {
-                    this.emit('kline', data);
-                } else if (data.e === 'trade') {
-                    this.emit('trade', data);
-                } else if (data.e === '24hrTicker') {
-                    this.emit('ticker', data);
-                } else if (data.e === 'bookTicker') {
-                    this.emit('bookTicker', data);
-                } else if (data.result === null) {
-                    // Subscription response
-                    logMessage('debug', 'Successfully subscribed to streams');
-                } else {
-                    // Other message types
-                    this.emit('message', data);
+                if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                    this.reconnectAttempts++;
+                    const delay = this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1);
+                    console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+                    setTimeout(() => this.connect(), delay);
                 }
-            } catch (error) {
-                logMessage('error', `Failed to parse WebSocket message: ${error.message}`);
-            }
-        });
+            };
 
-        this.socket.addEventListener('close', () => {
-            this.isConnected = false;
-            this.emit('disconnected');
-            logMessage('warning', 'WebSocket disconnected');
-            
-            // Clear ping interval
-            if (this.pingInterval) {
-                clearInterval(this.pingInterval);
-                this.pingInterval = null;
-            }
-            
-            // Attempt to reconnect
-            this.attemptReconnect();
-        });
+            this.socket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                this._triggerEvent('error', error);
+                reject(error);
+            };
 
-        this.socket.addEventListener('error', (error) => {
-            this.emit('error', error);
-            logMessage('error', `WebSocket error: ${error.message || 'Unknown error'}`);
+            this.socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    this._triggerEvent('message', data);
+                    
+                    // Handle different message types
+                    if (data.e === 'kline') {
+                        this._triggerEvent('kline', data);
+                    } else if (data.e === 'trade') {
+                        this._triggerEvent('trade', data);
+                    } else if (data.e === 'ticker') {
+                        this._triggerEvent('ticker', data);
+                    } else if (data.e === 'depthUpdate') {
+                        this._triggerEvent('depth', data);
+                    }
+                } catch (error) {
+                    console.error('Error parsing WebSocket message:', error);
+                }
+            };
         });
     }
 
     /**
-     * Start ping interval to keep connection alive
+     * Send data to WebSocket server
+     * @param {Object} data - Data to send
      */
-    startPingInterval() {
-        if (this.pingInterval) {
-            clearInterval(this.pingInterval);
+    send(data) {
+        if (!this.isConnected) {
+            throw new Error('WebSocket is not connected');
         }
+        this.socket.send(JSON.stringify(data));
+    }
+
+    /**
+     * Subscribe to a stream
+     * @param {string} streamName - Stream name
+     * @param {Object} params - Subscription parameters
+     */
+    subscribe(streamName, params = {}) {
+        const id = Date.now();
+        const subscription = {
+            id,
+            params
+        };
         
-        // Ping every 30 seconds to keep connection alive
-        this.pingInterval = setInterval(() => {
+        this.subscriptions.set(streamName, subscription);
+        
+        if (this.isConnected) {
+            this.send({
+                method: 'SUBSCRIBE',
+                params: [streamName],
+                id
+            });
+        }
+    }
+
+    /**
+     * Unsubscribe from a stream
+     * @param {string} streamName - Stream name
+     */
+    unsubscribe(streamName) {
+        const subscription = this.subscriptions.get(streamName);
+        if (subscription) {
             if (this.isConnected) {
-                this.socket.send(JSON.stringify({ method: 'PING' }));
-                logMessage('debug', 'Ping sent to WebSocket server');
+                this.send({
+                    method: 'UNSUBSCRIBE',
+                    params: [streamName],
+                    id: subscription.id
+                });
             }
-        }, 30000);
-    }
-
-    /**
-     * Attempt to reconnect after disconnection
-     */
-    attemptReconnect() {
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.reconnectAttempts++;
-            const delay = this.reconnectDelay * this.reconnectAttempts;
-            
-            logMessage('info', `Attempting to reconnect in ${delay / 1000} seconds (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-            
-            setTimeout(() => {
-                this.init();
-            }, delay);
-        } else {
-            logMessage('error', 'Maximum reconnection attempts reached. Please reconnect manually.');
+            this.subscriptions.delete(streamName);
         }
     }
 
     /**
-     * Subscribe to WebSocket streams
-     * @param {Array} streams - Array of stream names
+     * Subscribe to kline/candlestick updates
+     * @param {string} symbol - Trading pair symbol
+     * @param {string} interval - Candlestick interval
      */
-    subscribeToStreams(streams) {
-        if (!this.isConnected) {
-            logMessage('warning', 'Cannot subscribe: WebSocket not connected');
-            return;
-        }
-
-        const subscribeMsg = {
-            method: 'SUBSCRIBE',
-            params: streams,
-            id: Date.now()
-        };
-
-        this.socket.send(JSON.stringify(subscribeMsg));
-        logMessage('info', `Subscribed to streams: ${streams.join(', ')}`);
+    subscribeToKlines(symbol, interval) {
+        const streamName = `${symbol.toLowerCase()}@kline_${interval}`;
+        this.subscribe(streamName, { symbol, interval });
     }
 
     /**
-     * Unsubscribe from WebSocket streams
-     * @param {Array} streams - Array of stream names
+     * Subscribe to trade updates
+     * @param {string} symbol - Trading pair symbol
      */
-    unsubscribeFromStreams(streams) {
-        if (!this.isConnected) {
-            logMessage('warning', 'Cannot unsubscribe: WebSocket not connected');
-            return;
-        }
-
-        const unsubscribeMsg = {
-            method: 'UNSUBSCRIBE',
-            params: streams,
-            id: Date.now()
-        };
-
-        this.socket.send(JSON.stringify(unsubscribeMsg));
-        logMessage('info', `Unsubscribed from streams: ${streams.join(', ')}`);
+    subscribeToTrades(symbol) {
+        const streamName = `${symbol.toLowerCase()}@trade`;
+        this.subscribe(streamName, { symbol });
     }
 
     /**
-     * Subscribe to a single stream
-     * @param {string} stream - Stream name
+     * Subscribe to ticker updates
+     * @param {string} symbol - Trading pair symbol
      */
-    subscribe(stream) {
-        if (!this.subscriptions.includes(stream)) {
-            this.subscriptions.push(stream);
-        }
-        
-        if (this.isConnected) {
-            this.subscribeToStreams([stream]);
-        }
+    subscribeToTicker(symbol) {
+        const streamName = `${symbol.toLowerCase()}@ticker`;
+        this.subscribe(streamName, { symbol });
     }
 
     /**
-     * Unsubscribe from a single stream
-     * @param {string} stream - Stream name
+     * Subscribe to order book updates
+     * @param {string} symbol - Trading pair symbol
+     * @param {string} level - Update speed (100ms or 1000ms)
      */
-    unsubscribe(stream) {
-        const index = this.subscriptions.indexOf(stream);
-        if (index !== -1) {
-            this.subscriptions.splice(index, 1);
-        }
-        
-        if (this.isConnected) {
-            this.unsubscribeFromStreams([stream]);
-        }
+    subscribeToDepth(symbol, level = '100ms') {
+        const streamName = `${symbol.toLowerCase()}@depth@${level}`;
+        this.subscribe(streamName, { symbol, level });
     }
 
     /**
@@ -205,53 +185,91 @@ class WebSocketHandler {
      */
     close() {
         if (this.socket) {
+            this._stopHeartbeat();
             this.socket.close();
             this.socket = null;
             this.isConnected = false;
-            
-            if (this.pingInterval) {
-                clearInterval(this.pingInterval);
-                this.pingInterval = null;
-            }
-            
-            logMessage('info', 'WebSocket connection closed');
         }
     }
 
     /**
-     * Register event listener
+     * Add event listener
      * @param {string} event - Event name
-     * @param {Function} callback - Event callback function
+     * @param {Function} callback - Callback function
      */
     on(event, callback) {
-        if (!this.callbacks[event]) {
-            this.callbacks[event] = [];
+        if (this.listeners[event]) {
+            this.listeners[event].push(callback);
         }
-        this.callbacks[event].push(callback);
     }
 
     /**
-     * Emit event to registered listeners
+     * Remove event listener
+     * @param {string} event - Event name
+     * @param {Function} callback - Callback function
+     */
+    off(event, callback) {
+        if (this.listeners[event]) {
+            this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
+        }
+    }
+
+    /**
+     * Start heartbeat to keep connection alive
+     * @private
+     */
+    _startHeartbeat() {
+        this._stopHeartbeat();
+        this.heartbeatInterval = setInterval(() => {
+            if (this.isConnected) {
+                this.send({ type: 'ping' });
+            }
+        }, 30000); // Send ping every 30 seconds
+    }
+
+    /**
+     * Stop heartbeat
+     * @private
+     */
+    _stopHeartbeat() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+    }
+
+    /**
+     * Resubscribe to all streams after reconnect
+     * @private
+     */
+    _resubscribeAll() {
+        for (const [streamName, subscription] of this.subscriptions.entries()) {
+            this.send({
+                method: 'SUBSCRIBE',
+                params: [streamName],
+                id: subscription.id
+            });
+        }
+    }
+
+    /**
+     * Trigger event listeners
      * @param {string} event - Event name
      * @param {*} data - Event data
+     * @private
      */
-    emit(event, data) {
-        const callbacks = this.callbacks[event] || [];
-        callbacks.forEach(callback => callback(data));
-    }
-
-    /**
-     * Get connection status details
-     * @returns {Object} - Connection status
-     */
-    getStatus() {
-        return {
-            connected: this.isConnected,
-            lastMessageTime: this.lastMessageTime > 0 ? new Date(this.lastMessageTime).toISOString() : 'Never',
-            subscriptions: this.subscriptions
-        };
+    _triggerEvent(event, data) {
+        if (this.listeners[event]) {
+            for (const callback of this.listeners[event]) {
+                try {
+                    callback(data);
+                } catch (error) {
+                    console.error(`Error in ${event} listener:`, error);
+                }
+            }
+        }
     }
 }
 
-// Create global instance
-const webSocketHandler = new WebSocketHandler();
+// Export the class
+window.BinanceWebSocketHandler = BinanceWebSocketHandler;
