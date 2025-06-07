@@ -254,6 +254,14 @@
         .close:hover {
             color: #e6edf3;
         }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #30363d;
+            color: #8b949e;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -403,10 +411,10 @@
                     <div class="input-group">
                         <label for="strategy">Trading Strategy</label>
                         <select id="strategy">
+                            <option value="original">Original Strategy</option>
                             <option value="macd">MACD</option>
                             <option value="rsi">RSI</option>
                             <option value="bb">Bollinger Bands</option>
-                            <option value="custom">Custom</option>
                         </select>
                     </div>
                 </div>
@@ -491,10 +499,10 @@
                     <p>Edit the JSON below to customize your trading strategy parameters.</p>
                     <div class="input-group">
                         <pre id="json-editor" contenteditable="true">{
-  "strategy": "macd",
+  "strategy": "original",
   "parameters": {
-    "fastPeriod": 12,
-    "slowPeriod": 26,
+    "longPeriod": 26,
+    "shortPeriod": 12,
     "signalPeriod": 9,
     "overbought": 0.5,
     "oversold": -0.5
@@ -530,6 +538,11 @@
                     </div>
                 </div>
             </div>
+        </div>
+        
+        <div class="footer">
+            <p>Binance Trading Bot by @gelimorto2 - Last Updated: 2025-06-07</p>
+            <p id="current-datetime"></p>
         </div>
     </div>
 
@@ -573,10 +586,10 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.1.0/dist/chartjs-adapter-luxon.min.js"></script>
     
     <!-- Load Binance Trading Bot JS -->
-    <script src="live.js"></script>
     <script src="binance-api.js"></script>
     <script src="trading-strategies.js"></script>
     <script src="notifications.js"></script>
     <script src="config.js"></script>
+    <script src="live.js"></script>
 </body>
 </html>
