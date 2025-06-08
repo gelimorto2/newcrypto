@@ -1945,6 +1945,339 @@ function safeAddEventListener(id, event, callback) {
         element.addEventListener(event, callback);
     }
 }
+// Initialize charts
+function initCharts() {
+    // Initialize price chart
+    const priceChartDiv = safeGetElement('priceChart');
+    if (!priceChartDiv) {
+        throw new Error('Price chart element not found');
+    }
+    
+    // Create candlestick trace
+    const candleTrace = {
+        x: state.priceData.map(d => d.datetime),
+        open: state.priceData.map(d => d.open),
+        high: state.priceData.map(d => d.high),
+        low: state.priceData.map(d => d.low),
+        close: state.priceData.map(d => d.close),
+        type: 'candlestick',
+        name: 'Price',
+        increasing: {
+            line: { color: OHLC_COLORS.up },
+            fillcolor: OHLC_COLORS.upFill
+        },
+        decreasing: {
+            line: { color: OHLC_COLORS.down },
+            fillcolor: OHLC_COLORS.downFill
+        }
+    };
+    
+    // Create volume trace
+    const volumeColors = state.priceData.map(d => d.close > d.open ? OHLC_COLORS.volume.up : OHLC_COLORS.volume.down);
+    const volumeTrace = {
+        x: state.priceData.map(d => d.datetime),
+        y: state.priceData.map(d => d.volume),
+        type: 'bar',
+        name: 'Volume',
+        yaxis: 'y2',
+        marker: {
+            color: volumeColors
+        },
+        opacity: 0.5
+    };
+    
+    // Create long signal trace
+    const longSignalTrace = {
+        x: state.priceData.map(d => d.datetime),
+        y: state.indicators.longSignal,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Long Signal',
+        line: {
+            color: 'rgba(74, 222, 128, 0.6)',
+            width: 1,
+            dash: 'dot'
+        }
+    };
+    
+    // Create short signal trace
+    const shortSignalTrace = {
+        x: state.priceData.map(d => d.datetime),
+        y: state.indicators.shortSignal,
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Short Signal',
+        line: {
+            color: 'rgba(248, 113, 113, 0.6)',
+            width: 1,
+            dash: 'dot'
+        }
+    };
+    
+    // Set up layout
+    const layout = {
+        title: `${state.symbol} ${state.timeframe} Chart`,
+        dragmode: 'zoom',
+        margin: { l: 50, r: 50, b: 50, t: 50, pad: 4 },
+        grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'bottom to top' },
+        annotations: [],
+        xaxis: {
+            rangeslider: { visible: false },
+            type: 'date',
+            showgrid: false
+        },
+        yaxis: {
+            autorange: true,
+            domain: [0.2, 1],
+            type: 'linear',
+            scaleanchor: 'x',
+            gridcolor: 'rgba(255,255,255,0.1)'
+        },
+        yaxis2: {
+            domain: [0, 0.1],
+            gridcolor: 'rgba(255,255,255,0.1)'
+        },
+        plot_bgcolor: 'rgba(0, 0, 0, 0)',
+        paper_bgcolor: 'rgba(0, 0, 0, 0)',
+        font: {
+            color: '#d1d5db'
+        },
+        showlegend: false
+    };
+    
+    // Create the chart
+    try {
+        Plotly.newPlot(priceChartDiv, [candleTrace, volumeTrace, longSignalTrace, shortSignalTrace], layout, {
+            displayModeBar: true,
+            responsive: true,
+            displaylogo: false,
+            modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d', 'toggleSpikelines']
+        });
+        
+        state.charts.price = true;
+        
+        // Initialize equity chart
+        const equityChartDiv = safeGetElement('equityChart');
+        if (!equityChartDiv) {
+            throw new Error('Equity chart element not found');
+        }
+        
+        // Create equity curve trace
+        const equityTrace = {
+            x: state.equityCurve.map(d => d.time),
+            y: state.equityCurve.map(d => d.value),
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Equity',
+            line: {
+                color: '#4f46e5',
+                width: 2
+            }
+        };
+        
+        // Set up equity chart layout
+        const equityLayout = {
+            title: 'Equity Curve',
+            margin: { l: 50, r: 50, b: 50, t: 50, pad: 4 },
+            xaxis: {
+                type: 'date',
+                showgrid: false
+            },
+            yaxis: {
+                autorange: true,
+                type: 'linear',
+                gridcolor: 'rgba(255,255,255,0.1)'
+            },
+            plot_bgcolor: 'rgba(0, 0, 0, 0)',
+            paper_bgcolor: 'rgba(0, 0, 0, 0)',
+            font: {
+                color: '#d1d5db'
+            },
+            showlegend: false
+        };
+        
+        // Create the equity chart
+        Plotly.newPlot(equityChartDiv, [equityTrace], equityLayout, {
+            displayModeBar: true,
+            responsive: true,
+            displaylogo: false,
+            modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d', 'toggleSpikelines']
+        });
+        
+        state.charts.equity = true;
+    } catch (error) {
+        console.error('Error creating charts with Plotly:', error);
+        throw new Error('Failed to create charts: ' + error.message);
+    }
+}
+
+// Update price chart with new data and indicators
+function updatePriceChart() {
+    if (!state.charts.price) return;
+    
+    const priceChartDiv = safeGetElement('priceChart');
+    if (!priceChartDiv) return;
+    
+    try {
+        // Update candlestick data
+        const candleData = {
+            x: state.priceData.map(d => d.datetime),
+            open: state.priceData.map(d => d.open),
+            high: state.priceData.map(d => d.high),
+            low: state.priceData.map(d => d.low),
+            close: state.priceData.map(d => d.close)
+        };
+        
+        // Update volume data
+        const volumeColors = state.priceData.map(d => d.close > d.open ? OHLC_COLORS.volume.up : OHLC_COLORS.volume.down);
+        const volumeData = {
+            x: state.priceData.map(d => d.datetime),
+            y: state.priceData.map(d => d.volume),
+            marker: {
+                color: volumeColors
+            }
+        };
+        
+        // Update long signal data
+        const longSignalData = {
+            x: state.priceData.map(d => d.datetime),
+            y: state.indicators.longSignal
+        };
+        
+        // Update short signal data
+        const shortSignalData = {
+            x: state.priceData.map(d => d.datetime),
+            y: state.indicators.shortSignal
+        };
+        
+        // Update chart
+        Plotly.update(priceChartDiv, 
+            // Update candlestick data (trace 0)
+            candleData, {}, 0);
+        
+        // Update volume data (trace 1)
+        Plotly.update(priceChartDiv, volumeData, {}, 1);
+        
+        // Update signal traces
+        Plotly.update(priceChartDiv, longSignalData, {}, 2);
+        Plotly.update(priceChartDiv, shortSignalData, {}, 3);
+        
+        // Update chart title
+        Plotly.relayout(priceChartDiv, {
+            title: `${state.symbol} ${state.timeframe} Chart`,
+            // Update x-axis range to show the most recent data
+            xaxis: {
+                range: [
+                    state.priceData[Math.max(0, state.priceData.length - 100)].datetime,
+                    state.priceData[state.priceData.length - 1].datetime
+                ],
+                rangeslider: { visible: false },
+                type: 'date',
+                showgrid: false
+            }
+        });
+        
+        // Add historical trade markers if there are trades
+        if (state.trades.length > 0) {
+            // First remove any existing trade markers
+            if (priceChartDiv.data.length > 4) {
+                Plotly.deleteTraces(priceChartDiv, [4, 5]);
+            }
+            
+            // Create long trade markers
+            const longTrades = state.trades.filter(t => t.type === 'LONG');
+            const longEntries = {
+                x: longTrades.map(t => t.entryTime),
+                y: longTrades.map(t => {
+                    // Find the candle for this entry time
+                    const candle = state.priceData.find(d => 
+                        d.datetime.getTime() <= t.entryTime.getTime() && 
+                        d.datetime.getTime() + getTimeframeInMs(state.timeframe) > t.entryTime.getTime()
+                    );
+                    return candle ? candle.low - (candle.high - candle.low) * 0.5 : null;
+                }),
+                mode: 'markers',
+                type: 'scatter',
+                marker: {
+                    symbol: 'triangle-up',
+                    size: 10,
+                    color: OHLC_COLORS.up,
+                    line: { width: 1, color: 'white' }
+                },
+                name: 'Long Entries'
+            };
+            
+            // Create short trade markers
+            const shortTrades = state.trades.filter(t => t.type === 'SHORT');
+            const shortEntries = {
+                x: shortTrades.map(t => t.entryTime),
+                y: shortTrades.map(t => {
+                    // Find the candle for this entry time
+                    const candle = state.priceData.find(d => 
+                        d.datetime.getTime() <= t.entryTime.getTime() && 
+                        d.datetime.getTime() + getTimeframeInMs(state.timeframe) > t.entryTime.getTime()
+                    );
+                    return candle ? candle.high + (candle.high - candle.low) * 0.5 : null;
+                }),
+                mode: 'markers',
+                type: 'scatter',
+                marker: {
+                    symbol: 'triangle-down',
+                    size: 10,
+                    color: OHLC_COLORS.down,
+                    line: { width: 1, color: 'white' }
+                },
+                name: 'Short Entries'
+            };
+            
+            // Add trade markers to chart
+            Plotly.addTraces(priceChartDiv, [longEntries, shortEntries]);
+        }
+    } catch (error) {
+        console.error('Error updating price chart:', error);
+        addLogMessage('Error updating chart: ' + error.message, true);
+    }
+}
+
+// Get timeframe in milliseconds
+function getTimeframeInMs(timeframe) {
+    const timeframeMap = {
+        '1m': 60 * 1000,
+        '5m': 5 * 60 * 1000,
+        '15m': 15 * 60 * 1000,
+        '30m': 30 * 60 * 1000,
+        '1h': 60 * 60 * 1000,
+        '4h': 4 * 60 * 60 * 1000,
+        '1d': 24 * 60 * 60 * 1000
+    };
+    
+    return timeframeMap[timeframe] || 60 * 60 * 1000;
+}
+
+// Update equity chart
+function updateEquityChart() {
+    if (!state.charts.equity) return;
+    
+    const equityChartDiv = safeGetElement('equityChart');
+    if (!equityChartDiv) return;
+    
+    try {
+        // Update equity curve data
+        const equityData = {
+            x: state.equityCurve.map(d => d.time),
+            y: state.equityCurve.map(d => d.value)
+        };
+        
+        // Update chart
+        Plotly.update(equityChartDiv, equityData, {}, 0);
+        
+        // Update metrics
+        updateMetrics();
+    } catch (error) {
+        console.error('Error updating equity chart:', error);
+        addLogMessage('Error updating equity chart: ' + error.message, true);
+    }
+}
 
 // Safely set element property
 function safeSetElementProperty(id, property, value) {
