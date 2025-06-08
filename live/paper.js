@@ -1380,26 +1380,79 @@ function sendAlert(title, message, type = 'info') {
         notificationSound.play().catch(e => console.error('Error playing notification sound:', e));
     }
     
-    // Discord webhook
+    // Discord webhook - Enhanced with rich embeds
     if (state.alerts.discord.enabled && state.alerts.discord.webhook) {
-        const color = type === 'error' ? 16711680 : type === 'success' ? 65280 : 255;
+        // Set color based on type
+        const colorMap = {
+            'error': 16711680,     // Red
+            'success': 65280,      // Green
+            'warning': 16776960,   // Yellow
+            'info': 3447003        // Blue
+        };
         
+        const color = colorMap[type] || 3447003;
+        
+        // Get current metrics if we have a position
+        let fields = [
+            {
+                name: 'Bot Status',
+                value: `Trading ${state.futuresTrading.enabled ? 'LIVE' : 'Paper'} - ${state.symbol} ${state.timeframe}`,
+                inline: true
+            },
+            {
+                name: 'Current Price',
+                value: `$${state.currentPrice.toFixed(2)}`,
+                inline: true
+            }
+        ];
+        
+        // Add position-specific fields if relevant
+        if (state.currentPosition || (title.includes('Position') && type === 'success')) {
+            // For position alerts, add more trading details
+            fields.push({
+                name: 'Daily P&L',
+                value: `${state.botStats.dailyPnL >= 0 ? '+' : ''}$${state.botStats.dailyPnL.toFixed(2)}`,
+                inline: true
+            });
+            
+            fields.push({
+                name: 'Bot Metrics',
+                value: `Win Rate: ${state.metrics.winRate.toFixed(1)}% | Trades: ${state.metrics.totalTrades}`,
+                inline: false
+            });
+        }
+        
+        // Create timestamp
+        const timestamp = new Date().toISOString();
+        
+        // Create the Discord embed
+        const embed = {
+            embeds: [{
+                title: title,
+                description: message,
+                color: color,
+                timestamp: timestamp,
+                fields: fields,
+                footer: {
+                    text: `Volty Trading Bot | ${state.futuresTrading.enabled ? 'LIVE' : 'Paper'} Trading`,
+                    icon_url: "https://i.imgur.com/fKL31aD.png" // Bot logo
+                },
+                thumbnail: {
+                    url: type === 'error' ? 'https://img.icons8.com/color/48/000000/high-priority.png' : 
+                         type === 'success' ? 'https://img.icons8.com/color/48/000000/ok.png' : 
+                         type === 'warning' ? 'https://img.icons8.com/color/48/000000/warning-shield.png' :
+                         'https://img.icons8.com/color/48/000000/info.png'
+                }
+            }]
+        };
+        
+        // Send to Discord
         fetch(state.alerts.discord.webhook, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                embeds: [{
-                    title: title,
-                    description: message,
-                    color: color,
-                    timestamp: new Date().toISOString(),
-                    footer: {
-                        text: 'Volty Trading Bot - Futures Edition'
-                    }
-                }]
-            })
+            body: JSON.stringify(embed)
         }).catch(error => {
             console.error('Error sending Discord alert:', error);
         });
@@ -1416,6 +1469,10 @@ function sendAlert(title, message, type = 'info') {
     }
     
     // Email alert - implementation would use a proper email API
+    if (state.alerts.email.enabled && state.alerts.email.address) {
+        // In a real implementation, this would use a proper email API
+        console.log(`Email alert would be sent to ${state.alerts.email.address}: ${title} - ${message}`);
+    }
 }
 
 // Poll for futures data
@@ -1559,8 +1616,7 @@ async function fetchLatestCandle(symbol, interval) {
         throw error;
     }
 }
-
-// Poll for new data
+// Poll for new data (continued)
 async function pollForNewData() {
     try {
         // Update last check time
@@ -1945,6 +2001,7 @@ function safeAddEventListener(id, event, callback) {
         element.addEventListener(event, callback);
     }
 }
+
 // Initialize charts
 function initCharts() {
     // Initialize price chart
@@ -2279,322 +2336,422 @@ function updateEquityChart() {
     }
 }
 
-// Safely set element property
-function safeSetElementProperty(id, property, value) {
-    const element = safeGetElement(id);
-    if (element) {
-        element[property] = value;
-    }
-}
-
-// Safely set element text content
-function safeSetTextContent(id, text) {
-    const element = safeGetElement(id);
-    if (element) {
-        element.textContent = text;
-    }
-}
-
-// Modified initUI function with defensive coding
-function initUI() {
-    // Register event listeners for sliders
-    safeAddEventListener('atr-length', 'input', function() {
-        const value = this.value;
-        safeSetTextContent('atr-length-value', value);
-        state.atrLength = parseInt(value);
-    });
-    
-    safeAddEventListener('atr-mult', 'input', function() {
-        const value = this.value;
-        safeSetTextContent('atr-mult-value', value);
-        state.atrMultiplier = parseFloat(value);
-    });
-    
-    safeAddEventListener('position-size', 'input', function() {
-        const value = this.value;
-        safeSetTextContent('position-size-value', value + '%');
-        state.positionSize = parseInt(value);
-    });
-    
-    // Fee settings
-    safeAddEventListener('maker-fee', 'input', function() {
-        const value = parseFloat(this.value);
-        state.feeSettings.makerFee = value;
-        safeSetTextContent('futures-maker-fee', value.toFixed(2) + '%');
-        safeSetTextContent('stat-fee-rate', `${value.toFixed(2)}% / ${state.feeSettings.takerFee.toFixed(2)}%`);
-    });
-    
-    safeAddEventListener('taker-fee', 'input', function() {
-        const value = parseFloat(this.value);
-        state.feeSettings.takerFee = value;
-        safeSetTextContent('futures-taker-fee', value.toFixed(2) + '%');
-        safeSetTextContent('stat-fee-rate', `${state.feeSettings.makerFee.toFixed(2)}% / ${value.toFixed(2)}%`);
-    });
-    
-    // Tab switching
-    const tabButtons = document.querySelectorAll('.tab-button');
-    const tabContents = document.querySelectorAll('.tab-content');
-    
-    if (tabButtons.length > 0 && tabContents.length > 0) {
-        tabButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                const tabName = this.dataset.tab;
-                const tabContent = document.getElementById(tabName);
-                
-                if (!tabContent) {
-                    console.warn(`Tab content with ID "${tabName}" not found`);
-                    return;
-                }
-                
-                // Remove active class from all buttons and contents
-                tabButtons.forEach(btn => btn.classList.remove('active'));
-                tabContents.forEach(content => content.classList.remove('active'));
-                
-                // Add active class to current button and content
-                this.classList.add('active');
-                tabContent.classList.add('active');
-            });
-        });
+// Process trade signal
+function processTradeSignal(signal, candle) {
+    // Check if auto-trading is enabled
+    if (!state.settings.autoTrade) {
+        addLogMessage(`Signal: ${signal} detected, but auto-trading is disabled`);
+        return;
     }
     
-    // Symbol and timeframe change handlers
-    safeAddEventListener('symbol', 'change', function() {
-        if (!state.isTrading) {
-            state.symbol = this.value;
-            reloadDataWithSettings();
-        }
-    });
-    
-    safeAddEventListener('timeframe', 'change', function() {
-        if (!state.isTrading) {
-            state.timeframe = this.value;
-            reloadDataWithSettings();
-        }
-    });
-    
-    // Trading buttons
-    safeAddEventListener('start-trading-btn', 'click', startTrading);
-    safeAddEventListener('stop-trading-btn', 'click', stopTrading);
-    safeAddEventListener('reset-trading-btn', 'click', resetTrading);
-    
-    // Futures trading buttons
-    safeAddEventListener('start-live-trading-btn', 'click', startLiveTrading);
-    safeAddEventListener('stop-live-trading-btn', 'click', stopTrading);
-    safeAddEventListener('emergency-stop-btn', 'click', emergencyStop);
-    
-    safeAddEventListener('long-position-btn', 'click', function() {
-        openManualPosition('LONG');
-    });
-    
-    safeAddEventListener('short-position-btn', 'click', function() {
-        openManualPosition('SHORT');
-    });
-    
-    safeAddEventListener('close-positions-btn', 'click', function() {
-        closeCurrentPosition('Manual Close');
-    });
-    
-    // Trading mode toggles
-    safeAddEventListener('paper-trading-btn', 'click', function() {
-        switchToTradingMode('paper');
-    });
-    
-    safeAddEventListener('live-trading-btn', 'click', function() {
-        switchToTradingMode('live');
-    });
-    
-    // Settings & API buttons
-    safeAddEventListener('save-settings-btn', 'click', saveSettings);
-    
-    safeAddEventListener('test-alert-btn', 'click', function() {
-        sendAlert('Test Alert', 'This is a test alert from Volty Trading Bot', 'info');
-    });
-    
-    safeAddEventListener('configure-api-link', 'click', function(e) {
-        e.preventDefault();
-        showAPIConfigModal();
-    });
-    
-    safeAddEventListener('configure-api-link-alert', 'click', function(e) {
-        e.preventDefault();
-        showAPIConfigModal();
-    });
-    
-    // API config modal
-    const apiConfigModal = safeGetElement('apiConfigModal');
-    if (apiConfigModal) {
-        const closeBtns = apiConfigModal.querySelectorAll('.close-modal, #cancel-api-config-btn');
-        
-        closeBtns.forEach(btn => {
-            btn.addEventListener('click', function() {
-                apiConfigModal.style.display = 'none';
-            });
-        });
-        
-        safeAddEventListener('save-api-config-btn', 'click', saveAPIConfig);
-    }
-    
-    // Live trading confirmation modal
-    const liveTradingModal = safeGetElement('liveTradingConfirmModal');
-    if (liveTradingModal) {
-        safeAddEventListener('confirm-live-trading', 'change', function() {
-            safeSetElementProperty('confirm-live-trading-btn', 'disabled', !this.checked);
-        });
-        
-        safeAddEventListener('confirm-live-trading-btn', 'click', function() {
-            liveTradingModal.style.display = 'none';
-            startActualLiveTrading();
-        });
-        
-        safeAddEventListener('cancel-live-trading-btn', 'click', function() {
-            liveTradingModal.style.display = 'none';
-        });
-        
-        const closeModalBtn = liveTradingModal.querySelector('.close-modal');
-        if (closeModalBtn) {
-            closeModalBtn.addEventListener('click', function() {
-                liveTradingModal.style.display = 'none';
-            });
-        }
-    }
-    
-    // Theme switcher
-    safeAddEventListener('theme-select', 'change', function() {
-        if (this.value === 'dark') {
-            document.body.classList.remove('light-theme');
-            document.body.classList.add('dark-theme');
-            state.settings.theme = 'dark';
+    // Check if we already have a position
+    if (state.currentPosition) {
+        // If we have a position in the opposite direction, close it and open a new one
+        if (state.currentPosition.type !== signal) {
+            addLogMessage(`Closing ${state.currentPosition.type} position to reverse to ${signal}`);
+            closeCurrentPosition('Signal Reverse');
+            openPosition(signal, candle);
         } else {
-            document.body.classList.remove('dark-theme');
-            document.body.classList.add('light-theme');
-            state.settings.theme = 'light';
+            addLogMessage(`${signal} signal confirmed, already in position`);
         }
+    } else {
+        // Open new position
+        openPosition(signal, candle);
+    }
+}
+
+// Open a position
+function openPosition(type, candle) {
+    // Calculate position size based on percentage of capital
+    const positionSize = (state.currentCapital * state.positionSize) / 100;
+    const entryPrice = candle.close;
+    
+    // Create new trade
+    state.currentPosition = new Trade(
+        candle.datetime,
+        type,
+        entryPrice,
+        positionSize / entryPrice
+    );
+    
+    // Calculate risk levels
+    updatePositionRiskLevels();
+    
+    // Update UI
+    updatePositionCard();
+    document.getElementById('position-card').style.display = 'block';
+    
+    if (state.futuresTrading.enabled) {
+        document.getElementById('close-positions-btn').disabled = false;
+    }
+    
+    // Send alert
+    sendAlert(
+        `New ${type} Position Opened`,
+        `Opened ${type} position at $${entryPrice.toFixed(2)} with size ${positionSize.toFixed(2)} USDT`,
+        'success'
+    );
+    
+    // Log the new position
+    addLogMessage(`Opened ${type} position at $${entryPrice.toFixed(2)} with size ${positionSize.toFixed(2)} USDT`);
+    
+    // Increment daily trades counter
+    state.botStats.dailyTrades++;
+}
+
+// Open manual position (from UI)
+function openManualPosition(type) {
+    if (!state.isTrading) {
+        addLogMessage('Cannot open position: Trading is not active', true);
+        return;
+    }
+    
+    if (state.currentPosition) {
+        addLogMessage('Cannot open position: Already have an active position', true);
+        return;
+    }
+    
+    // Get current candle
+    const currentCandle = state.priceData[state.priceData.length - 1];
+    
+    // Open position
+    openPosition(type, currentCandle);
+}
+
+// Close current position
+function closeCurrentPosition(reason) {
+    if (!state.currentPosition) {
+        addLogMessage('No position to close', true);
+        return;
+    }
+    
+    // Get current candle
+    const currentCandle = state.priceData[state.priceData.length - 1];
+    const exitPrice = currentCandle.close;
+    
+    // Close the position and calculate P&L
+    const pnl = state.currentPosition.close(currentCandle.datetime, exitPrice);
+    
+    // Update capital
+    state.currentCapital += pnl;
+    
+    // Add to equity curve
+    state.equityCurve.push({
+        time: new Date(),
+        value: state.currentCapital
     });
     
-    // Initial capital
-    safeAddEventListener('initial-capital', 'change', function() {
-        if (!state.isTrading) {
-            state.initialCapital = parseFloat(this.value);
-            state.currentCapital = state.initialCapital;
-            state.botStats.dailyStartCapital = state.initialCapital;
-            state.equityCurve = [{ time: new Date(), value: state.initialCapital }];
-            
-            // Update metrics
-            updateMetrics();
-            updateEquityChart();
-            
-            addLogMessage(`Initial capital updated to $${state.initialCapital.toLocaleString()}`);
+    // Add to trades history
+    state.trades.push(state.currentPosition);
+    
+    // Update daily P&L
+    state.botStats.dailyPnL += pnl;
+    
+    // Send alert
+    const pnlPct = state.currentPosition.pnlPct * 100;
+    const pnlText = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)`;
+    
+    sendAlert(
+        `Position Closed: ${reason}`,
+        `Closed ${state.currentPosition.type} position at $${exitPrice.toFixed(2)} with P&L: ${pnlText}`,
+        pnl >= 0 ? 'success' : 'warning'
+    );
+    
+    // Log the closure
+    addLogMessage(`Closed ${state.currentPosition.type} position at $${exitPrice.toFixed(2)} with P&L: ${pnlText} (${reason})`);
+    
+    // Clear current position
+    state.currentPosition = null;
+    
+    // Update UI
+    updatePositionCard();
+    document.getElementById('position-card').style.display = 'none';
+    document.getElementById('close-positions-btn').disabled = true;
+    
+    // Update metrics and charts
+    updateMetrics();
+    updateEquityChart();
+    updateTradeHistory();
+}
+
+// Check position exit conditions
+function checkPositionExitConditions() {
+    if (!state.currentPosition) return;
+    
+    const currentPrice = state.currentPrice;
+    const entryPrice = state.currentPosition.entryPrice;
+    const positionType = state.currentPosition.type;
+    
+    // Calculate profit/loss percentage
+    let pnlPct;
+    if (positionType === 'LONG') {
+        pnlPct = (currentPrice - entryPrice) / entryPrice * 100;
+    } else {
+        pnlPct = (entryPrice - currentPrice) / entryPrice * 100;
+    }
+    
+    // Check take profit
+    if (state.settings.takeProfit.enabled && pnlPct >= state.settings.takeProfit.percentage) {
+        closeCurrentPosition('Take Profit');
+        return;
+    }
+    
+    // Check stop loss
+    if (state.settings.stopLoss.enabled && pnlPct <= -state.settings.stopLoss.percentage) {
+        closeCurrentPosition('Stop Loss');
+        return;
+    }
+    
+    // Check trailing stop
+    if (state.settings.trailingStop.enabled && state.botStats.positionDetails.trailingStopPrice > 0) {
+        if (positionType === 'LONG' && currentPrice <= state.botStats.positionDetails.trailingStopPrice) {
+            closeCurrentPosition('Trailing Stop');
+            return;
+        } else if (positionType === 'SHORT' && currentPrice >= state.botStats.positionDetails.trailingStopPrice) {
+            closeCurrentPosition('Trailing Stop');
+            return;
         }
+        
+        // Update trailing stop level if price moves in favorable direction
+        if (positionType === 'LONG' && currentPrice > state.botStats.positionDetails.trailingStopPrice + (entryPrice * state.settings.trailingStop.percentage / 100)) {
+            // New trailing stop level = current price - trailing stop distance
+            state.botStats.positionDetails.trailingStopPrice = currentPrice - (entryPrice * state.settings.trailingStop.percentage / 100);
+            updatePositionCard();
+        } else if (positionType === 'SHORT' && currentPrice < state.botStats.positionDetails.trailingStopPrice - (entryPrice * state.settings.trailingStop.percentage / 100)) {
+            // New trailing stop level = current price + trailing stop distance
+            state.botStats.positionDetails.trailingStopPrice = currentPrice + (entryPrice * state.settings.trailingStop.percentage / 100);
+            updatePositionCard();
+        }
+    }
+}
+
+// Update position risk levels
+function updatePositionRiskLevels() {
+    if (!state.currentPosition) return;
+    
+    const entryPrice = state.currentPosition.entryPrice;
+    const positionType = state.currentPosition.type;
+    
+    // Calculate take profit price
+    if (state.settings.takeProfit.enabled) {
+        const tpPct = state.settings.takeProfit.percentage / 100;
+        state.botStats.positionDetails.takeProfitPrice = positionType === 'LONG' 
+            ? entryPrice * (1 + tpPct) 
+            : entryPrice * (1 - tpPct);
+    } else {
+        state.botStats.positionDetails.takeProfitPrice = 0;
+    }
+    
+    // Calculate stop loss price
+    if (state.settings.stopLoss.enabled) {
+        const slPct = state.settings.stopLoss.percentage / 100;
+        state.botStats.positionDetails.stopLossPrice = positionType === 'LONG' 
+            ? entryPrice * (1 - slPct) 
+            : entryPrice * (1 + slPct);
+    } else {
+        state.botStats.positionDetails.stopLossPrice = 0;
+    }
+    
+    // Initialize trailing stop price
+    if (state.settings.trailingStop.enabled) {
+        const tsPct = state.settings.trailingStop.percentage / 100;
+        state.botStats.positionDetails.trailingStopPrice = positionType === 'LONG' 
+            ? entryPrice * (1 - tsPct) 
+            : entryPrice * (1 + tsPct);
+    } else {
+        state.botStats.positionDetails.trailingStopPrice = 0;
+    }
+    
+    // Store entry time
+    state.botStats.positionDetails.entryTime = state.currentPosition.entryTime;
+}
+
+// Update position card
+function updatePositionCard() {
+    if (!state.currentPosition) {
+        document.getElementById('position-card').style.display = 'none';
+        return;
+    }
+    
+    document.getElementById('position-card').style.display = 'block';
+    
+    // Set position type
+    const positionType = document.getElementById('position-type');
+    positionType.textContent = state.currentPosition.type;
+    positionType.className = 'metric-value ' + (state.currentPosition.type === 'LONG' ? 'positive' : 'negative');
+    
+    // Set entry price
+    document.getElementById('position-entry-price').textContent = `$${state.currentPosition.entryPrice.toFixed(2)}`;
+    
+    // Set current price
+    document.getElementById('position-current-price').textContent = `$${state.currentPrice.toFixed(2)}`;
+    
+    // Calculate and set P&L
+    const unrealizedPnl = state.currentPosition.getUnrealizedPnl(state.currentPrice);
+    const unrealizedPnlPct = state.currentPosition.getUnrealizedPnlPct(state.currentPrice) * 100;
+    
+    const pnlElement = document.getElementById('position-pnl');
+    pnlElement.textContent = `${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)} (${unrealizedPnlPct >= 0 ? '+' : ''}${unrealizedPnlPct.toFixed(2)}%)`;
+    pnlElement.className = 'metric-value ' + (unrealizedPnl >= 0 ? 'positive' : 'negative');
+    
+    // Set entry time
+    document.getElementById('position-entry-time').textContent = state.currentPosition.entryTime.toLocaleTimeString();
+    
+    // Set position size
+    document.getElementById('position-size-info').textContent = `${state.currentPosition.size.toFixed(6)} (≈$${(state.currentPosition.size * state.currentPosition.entryPrice).toFixed(2)})`;
+    
+    // Set risk levels
+    if (state.settings.takeProfit.enabled && state.botStats.positionDetails.takeProfitPrice) {
+        document.getElementById('position-tp').textContent = `$${state.botStats.positionDetails.takeProfitPrice.toFixed(2)}`;
+    } else {
+        document.getElementById('position-tp').textContent = 'Not Set';
+    }
+    
+    if (state.settings.stopLoss.enabled && state.botStats.positionDetails.stopLossPrice) {
+        document.getElementById('position-sl').textContent = `$${state.botStats.positionDetails.stopLossPrice.toFixed(2)}`;
+    } else {
+        document.getElementById('position-sl').textContent = 'Not Set';
+    }
+}
+
+// Update trade history
+function updateTradeHistory() {
+    const tradeTableBody = document.getElementById('trade-history-body');
+    if (!tradeTableBody) return;
+    
+    // Clear existing rows
+    tradeTableBody.innerHTML = '';
+    
+    // Create rows for each trade (most recent first)
+    const sortedTrades = [...state.trades].reverse();
+    
+    sortedTrades.forEach(trade => {
+        const row = document.createElement('tr');
+        row.className = trade.type === 'LONG' ? 'trade-long' : 'trade-short';
+        
+        // Add trade data
+        row.innerHTML = `
+            <td>${trade.entryTime.toLocaleString()}</td>
+            <td>${trade.type}</td>
+            <td>$${trade.entryPrice.toFixed(2)}</td>
+            <td>$${trade.exitPrice ? trade.exitPrice.toFixed(2) : '-'}</td>
+            <td>${(trade.size * trade.entryPrice).toFixed(2)} USDT</td>
+            <td class="${trade.pnl >= 0 ? 'positive' : 'negative'}">${trade.pnl >= 0 ? '+' : ''}$${trade.pnl.toFixed(2)} (${(trade.pnlPct * 100).toFixed(2)}%)</td>
+        `;
+        
+        tradeTableBody.appendChild(row);
     });
     
-    // Initialize UI based on selected trading mode
-    try {
-        switchToTradingMode('paper');
-    } catch (error) {
-        console.error('Error initializing trading mode:', error);
+    // If no trades yet, show message
+    if (sortedTrades.length === 0) {
+        const row = document.createElement('tr');
+        row.innerHTML = `<td colspan="6" style="text-align: center;">No trades yet</td>`;
+        tradeTableBody.appendChild(row);
+    }
+}
+
+// Update metrics
+function updateMetrics() {
+    // Only update if we have trades
+    if (state.trades.length === 0) {
+        document.getElementById('total-return').textContent = '0.00%';
+        document.getElementById('total-return-delta').textContent = '$0.00';
+        document.getElementById('win-rate').textContent = '0.0%';
+        document.getElementById('win-rate-delta').textContent = '0 trades';
+        document.getElementById('profit-factor').textContent = '0.00';
+        document.getElementById('profit-factor-delta').textContent = 'Avg: $0.00';
+        document.getElementById('max-drawdown').textContent = '0.00%';
+        document.getElementById('max-drawdown-delta').textContent = 'Sharpe: 0.00';
+        return;
     }
     
-    // Initialize settings toggles
-    try {
-        loadSettings();
-    } catch (error) {
-        console.error('Error loading settings:', error);
-    }
+    // Calculate total return
+    const totalReturn = ((state.currentCapital - state.initialCapital) / state.initialCapital) * 100;
+    document.getElementById('total-return').textContent = `${totalReturn >= 0 ? '+' : ''}${totalReturn.toFixed(2)}%`;
+    document.getElementById('total-return-delta').textContent = `${totalReturn >= 0 ? '+' : ''}$${(state.currentCapital - state.initialCapital).toFixed(2)}`;
     
-    // Initialize alerts
-    try {
-        initAlerts();
-    } catch (error) {
-        console.error('Error initializing alerts:', error);
-    }
+    // Calculate win rate
+    const winningTrades = state.trades.filter(t => t.pnl > 0).length;
+    const winRate = (winningTrades / state.trades.length) * 100;
+    document.getElementById('win-rate').textContent = `${winRate.toFixed(1)}%`;
+    document.getElementById('win-rate-delta').textContent = `${winningTrades}/${state.trades.length} trades`;
     
-    // Check if using mobile device
-    try {
-        checkMobileDevice();
-    } catch (error) {
-        console.error('Error checking mobile device:', error);
-    }
+    // Calculate profit factor and average trade
+    const grossProfit = state.trades.reduce((sum, t) => t.pnl > 0 ? sum + t.pnl : sum, 0);
+    const grossLoss = Math.abs(state.trades.reduce((sum, t) => t.pnl < 0 ? sum + t.pnl : sum, 0));
+    const profitFactor = grossLoss === 0 ? grossProfit : grossProfit / grossLoss;
+    const avgTrade = state.trades.reduce((sum, t) => sum + t.pnl, 0) / state.trades.length;
     
-    // Initial bot status
-    try {
-        updateBotStatus('idle', 'System initialized - Waiting for data...');
-    } catch (error) {
-        console.error('Error updating bot status:', error);
-    }
+    document.getElementById('profit-factor').textContent = `${profitFactor.toFixed(2)}`;
+    document.getElementById('profit-factor-delta').textContent = `Avg: ${avgTrade >= 0 ? '+' : ''}$${avgTrade.toFixed(2)}`;
     
-    // Update fee display
-    safeSetTextContent('stat-fee-rate', `${state.feeSettings.makerFee.toFixed(2)}% / ${state.feeSettings.takerFee.toFixed(2)}%`);
+    // Calculate max drawdown
+    let maxDrawdown = 0;
+    let peak = state.initialCapital;
     
-    // Show loading indicator
-    try {
-        showLoading();
-    } catch (error) {
-        console.error('Error showing loading indicator:', error);
-    }
-    
-    // Initial data fetch
-    fetchHistoricalData(state.symbol, state.timeframe, 500)
-        .then(data => {
-            try {
-                hideLoading();
-                state.priceData = data;
-                
-                // Update current price and market data
-                if (data.length > 0) {
-                    const lastCandle = data[data.length - 1];
-                    state.currentPrice = lastCandle.close;
-                    state.botStats.marketData.price = lastCandle.close;
-                    
-                    // Calculate 24h price change
-                    const oneDayInMs = 24 * 60 * 60 * 1000;
-                    const prevDayData = data.find(d => d.datetime.getTime() < (lastCandle.datetime.getTime() - oneDayInMs));
-                    
-                    if (prevDayData) {
-                        const change = ((lastCandle.close - prevDayData.close) / prevDayData.close) * 100;
-                        state.botStats.marketData.change24h = change;
-                    }
-                    
-                    // Calculate 24h volume
-                    const last24hData = data.filter(d => d.datetime.getTime() > (lastCandle.datetime.getTime() - oneDayInMs));
-                    const volume = last24hData.reduce((sum, candle) => sum + candle.volume, 0);
-                    state.botStats.marketData.volume = volume;
-                    
-                    // Update market data display
-                    updateMarketData();
-                }
-                
-                // Generate signals
-                const strategy = new VoltyStrategy(state.atrLength, state.atrMultiplier);
-                state.indicators = strategy.generateSignals(state.priceData);
-                
-                // Initialize charts
-                try {
-                    initCharts();
-                } catch (error) {
-                    console.error('Error initializing charts:', error);
-                    addLogMessage('Error initializing charts: ' + error.message, true);
-                }
-                
-                // Update bot status
-                updateBotStatus('idle', 'Ready to start trading');
-                
-                // Add log message
-                addLogMessage('System initialized with historical data');
-            } catch (error) {
-                console.error('Error processing initial data:', error);
-                addLogMessage('Error processing initial data: ' + error.message, true);
-            }
-        })
-        .catch(error => {
-            try {
-                hideLoading();
-                console.error('Error fetching initial data:', error);
-                updateBotStatus('idle', 'Error fetching data - Check connection');
-                addLogMessage('Error fetching historical data: ' + error.message, true);
-            } catch (innerError) {
-                console.error('Error handling fetch error:', innerError);
-            }
+    // Generate equity curve data if we don't have it
+    if (state.equityCurve.length <= 1) {
+        state.equityCurve = [{ time: new Date(0), value: state.initialCapital }];
+        
+        // Sort trades by entry time
+        const sortedTrades = [...state.trades].sort((a, b) => a.entryTime - b.entryTime);
+        
+        // Reconstruct equity curve
+        let currentEquity = state.initialCapital;
+        sortedTrades.forEach(trade => {
+            currentEquity += trade.pnl;
+            state.equityCurve.push({
+                time: new Date(trade.exitTime),
+                value: currentEquity
+            });
         });
+    }
+    
+    // Calculate max drawdown from equity curve
+    for (const point of state.equityCurve) {
+        if (point.value > peak) {
+            peak = point.value;
+        }
+        
+        const drawdown = ((peak - point.value) / peak) * 100;
+        if (drawdown > maxDrawdown) {
+            maxDrawdown = drawdown;
+        }
+    }
+    
+    document.getElementById('max-drawdown').textContent = `${maxDrawdown.toFixed(2)}%`;
+    
+    // Calculate simple Sharpe ratio (approximation for demo)
+    // Using average return / standard deviation of returns
+    const returns = [];
+    for (let i = 1; i < state.equityCurve.length; i++) {
+        const prevValue = state.equityCurve[i-1].value;
+        const currentValue = state.equityCurve[i].value;
+        returns.push((currentValue - prevValue) / prevValue);
+    }
+    
+    let sharpeRatio = 0;
+    if (returns.length > 0) {
+        const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+        const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+        const stdDev = Math.sqrt(variance);
+        sharpeRatio = stdDev === 0 ? 0 : (avgReturn / stdDev) * Math.sqrt(252); // Annualized
+    }
+    
+    document.getElementById('max-drawdown-delta').textContent = `Sharpe: ${sharpeRatio.toFixed(2)}`;
+    
+    // Update state metrics
+    state.metrics = {
+        totalReturn,
+        winRate,
+        profitFactor,
+        maxDrawdown,
+        sharpeRatio,
+        totalTrades: state.trades.length,
+        avgTrade,
+        maxWin: Math.max(...state.trades.map(t => t.pnl)),
+        maxLoss: Math.min(...state.trades.map(t => t.pnl))
+    };
 }
 
 // Set a fixed clock display
@@ -2620,5 +2777,6 @@ document.addEventListener('DOMContentLoaded', function() {
     initUI();
     
     // Set fixed clock date from user's specified time
-    setFixedClock('2025-06-08 14:48:05');
+    setFixedClock('2025-06-08 15:27:36');
 });
+
