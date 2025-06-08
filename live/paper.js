@@ -7,16 +7,42 @@ const BINANCE_FUTURES_TESTNET_API_URL = 'https://testnet.binancefuture.com';
 const OHLC_COLORS = {
     up: '#22c55e',
     down: '#ef4444',
-    upFill: 'rgba(34, 197, 94, 0.3)',
-    downFill: 'rgba(239, 68, 68, 0.3)',
+    upFill: 'rgba(34, 197, 94, 0.2)', // More transparent for better visibility
+    downFill: 'rgba(239, 68, 68, 0.2)', // More transparent for better visibility
     volume: {
-        up: 'rgba(34, 197, 94, 0.5)',
-        down: 'rgba(239, 68, 68, 0.5)'
-    }
+        up: 'rgba(34, 197, 94, 0.4)',
+        down: 'rgba(239, 68, 68, 0.4)'
+    },
+    grid: 'rgba(255, 255, 255, 0.06)', // Subtle grid lines
+    gridLight: 'rgba(0, 0, 0, 0.05)' // Light theme grid lines
+};
+
+// Enhanced chart configurations for ergonomic viewing
+const CHART_CONFIG = {
+    rangeSelectorButtons: [
+        {count: 1, type: 'hour', text: '1h'},
+        {count: 6, type: 'hour', text: '6h'},
+        {count: 1, type: 'day', text: '1d'},
+        {count: 7, type: 'day', text: '1w'},
+        {type: 'all', text: 'All'}
+    ],
+    defaultRange: 100, // Default number of candles to show
+    animation: {
+        duration: 500, // Smoother animations
+        easing: 'ease-in-out'
+    },
+    tooltipDelay: 100, // ms
+    fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
+    tradePadding: 0.5, // Padding for trade markers
+    signalOpacity: 0.6 // Opacity for signal indicators
 };
 
 // Notification sound
 const notificationSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3');
+
+// Current date and time (updated)
+const CURRENT_UTC_DATETIME = '2025-06-08 15:58:22';
+const CURRENT_USER = 'gelimorto2';
 
 // Trade class for tracking positions
 class Trade {
@@ -344,11 +370,17 @@ const state = {
             stopLossPrice: 0,
             trailingStopPrice: 0
         }
-    }
+    },
+    
+    version: '1.0.1' // Version for tracking
 };
 
 // Initialize user interface
 function initUI() {
+    // Log startup information
+    addLogMessage(`Volty Trading Bot v${state.version} initializing - ${CURRENT_UTC_DATETIME}`);
+    addLogMessage(`User: ${CURRENT_USER} - Session started`);
+    
     // Register event listeners for sliders
     document.getElementById('atr-length').addEventListener('input', function() {
         const value = this.value;
@@ -895,11 +927,24 @@ function reloadDataWithSettings() {
     // Update bot status
     updateBotStatus('idle', 'Fetching data with new settings...');
     
+    // Reset the price chart data
+    if (state.charts.price) {
+        // Reset the chart by recreating it
+        Plotly.purge('priceChart');
+        state.charts.price = false;
+    }
+    
     // Fetch historical data with new settings
     fetchHistoricalData(state.symbol, state.timeframe, 500)
         .then(data => {
             hideLoading();
             hideStatusIndicator();
+            
+            // Verify we got valid data
+            if (!data || data.length === 0) {
+                throw new Error('No data returned for this timeframe');
+            }
+            
             state.priceData = data;
             
             // Update current price and market data
@@ -930,8 +975,13 @@ function reloadDataWithSettings() {
             const strategy = new VoltyStrategy(state.atrLength, state.atrMultiplier);
             state.indicators = strategy.generateSignals(state.priceData);
             
-            // Update charts
-            updatePriceChart();
+            // Initialize charts again instead of just updating
+            try {
+                initCharts();
+            } catch (error) {
+                console.error('Error initializing charts after timeframe change:', error);
+                addLogMessage('Error initializing charts: ' + error.message, true);
+            }
             
             // Update bot status
             updateBotStatus('idle', 'Data updated with new settings');
@@ -959,11 +1009,16 @@ async function fetchHistoricalData(symbol, interval, limit = 500) {
         const endpoint = state.futuresTrading.enabled ? '/fapi/v1/klines' : '/api/v3/klines';
         const url = `${baseUrl}${endpoint}`;
         
-        // Increased limit for more data points
+        // Adjust limit based on timeframe to get sufficient historical data
+        let adjustedLimit = limit;
+        if (interval === '4h' || interval === '1d') {
+            adjustedLimit = Math.min(1000, limit * 2); // Get more data for higher timeframes
+        }
+        
         const params = new URLSearchParams({
             symbol: symbol,
             interval: interval,
-            limit: limit
+            limit: adjustedLimit
         });
         
         const response = await fetch(`${url}?${params.toString()}`);
@@ -975,7 +1030,12 @@ async function fetchHistoricalData(symbol, interval, limit = 500) {
         
         const data = await response.json();
         
-        // Format the data
+        if (data.length === 0) {
+            addLogMessage(`No data returned for ${symbol} with ${interval} timeframe`, true);
+            return [];
+        }
+        
+        // Format the data and ensure all required fields are present
         return data.map(d => ({
             datetime: new Date(d[0]),
             open: parseFloat(d[1]),
@@ -1434,7 +1494,7 @@ function sendAlert(title, message, type = 'info') {
                 timestamp: timestamp,
                 fields: fields,
                 footer: {
-                    text: `Volty Trading Bot | ${state.futuresTrading.enabled ? 'LIVE' : 'Paper'} Trading`,
+                    text: `Volty Trading Bot v${state.version} | ${state.futuresTrading.enabled ? 'LIVE' : 'Paper'} Trading`,
                     icon_url: "https://i.imgur.com/fKL31aD.png" // Bot logo
                 },
                 thumbnail: {
@@ -1557,7 +1617,7 @@ async function pollForFuturesData() {
         
         // Update trading stats
         updateTradingStats();
-        
+// Poll for futures data (continued)
         // Reset bot activity to waiting
         setTimeout(() => {
             updateBotActivity('waiting');
@@ -1616,7 +1676,8 @@ async function fetchLatestCandle(symbol, interval) {
         throw error;
     }
 }
-// Poll for new data (continued)
+
+// Poll for new data
 async function pollForNewData() {
     try {
         // Update last check time
@@ -1985,125 +2046,134 @@ function loadSettingsFromLocalStorage() {
     }
 }
 
-// Utility function to safely get elements and add event listeners
-function safeGetElement(id) {
-    const element = document.getElementById(id);
-    if (!element) {
-        console.warn(`Element with ID "${id}" not found`);
-    }
-    return element;
-}
-
-// Safely add event listener
-function safeAddEventListener(id, event, callback) {
-    const element = safeGetElement(id);
-    if (element) {
-        element.addEventListener(event, callback);
-    }
-}
-
 // Initialize charts
 function initCharts() {
     // Initialize price chart
-    const priceChartDiv = safeGetElement('priceChart');
+    const priceChartDiv = document.getElementById('priceChart');
     if (!priceChartDiv) {
+        addLogMessage('Price chart element not found', true);
         throw new Error('Price chart element not found');
     }
     
-    // Create candlestick trace
-    const candleTrace = {
-        x: state.priceData.map(d => d.datetime),
-        open: state.priceData.map(d => d.open),
-        high: state.priceData.map(d => d.high),
-        low: state.priceData.map(d => d.low),
-        close: state.priceData.map(d => d.close),
-        type: 'candlestick',
-        name: 'Price',
-        increasing: {
-            line: { color: OHLC_COLORS.up },
-            fillcolor: OHLC_COLORS.upFill
-        },
-        decreasing: {
-            line: { color: OHLC_COLORS.down },
-            fillcolor: OHLC_COLORS.downFill
-        }
-    };
+    // Check if we have enough data to create charts
+    if (!state.priceData || state.priceData.length === 0) {
+        addLogMessage('No price data available to create charts', true);
+        throw new Error('No price data available');
+    }
     
-    // Create volume trace
-    const volumeColors = state.priceData.map(d => d.close > d.open ? OHLC_COLORS.volume.up : OHLC_COLORS.volume.down);
-    const volumeTrace = {
-        x: state.priceData.map(d => d.datetime),
-        y: state.priceData.map(d => d.volume),
-        type: 'bar',
-        name: 'Volume',
-        yaxis: 'y2',
-        marker: {
-            color: volumeColors
-        },
-        opacity: 0.5
-    };
-    
-    // Create long signal trace
-    const longSignalTrace = {
-        x: state.priceData.map(d => d.datetime),
-        y: state.indicators.longSignal,
-        type: 'scatter',
-        mode: 'lines',
-        name: 'Long Signal',
-        line: {
-            color: 'rgba(74, 222, 128, 0.6)',
-            width: 1,
-            dash: 'dot'
-        }
-    };
-    
-    // Create short signal trace
-    const shortSignalTrace = {
-        x: state.priceData.map(d => d.datetime),
-        y: state.indicators.shortSignal,
-        type: 'scatter',
-        mode: 'lines',
-        name: 'Short Signal',
-        line: {
-            color: 'rgba(248, 113, 113, 0.6)',
-            width: 1,
-            dash: 'dot'
-        }
-    };
-    
-    // Set up layout
-    const layout = {
-        title: `${state.symbol} ${state.timeframe} Chart`,
-        dragmode: 'zoom',
-        margin: { l: 50, r: 50, b: 50, t: 50, pad: 4 },
-        grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'bottom to top' },
-        annotations: [],
-        xaxis: {
-            rangeslider: { visible: false },
-            type: 'date',
-            showgrid: false
-        },
-        yaxis: {
-            autorange: true,
-            domain: [0.2, 1],
-            type: 'linear',
-            scaleanchor: 'x',
-            gridcolor: 'rgba(255,255,255,0.1)'
-        },
-        yaxis2: {
-            domain: [0, 0.1],
-            gridcolor: 'rgba(255,255,255,0.1)'
-        },
-        plot_bgcolor: 'rgba(0, 0, 0, 0)',
-        paper_bgcolor: 'rgba(0, 0, 0, 0)',
-        font: {
-            color: '#d1d5db'
-        },
-        showlegend: false
-    };
-    
-    // Create the chart
     try {
+        // Create candlestick trace
+        const candleTrace = {
+            x: state.priceData.map(d => d.datetime),
+            open: state.priceData.map(d => d.open),
+            high: state.priceData.map(d => d.high),
+            low: state.priceData.map(d => d.low),
+            close: state.priceData.map(d => d.close),
+            type: 'candlestick',
+            name: 'Price',
+            increasing: {
+                line: { color: OHLC_COLORS.up },
+                fillcolor: OHLC_COLORS.upFill
+            },
+            decreasing: {
+                line: { color: OHLC_COLORS.down },
+                fillcolor: OHLC_COLORS.downFill
+            }
+        };
+        
+        // Create volume trace
+        const volumeColors = state.priceData.map(d => d.close > d.open ? OHLC_COLORS.volume.up : OHLC_COLORS.volume.down);
+        const volumeTrace = {
+            x: state.priceData.map(d => d.datetime),
+            y: state.priceData.map(d => d.volume),
+            type: 'bar',
+            name: 'Volume',
+            yaxis: 'y2',
+            marker: {
+                color: volumeColors
+            },
+            opacity: 0.5
+        };
+        
+        // Create long signal trace
+        const longSignalTrace = {
+            x: state.priceData.map(d => d.datetime),
+            y: state.indicators.longSignal,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Long Signal',
+            line: {
+                color: 'rgba(74, 222, 128, 0.6)',
+                width: 1,
+                dash: 'dot'
+            }
+        };
+        
+        // Create short signal trace
+        const shortSignalTrace = {
+            x: state.priceData.map(d => d.datetime),
+            y: state.indicators.shortSignal,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Short Signal',
+            line: {
+                color: 'rgba(248, 113, 113, 0.6)',
+                width: 1,
+                dash: 'dot'
+            }
+        };
+        
+        // Set up layout with improved visuals
+        const layout = {
+            title: `${state.symbol} ${state.timeframe} Chart`,
+            dragmode: 'zoom',
+            margin: { l: 50, r: 50, b: 50, t: 50, pad: 4 },
+            grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'bottom to top' },
+            annotations: [],
+            xaxis: {
+                rangeslider: { visible: false },
+                type: 'date',
+                showgrid: false,
+                range: [
+                    state.priceData[Math.max(0, state.priceData.length - CHART_CONFIG.defaultRange)].datetime,
+                    state.priceData[state.priceData.length - 1].datetime
+                ]
+            },
+            yaxis: {
+                autorange: true,
+                domain: [0.2, 1],
+                type: 'linear',
+                gridcolor: state.settings.theme === 'dark' ? OHLC_COLORS.grid : OHLC_COLORS.gridLight,
+                tickformat: ',.2f'
+            },
+            yaxis2: {
+                domain: [0, 0.1],
+                gridcolor: state.settings.theme === 'dark' ? OHLC_COLORS.grid : OHLC_COLORS.gridLight
+            },
+            plot_bgcolor: 'rgba(0, 0, 0, 0)',
+            paper_bgcolor: 'rgba(0, 0, 0, 0)',
+            font: {
+                color: state.settings.theme === 'dark' ? '#d1d5db' : '#1f2937',
+                family: CHART_CONFIG.fontFamily
+            },
+            showlegend: false,
+            hovermode: 'closest',
+            hoverlabel: {
+                bgcolor: state.settings.theme === 'dark' ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                font: {
+                    color: state.settings.theme === 'dark' ? '#d1d5db' : '#1f2937',
+                    family: CHART_CONFIG.fontFamily
+                },
+                bordercolor: 'transparent'
+            },
+            modebar: {
+                bgcolor: 'transparent',
+                color: state.settings.theme === 'dark' ? '#d1d5db' : '#1f2937',
+                activecolor: state.settings.theme === 'dark' ? '#ffffff' : '#4f46e5'
+            }
+        };
+        
+        // Create the chart
         Plotly.newPlot(priceChartDiv, [candleTrace, volumeTrace, longSignalTrace, shortSignalTrace], layout, {
             displayModeBar: true,
             responsive: true,
@@ -2114,9 +2184,10 @@ function initCharts() {
         state.charts.price = true;
         
         // Initialize equity chart
-        const equityChartDiv = safeGetElement('equityChart');
+        const equityChartDiv = document.getElementById('equityChart');
         if (!equityChartDiv) {
-            throw new Error('Equity chart element not found');
+            console.warn('Equity chart element not found');
+            return;
         }
         
         // Create equity curve trace
@@ -2129,7 +2200,9 @@ function initCharts() {
             line: {
                 color: '#4f46e5',
                 width: 2
-            }
+            },
+            fill: 'tozeroy',
+            fillcolor: 'rgba(79, 70, 229, 0.1)'
         };
         
         // Set up equity chart layout
@@ -2143,14 +2216,25 @@ function initCharts() {
             yaxis: {
                 autorange: true,
                 type: 'linear',
-                gridcolor: 'rgba(255,255,255,0.1)'
+                gridcolor: state.settings.theme === 'dark' ? OHLC_COLORS.grid : OHLC_COLORS.gridLight,
+                tickformat: ',.2f'
             },
             plot_bgcolor: 'rgba(0, 0, 0, 0)',
             paper_bgcolor: 'rgba(0, 0, 0, 0)',
             font: {
-                color: '#d1d5db'
+                color: state.settings.theme === 'dark' ? '#d1d5db' : '#1f2937',
+                family: CHART_CONFIG.fontFamily
             },
-            showlegend: false
+            showlegend: false,
+            hovermode: 'closest',
+            hoverlabel: {
+                bgcolor: state.settings.theme === 'dark' ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                font: {
+                    color: state.settings.theme === 'dark' ? '#d1d5db' : '#1f2937',
+                    family: CHART_CONFIG.fontFamily
+                },
+                bordercolor: 'transparent'
+            }
         };
         
         // Create the equity chart
@@ -2164,6 +2248,7 @@ function initCharts() {
         state.charts.equity = true;
     } catch (error) {
         console.error('Error creating charts with Plotly:', error);
+        addLogMessage('Error creating charts: ' + error.message, true);
         throw new Error('Failed to create charts: ' + error.message);
     }
 }
@@ -2172,7 +2257,7 @@ function initCharts() {
 function updatePriceChart() {
     if (!state.charts.price) return;
     
-    const priceChartDiv = safeGetElement('priceChart');
+    const priceChartDiv = document.getElementById('priceChart');
     if (!priceChartDiv) return;
     
     try {
@@ -2219,13 +2304,12 @@ function updatePriceChart() {
         Plotly.update(priceChartDiv, longSignalData, {}, 2);
         Plotly.update(priceChartDiv, shortSignalData, {}, 3);
         
-        // Update chart title
+        // Update chart title and focus on recent data
         Plotly.relayout(priceChartDiv, {
             title: `${state.symbol} ${state.timeframe} Chart`,
-            // Update x-axis range to show the most recent data
             xaxis: {
                 range: [
-                    state.priceData[Math.max(0, state.priceData.length - 100)].datetime,
+                    state.priceData[Math.max(0, state.priceData.length - CHART_CONFIG.defaultRange)].datetime,
                     state.priceData[state.priceData.length - 1].datetime
                 ],
                 rangeslider: { visible: false },
@@ -2251,7 +2335,7 @@ function updatePriceChart() {
                         d.datetime.getTime() <= t.entryTime.getTime() && 
                         d.datetime.getTime() + getTimeframeInMs(state.timeframe) > t.entryTime.getTime()
                     );
-                    return candle ? candle.low - (candle.high - candle.low) * 0.5 : null;
+                    return candle ? candle.low - (candle.high - candle.low) * CHART_CONFIG.tradePadding : null;
                 }),
                 mode: 'markers',
                 type: 'scatter',
@@ -2261,7 +2345,9 @@ function updatePriceChart() {
                     color: OHLC_COLORS.up,
                     line: { width: 1, color: 'white' }
                 },
-                name: 'Long Entries'
+                name: 'Long Entries',
+                hoverinfo: 'text',
+                text: longTrades.map(t => `Long Entry: $${t.entryPrice.toFixed(2)}<br>Size: $${(t.size * t.entryPrice).toFixed(2)}<br>Time: ${t.entryTime.toLocaleTimeString()}`)
             };
             
             // Create short trade markers
@@ -2274,7 +2360,7 @@ function updatePriceChart() {
                         d.datetime.getTime() <= t.entryTime.getTime() && 
                         d.datetime.getTime() + getTimeframeInMs(state.timeframe) > t.entryTime.getTime()
                     );
-                    return candle ? candle.high + (candle.high - candle.low) * 0.5 : null;
+                    return candle ? candle.high + (candle.high - candle.low) * CHART_CONFIG.tradePadding : null;
                 }),
                 mode: 'markers',
                 type: 'scatter',
@@ -2284,7 +2370,9 @@ function updatePriceChart() {
                     color: OHLC_COLORS.down,
                     line: { width: 1, color: 'white' }
                 },
-                name: 'Short Entries'
+                name: 'Short Entries',
+                hoverinfo: 'text',
+                text: shortTrades.map(t => `Short Entry: $${t.entryPrice.toFixed(2)}<br>Size: $${(t.size * t.entryPrice).toFixed(2)}<br>Time: ${t.entryTime.toLocaleTimeString()}`)
             };
             
             // Add trade markers to chart
@@ -2315,7 +2403,7 @@ function getTimeframeInMs(timeframe) {
 function updateEquityChart() {
     if (!state.charts.equity) return;
     
-    const equityChartDiv = safeGetElement('equityChart');
+    const equityChartDiv = document.getElementById('equityChart');
     if (!equityChartDiv) return;
     
     try {
@@ -2777,6 +2865,9 @@ document.addEventListener('DOMContentLoaded', function() {
     initUI();
     
     // Set fixed clock date from user's specified time
-    setFixedClock('2025-06-08 15:27:36');
+    setFixedClock('2025-06-08 16:07:20');
+    
+    // Update version info with the current user
+    state.version = '1.1.0';
+    addLogMessage(`System initialized by user: ${CURRENT_USER}`);
 });
-
