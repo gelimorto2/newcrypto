@@ -7,42 +7,16 @@ const BINANCE_FUTURES_TESTNET_API_URL = 'https://testnet.binancefuture.com';
 const OHLC_COLORS = {
     up: '#22c55e',
     down: '#ef4444',
-    upFill: 'rgba(34, 197, 94, 0.2)', // More transparent for better visibility
-    downFill: 'rgba(239, 68, 68, 0.2)', // More transparent for better visibility
+    upFill: 'rgba(34, 197, 94, 0.3)',
+    downFill: 'rgba(239, 68, 68, 0.3)',
     volume: {
-        up: 'rgba(34, 197, 94, 0.4)',
-        down: 'rgba(239, 68, 68, 0.4)'
-    },
-    grid: 'rgba(255, 255, 255, 0.06)', // Subtle grid lines
-    gridLight: 'rgba(0, 0, 0, 0.05)' // Light theme grid lines
-};
-
-// Enhanced chart configurations for ergonomic viewing
-const CHART_CONFIG = {
-    rangeSelectorButtons: [
-        {count: 1, type: 'hour', text: '1h'},
-        {count: 6, type: 'hour', text: '6h'},
-        {count: 1, type: 'day', text: '1d'},
-        {count: 7, type: 'day', text: '1w'},
-        {type: 'all', text: 'All'}
-    ],
-    defaultRange: 100, // Default number of candles to show
-    animation: {
-        duration: 500, // Smoother animations
-        easing: 'ease-in-out'
-    },
-    tooltipDelay: 100, // ms
-    fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
-    tradePadding: 0.5, // Padding for trade markers
-    signalOpacity: 0.6 // Opacity for signal indicators
+        up: 'rgba(34, 197, 94, 0.5)',
+        down: 'rgba(239, 68, 68, 0.5)'
+    }
 };
 
 // Notification sound
 const notificationSound = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3');
-
-// Current date and time (updated)
-const CURRENT_UTC_DATETIME = '2025-06-08 15:58:22';
-const CURRENT_USER = 'gelimorto2';
 
 // Trade class for tracking positions
 class Trade {
@@ -135,7 +109,7 @@ class Trade {
     }
 }
 
-// Volatility-based trading strategy
+// Volty Expansion Close strategy implementation
 class VoltyStrategy {
     constructor(atrLength = 5, atrMultiplier = 0.75) {
         this.atrLength = atrLength;
@@ -143,57 +117,11 @@ class VoltyStrategy {
     }
     
     generateSignals(priceData) {
-        const atr = this.calculateATR(priceData, this.atrLength);
-        const longSignal = [];
-        const shortSignal = [];
-        
-        let prevValue = priceData[0].close;
-        let longSignalActive = false;
-        let shortSignalActive = false;
-        
-        for (let i = 0; i < priceData.length; i++) {
-            if (i < this.atrLength) {
-                // Not enough data yet for signals
-                longSignal.push(null);
-                shortSignal.push(null);
-                continue;
-            }
-            
-            const currentATR = atr[i];
-            const threshold = currentATR * this.atrMultiplier;
-            
-            // Update signals
-            if (priceData[i].close - prevValue > threshold) {
-                longSignalActive = true;
-                shortSignalActive = false;
-            } else if (prevValue - priceData[i].close > threshold) {
-                shortSignalActive = true;
-                longSignalActive = false;
-            }
-            
-            // Set signal values (using price values for easier charting)
-            longSignal.push(longSignalActive ? priceData[i].low - (currentATR * 0.5) : null);
-            shortSignal.push(shortSignalActive ? priceData[i].high + (currentATR * 0.5) : null);
-            
-            prevValue = priceData[i].close;
-        }
-        
-        return {
-            atr,
-            longSignal,
-            shortSignal
-        };
-    }
-    
-    calculateATR(priceData, length) {
-        const tr = [];
-        const atr = [];
-        
         // Calculate True Range
+        const tr = [];
         for (let i = 0; i < priceData.length; i++) {
             if (i === 0) {
                 tr.push(priceData[i].high - priceData[i].low);
-                atr.push(tr[0]);
                 continue;
             }
             
@@ -204,23 +132,83 @@ class VoltyStrategy {
             );
             
             tr.push(trValue);
+        }
+        
+        // Calculate SMA of True Range (ATR)
+        const atr = [];
+        for (let i = 0; i < priceData.length; i++) {
+            if (i < this.atrLength - 1) {
+                atr.push(null);
+                continue;
+            }
             
-            // Calculate ATR using EMA method
-            if (i < length) {
-                // Simple average for initial values
-                let sumTr = 0;
-                for (let j = 0; j <= i; j++) {
-                    sumTr += tr[j];
+            let sum = 0;
+            for (let j = 0; j < this.atrLength; j++) {
+                sum += tr[i - j];
+            }
+            
+            atr.push((sum / this.atrLength) * this.atrMultiplier);
+        }
+        
+        // Generate signals based on stop levels
+        const longSignal = [];
+        const shortSignal = [];
+        
+        // Track the previous signal state
+        let prevSignalState = null; // 'LONG', 'SHORT', or null
+        
+        for (let i = 0; i < priceData.length; i++) {
+            if (i < this.atrLength) {
+                // Not enough data yet for signals
+                longSignal.push(null);
+                shortSignal.push(null);
+                continue;
+            }
+            
+            // Get reference close and ATR
+            const referenceClose = priceData[i - this.atrLength].close;
+            const currentATR = atr[i];
+            
+            // Calculate stop levels
+            const longStopLevel = referenceClose + currentATR;
+            const shortStopLevel = referenceClose - currentATR;
+            
+            // Check if current bar's high/low crossed the stop levels
+            const longTriggered = (priceData[i].high >= longStopLevel);
+            const shortTriggered = (priceData[i].low <= shortStopLevel);
+            
+            // Determine current signal
+            let currentSignal = null;
+            if (longTriggered) {
+                currentSignal = 'LONG';
+            } else if (shortTriggered) {
+                currentSignal = 'SHORT';
+            }
+            
+            // Set signal values only when direction changes
+            if (currentSignal !== null && currentSignal !== prevSignalState) {
+                if (currentSignal === 'LONG') {
+                    longSignal.push(priceData[i].low - (priceData[i].high - priceData[i].low) * 0.3);
+                    shortSignal.push(null);
+                } else {
+                    longSignal.push(null);
+                    shortSignal.push(priceData[i].high + (priceData[i].high - priceData[i].low) * 0.3);
                 }
-                atr.push(sumTr / (i + 1));
+                
+                // Update previous state
+                prevSignalState = currentSignal;
             } else {
-                // EMA for subsequent values
-                const multiplier = 2 / (length + 1);
-                atr.push((tr[i] * multiplier) + (atr[i-1] * (1 - multiplier)));
+                // No direction change
+                longSignal.push(null);
+                shortSignal.push(null);
             }
         }
         
-        return atr;
+        return {
+            atr,
+            longSignal,
+            shortSignal
+        };
     }
     
     getLatestSignal(priceData, indicators) {
@@ -252,6 +240,7 @@ const state = {
     
     isTrading: false,
     interval: null,
+    clockInterval: null,
     
     currentPosition: null,
     trades: [],
@@ -372,283 +361,628 @@ const state = {
         }
     },
     
-    version: '1.0.1' // Version for tracking
+    usingTradingView: false
 };
+
+// Safely get element - returns null if element doesn't exist
+function safeGetElement(id) {
+    return document.getElementById(id);
+}
+
+// Safe API fetch with error handling and retry
+async function safeApiFetch(url, options = {}) {
+    try {
+        const response = await fetch(url, options);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API error (${response.status}): ${errorText}`);
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('API fetch error:', error);
+        addLogMessage(`API Error: ${error.message}`, true);
+        
+        // Depending on the error, you might want to retry or handle differently
+        if (error.message.includes('429')) {
+            addLogMessage('Rate limit exceeded. Waiting before retry...', true);
+            // Wait for a bit then retry
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            return safeApiFetch(url, options);
+        }
+        
+        throw error;
+    }
+}
+
+// Start a live updating clock
+function startLiveClock() {
+    // Create a function to update the clock
+    function updateClock() {
+        const now = new Date();
+        
+        // Format date as YYYY-MM-DD HH:MM:SS
+        const year = now.getUTCFullYear();
+        const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(now.getUTCDate()).padStart(2, '0');
+        const hours = String(now.getUTCHours()).padStart(2, '0');
+        const minutes = String(now.getUTCMinutes()).padStart(2, '0');
+        const seconds = String(now.getUTCSeconds()).padStart(2, '0');
+        
+        const formattedDateTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        
+        // Update the clock display
+        const clockDisplay = safeGetElement('clock-display');
+        if (clockDisplay) {
+            clockDisplay.textContent = formattedDateTime + ' UTC';
+        }
+    }
+    
+    // Update immediately
+    updateClock();
+    
+    // Then update every second
+    state.clockInterval = setInterval(updateClock, 1000);
+    
+    return state.clockInterval;
+}
 
 // Initialize user interface
 function initUI() {
-    // Log startup information
-    addLogMessage(`Volty Trading Bot v${state.version} initializing - ${CURRENT_UTC_DATETIME}`);
-    addLogMessage(`User: ${CURRENT_USER} - Session started`);
-    
-    // Register event listeners for sliders
-    document.getElementById('atr-length').addEventListener('input', function() {
-        const value = this.value;
-        document.getElementById('atr-length-value').textContent = value;
-        state.atrLength = parseInt(value);
-    });
-    
-    document.getElementById('atr-mult').addEventListener('input', function() {
-        const value = this.value;
-        document.getElementById('atr-mult-value').textContent = value;
-        state.atrMultiplier = parseFloat(value);
-    });
-    
-    document.getElementById('position-size').addEventListener('input', function() {
-        const value = this.value;
-        document.getElementById('position-size-value').textContent = value + '%';
-        state.positionSize = parseInt(value);
-    });
-    
-    // Fee settings
-    document.getElementById('maker-fee').addEventListener('input', function() {
-        const value = parseFloat(this.value);
-        state.feeSettings.makerFee = value;
-        document.getElementById('futures-maker-fee').textContent = value.toFixed(2) + '%';
-        document.getElementById('stat-fee-rate').textContent = `${value.toFixed(2)}% / ${state.feeSettings.takerFee.toFixed(2)}%`;
-    });
-    
-    document.getElementById('taker-fee').addEventListener('input', function() {
-        const value = parseFloat(this.value);
-        state.feeSettings.takerFee = value;
-        document.getElementById('futures-taker-fee').textContent = value.toFixed(2) + '%';
-        document.getElementById('stat-fee-rate').textContent = `${state.feeSettings.makerFee.toFixed(2)}% / ${value.toFixed(2)}%`;
-    });
-    
-    // Tab switching
-    const tabButtons = document.querySelectorAll('.tab-button');
-    const tabContents = document.querySelectorAll('.tab-content');
-    
-    tabButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const tabName = this.dataset.tab;
-            
-            // Remove active class from all buttons and contents
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            tabContents.forEach(content => content.classList.remove('active'));
-            
-            // Add active class to current button and content
-            this.classList.add('active');
-            document.getElementById(tabName).classList.add('active');
-        });
-    });
-    
-    // Symbol and timeframe change handlers
-    document.getElementById('symbol').addEventListener('change', function() {
-        if (!state.isTrading) {
-            state.symbol = this.value;
-            reloadDataWithSettings();
+    try {
+        // Register event listeners for sliders
+        const atrLengthSlider = safeGetElement('atr-length');
+        const atrLengthValue = safeGetElement('atr-length-value');
+        if (atrLengthSlider && atrLengthValue) {
+            atrLengthSlider.addEventListener('input', function() {
+                const value = this.value;
+                atrLengthValue.textContent = value;
+                state.atrLength = parseInt(value);
+            });
         }
-    });
-    
-    document.getElementById('timeframe').addEventListener('change', function() {
-        if (!state.isTrading) {
-            state.timeframe = this.value;
-            reloadDataWithSettings();
+        
+        const atrMultSlider = safeGetElement('atr-mult');
+        const atrMultValue = safeGetElement('atr-mult-value');
+        if (atrMultSlider && atrMultValue) {
+            atrMultSlider.addEventListener('input', function() {
+                const value = this.value;
+                atrMultValue.textContent = value;
+                state.atrMultiplier = parseFloat(value);
+            });
         }
-    });
-    
-    // Trading buttons
-    document.getElementById('start-trading-btn').addEventListener('click', startTrading);
-    document.getElementById('stop-trading-btn').addEventListener('click', stopTrading);
-    document.getElementById('reset-trading-btn').addEventListener('click', resetTrading);
-    
-    // Futures trading buttons
-    document.getElementById('start-live-trading-btn').addEventListener('click', startLiveTrading);
-    document.getElementById('stop-live-trading-btn').addEventListener('click', stopTrading);
-    document.getElementById('emergency-stop-btn').addEventListener('click', emergencyStop);
-    document.getElementById('long-position-btn').addEventListener('click', function() {
-        openManualPosition('LONG');
-    });
-    document.getElementById('short-position-btn').addEventListener('click', function() {
-        openManualPosition('SHORT');
-    });
-    document.getElementById('close-positions-btn').addEventListener('click', function() {
-        closeCurrentPosition('Manual Close');
-    });
-    
-    // Trading mode toggles
-    document.getElementById('paper-trading-btn').addEventListener('click', function() {
-        switchToTradingMode('paper');
-    });
-    
-    document.getElementById('live-trading-btn').addEventListener('click', function() {
-        switchToTradingMode('live');
-    });
-    
-    // Settings & API buttons
-    document.getElementById('save-settings-btn').addEventListener('click', saveSettings);
-    document.getElementById('test-alert-btn').addEventListener('click', function() {
-        sendAlert('Test Alert', 'This is a test alert from Volty Trading Bot', 'info');
-    });
-    
-    document.getElementById('configure-api-btn').addEventListener('click', function() {
-        showAPIConfigModal();
-    });
-    
-    document.getElementById('configure-api-link').addEventListener('click', function(e) {
-        e.preventDefault();
-        showAPIConfigModal();
-    });
-    
-    document.getElementById('configure-api-link-alert').addEventListener('click', function(e) {
-        e.preventDefault();
-        showAPIConfigModal();
-    });
-    
-    // API config modal
-    const apiConfigModal = document.getElementById('apiConfigModal');
-    const closeBtns = apiConfigModal.querySelectorAll('.close-modal, #cancel-api-config-btn');
-    
-    closeBtns.forEach(btn => {
-        btn.addEventListener('click', function() {
-            apiConfigModal.style.display = 'none';
-        });
-    });
-    
-    document.getElementById('save-api-config-btn').addEventListener('click', saveAPIConfig);
-    
-    // Live trading confirmation modal
-    const liveTradingModal = document.getElementById('liveTradingConfirmModal');
-    document.getElementById('confirm-live-trading').addEventListener('change', function() {
-        document.getElementById('confirm-live-trading-btn').disabled = !this.checked;
-    });
-    
-    document.getElementById('confirm-live-trading-btn').addEventListener('click', function() {
-        liveTradingModal.style.display = 'none';
-        startActualLiveTrading();
-    });
-    
-    document.getElementById('cancel-live-trading-btn').addEventListener('click', function() {
-        liveTradingModal.style.display = 'none';
-    });
-    
-    liveTradingModal.querySelector('.close-modal').addEventListener('click', function() {
-        liveTradingModal.style.display = 'none';
-    });
-    
-    // Theme switcher
-    document.getElementById('theme-select').addEventListener('change', function() {
-        if (this.value === 'dark') {
-            document.body.classList.remove('light-theme');
-            document.body.classList.add('dark-theme');
-            state.settings.theme = 'dark';
-        } else {
-            document.body.classList.remove('dark-theme');
-            document.body.classList.add('light-theme');
-            state.settings.theme = 'light';
+        
+        const positionSizeSlider = safeGetElement('position-size');
+        const positionSizeValue = safeGetElement('position-size-value');
+        if (positionSizeSlider && positionSizeValue) {
+            positionSizeSlider.addEventListener('input', function() {
+                const value = this.value;
+                positionSizeValue.textContent = value + '%';
+                state.positionSize = parseInt(value);
+            });
         }
-    });
-    
-    // Initial capital
-    document.getElementById('initial-capital').addEventListener('change', function() {
-        if (!state.isTrading) {
-            state.initialCapital = parseFloat(this.value);
-            state.currentCapital = state.initialCapital;
-            state.botStats.dailyStartCapital = state.initialCapital;
-            state.equityCurve = [{ time: new Date(), value: state.initialCapital }];
-            
-            // Update metrics
-            updateMetrics();
-            updateEquityChart();
-            
-            addLogMessage(`Initial capital updated to $${state.initialCapital.toLocaleString()}`);
+        
+        // Live trading specific inputs
+        const liveAtrLengthSlider = safeGetElement('live-atr-length');
+        const liveAtrLengthValue = safeGetElement('live-atr-length-value');
+        if (liveAtrLengthSlider && liveAtrLengthValue) {
+            liveAtrLengthSlider.addEventListener('input', function() {
+                const value = this.value;
+                liveAtrLengthValue.textContent = value;
+                state.atrLength = parseInt(value);
+            });
         }
-    });
-    
-    // Initialize UI based on selected trading mode
-    switchToTradingMode('paper');
-    
-    // Initialize settings toggles
-    loadSettings();
-    
-    // Initialize alerts
-    initAlerts();
-    
-    // Check if using mobile device
-    checkMobileDevice();
-    
-    // Initial bot status
-    updateBotStatus('idle', 'System initialized - Waiting for data...');
-    
-    // Update fee display
-    document.getElementById('stat-fee-rate').textContent = `${state.feeSettings.makerFee.toFixed(2)}% / ${state.feeSettings.takerFee.toFixed(2)}%`;
-    
-    // Show loading indicator
-    showLoading();
-    
-    // Initial data fetch
-    fetchHistoricalData(state.symbol, state.timeframe, 500)
-        .then(data => {
-            hideLoading();
-            state.priceData = data;
-            
-            // Update current price and market data
-            if (data.length > 0) {
-                const lastCandle = data[data.length - 1];
-                state.currentPrice = lastCandle.close;
-                state.botStats.marketData.price = lastCandle.close;
-                
-                // Calculate 24h price change
-                const oneDayInMs = 24 * 60 * 60 * 1000;
-                const prevDayData = data.find(d => d.datetime.getTime() < (lastCandle.datetime.getTime() - oneDayInMs));
-                
-                if (prevDayData) {
-                    const change = ((lastCandle.close - prevDayData.close) / prevDayData.close) * 100;
-                    state.botStats.marketData.change24h = change;
+        
+        const liveAtrMultSlider = safeGetElement('live-atr-mult');
+        const liveAtrMultValue = safeGetElement('live-atr-mult-value');
+        if (liveAtrMultSlider && liveAtrMultValue) {
+            liveAtrMultSlider.addEventListener('input', function() {
+                const value = this.value;
+                liveAtrMultValue.textContent = value;
+                state.atrMultiplier = parseFloat(value);
+            });
+        }
+        
+        const livePositionSizeSlider = safeGetElement('live-position-size');
+        const livePositionSizeValue = safeGetElement('live-position-size-value');
+        if (livePositionSizeSlider && livePositionSizeValue) {
+            livePositionSizeSlider.addEventListener('input', function() {
+                const value = this.value;
+                livePositionSizeValue.textContent = value + '%';
+                state.futuresTrading.positionSize = parseInt(value);
+            });
+        }
+        
+        // Fee settings
+        const makerFeeInput = safeGetElement('maker-fee');
+        const futureMakerFee = safeGetElement('futures-maker-fee');
+        const statFeeRate = safeGetElement('stat-fee-rate');
+        if (makerFeeInput) {
+            makerFeeInput.addEventListener('input', function() {
+                const value = parseFloat(this.value);
+                state.feeSettings.makerFee = value;
+                if (futureMakerFee) futureMakerFee.textContent = value.toFixed(2) + '%';
+                if (statFeeRate) statFeeRate.textContent = `${value.toFixed(2)}% / ${state.feeSettings.takerFee.toFixed(2)}%`;
+            });
+        }
+        
+        const takerFeeInput = safeGetElement('taker-fee');
+        const futureTakerFee = safeGetElement('futures-taker-fee');
+        if (takerFeeInput) {
+            takerFeeInput.addEventListener('input', function() {
+                const value = parseFloat(this.value);
+                state.feeSettings.takerFee = value;
+                if (futureTakerFee) futureTakerFee.textContent = value.toFixed(2) + '%';
+                if (statFeeRate) statFeeRate.textContent = `${state.feeSettings.makerFee.toFixed(2)}% / ${value.toFixed(2)}%`;
+            });
+        }
+        
+        // Tab switching
+        const tabButtons = document.querySelectorAll('.tab-button');
+        if (tabButtons) {
+            tabButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const tabName = this.dataset.tab;
+                    
+                    // Remove active class from all buttons and contents
+                    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                    
+                    // Add active class to current button and content
+                    this.classList.add('active');
+                    const tabContent = safeGetElement(tabName);
+                    if (tabContent) tabContent.classList.add('active');
+                });
+            });
+        }
+        
+        // Symbol and timeframe change handlers
+        const symbolSelect = safeGetElement('symbol');
+        if (symbolSelect) {
+            symbolSelect.addEventListener('change', function() {
+                if (!state.isTrading) {
+                    state.symbol = this.value;
+                    // Update market symbol display
+                    const marketSymbol = safeGetElement('market-symbol');
+                    if (marketSymbol) marketSymbol.textContent = state.symbol;
+                    reloadDataWithSettings();
                 }
-                
-                // Calculate 24h volume
-                const last24hData = data.filter(d => d.datetime.getTime() > (lastCandle.datetime.getTime() - oneDayInMs));
-                const volume = last24hData.reduce((sum, candle) => sum + candle.volume, 0);
-                state.botStats.marketData.volume = volume;
-                
-                // Update market data display
-                updateMarketData();
+            });
+        }
+        
+        const timeframeSelect = safeGetElement('timeframe');
+        if (timeframeSelect) {
+            timeframeSelect.addEventListener('change', function() {
+                if (!state.isTrading) {
+                    state.timeframe = this.value;
+                    reloadDataWithSettings();
+                }
+            });
+        }
+        
+        // Live trading symbol and timeframe
+        const liveSymbolSelect = safeGetElement('live-symbol');
+        if (liveSymbolSelect) {
+            liveSymbolSelect.addEventListener('change', function() {
+                if (!state.isTrading) {
+                    state.symbol = this.value;
+                    // Update market symbol display
+                    const marketSymbol = safeGetElement('market-symbol');
+                    if (marketSymbol) marketSymbol.textContent = state.symbol;
+                    reloadDataWithSettings();
+                }
+            });
+        }
+        
+        const liveTimeframeSelect = safeGetElement('live-timeframe');
+        if (liveTimeframeSelect) {
+            liveTimeframeSelect.addEventListener('change', function() {
+                if (!state.isTrading) {
+                    state.timeframe = this.value;
+                    reloadDataWithSettings();
+                }
+            });
+        }
+        
+        // Trading buttons
+        const startTradingBtn = safeGetElement('start-trading-btn');
+        if (startTradingBtn) {
+            startTradingBtn.addEventListener('click', startTrading);
+        }
+        
+        const stopTradingBtn = safeGetElement('stop-trading-btn');
+        if (stopTradingBtn) {
+            stopTradingBtn.addEventListener('click', stopTrading);
+        }
+        
+        const resetTradingBtn = safeGetElement('reset-trading-btn');
+        if (resetTradingBtn) {
+            resetTradingBtn.addEventListener('click', resetTrading);
+        }
+        
+        // Position close button
+        const positionCloseBtn = safeGetElement('position-close-btn');
+        if (positionCloseBtn) {
+            positionCloseBtn.addEventListener('click', function() {
+                closeCurrentPosition('Manual Close');
+            });
+        }
+        
+        // Futures trading buttons
+        const startLiveTradingBtn = safeGetElement('start-live-trading-btn');
+        if (startLiveTradingBtn) {
+            startLiveTradingBtn.addEventListener('click', startLiveTrading);
+        }
+        
+        const stopLiveTradingBtn = safeGetElement('stop-live-trading-btn');
+        if (stopLiveTradingBtn) {
+            stopLiveTradingBtn.addEventListener('click', stopTrading);
+        }
+        
+        const emergencyStopBtn = safeGetElement('emergency-stop-btn');
+        if (emergencyStopBtn) {
+            emergencyStopBtn.addEventListener('click', emergencyStop);
+        }
+        
+        const longPositionBtn = safeGetElement('long-position-btn');
+        if (longPositionBtn) {
+            longPositionBtn.addEventListener('click', function() {
+                openManualPosition('LONG');
+            });
+        }
+        
+        const shortPositionBtn = safeGetElement('short-position-btn');
+        if (shortPositionBtn) {
+            shortPositionBtn.addEventListener('click', function() {
+                openManualPosition('SHORT');
+            });
+        }
+        
+        const closePositionsBtn = safeGetElement('close-positions-btn');
+        if (closePositionsBtn) {
+            closePositionsBtn.addEventListener('click', function() {
+                closeCurrentPosition('Manual Close');
+            });
+        }
+        
+        // Trading mode toggles
+        const paperTradingBtn = safeGetElement('paper-trading-btn');
+        if (paperTradingBtn) {
+            paperTradingBtn.addEventListener('click', function() {
+                switchToTradingMode('paper');
+            });
+        }
+        
+        const liveTradingBtn = safeGetElement('live-trading-btn');
+        if (liveTradingBtn) {
+            liveTradingBtn.addEventListener('click', function() {
+                switchToTradingMode('live');
+            });
+        }
+        
+        // Settings & API buttons
+        const saveSettingsBtn = safeGetElement('save-settings-btn');
+        if (saveSettingsBtn) {
+            saveSettingsBtn.addEventListener('click', saveSettings);
+        }
+        
+        const saveGeneralSettingsBtn = safeGetElement('save-general-settings-btn');
+        if (saveGeneralSettingsBtn) {
+            saveGeneralSettingsBtn.addEventListener('click', saveGeneralSettings);
+        }
+        
+        const saveAlertsBtn = safeGetElement('save-alerts-btn');
+        if (saveAlertsBtn) {
+            saveAlertsBtn.addEventListener('click', saveAlertSettings);
+        }
+        
+        const configureApiLink = safeGetElement('configure-api-link');
+        if (configureApiLink) {
+            configureApiLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                showAPIConfigModal();
+            });
+        }
+        
+        const configureApiBtn = safeGetElement('configure-api-btn');
+        if (configureApiBtn) {
+            configureApiBtn.addEventListener('click', showAPIConfigModal);
+        }
+        
+        const testAlertBtn = safeGetElement('test-alert-btn');
+        if (testAlertBtn) {
+            testAlertBtn.addEventListener('click', function() {
+                sendAlert('Test Alert', 'This is a test notification to check your alert settings.', 'info');
+            });
+        }
+        
+        // Chart toggle button
+        const toggleChartBtn = safeGetElement('toggle-chart-btn');
+        if (toggleChartBtn) {
+            toggleChartBtn.addEventListener('click', toggleChartType);
+        }
+        
+        // API config modal
+        const apiConfigModal = safeGetElement('apiConfigModal');
+        if (apiConfigModal) {
+            const closeBtns = apiConfigModal.querySelectorAll('.close-modal, #cancel-api-config-btn');
+            closeBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    apiConfigModal.style.display = 'none';
+                });
+            });
+            
+            const saveApiConfigBtn = safeGetElement('save-api-config-btn');
+            if (saveApiConfigBtn) {
+                saveApiConfigBtn.addEventListener('click', saveAPIConfig);
+            }
+        }
+        
+        // Live trading confirmation modal
+        const liveTradingModal = safeGetElement('liveTradingConfirmModal');
+        if (liveTradingModal) {
+            const confirmLiveTradingCheckbox = safeGetElement('confirm-live-trading');
+            const confirmLiveTradingBtn = safeGetElement('confirm-live-trading-btn');
+            
+            if (confirmLiveTradingCheckbox && confirmLiveTradingBtn) {
+                confirmLiveTradingCheckbox.addEventListener('change', function() {
+                    confirmLiveTradingBtn.disabled = !this.checked;
+                });
             }
             
-            // Generate signals
-            const strategy = new VoltyStrategy(state.atrLength, state.atrMultiplier);
-            state.indicators = strategy.generateSignals(state.priceData);
+            if (confirmLiveTradingBtn) {
+                confirmLiveTradingBtn.addEventListener('click', function() {
+                    liveTradingModal.style.display = 'none';
+                    startActualLiveTrading();
+                });
+            }
             
-            // Initialize charts
-            initCharts();
+            const cancelLiveTradingBtn = safeGetElement('cancel-live-trading-btn');
+            if (cancelLiveTradingBtn) {
+                cancelLiveTradingBtn.addEventListener('click', function() {
+                    liveTradingModal.style.display = 'none';
+                });
+            }
             
-            // Update bot status
-            updateBotStatus('idle', 'Ready to start trading');
+            const closeModalBtn = liveTradingModal.querySelector('.close-modal');
+            if (closeModalBtn) {
+                closeModalBtn.addEventListener('click', function() {
+                    liveTradingModal.style.display = 'none';
+                });
+            }
+        }
+        
+        // Initial capital
+        const initialCapitalInput = safeGetElement('initial-capital');
+        if (initialCapitalInput) {
+            initialCapitalInput.addEventListener('change', function() {
+                if (!state.isTrading) {
+                    state.initialCapital = parseFloat(this.value);
+                    state.currentCapital = state.initialCapital;
+                    state.botStats.dailyStartCapital = state.initialCapital;
+                    state.equityCurve = [{ time: new Date(), value: state.initialCapital }];
+                    
+                    // Update metrics
+                    updateMetrics();
+                    updateEquityChart();
+                    
+                    addLogMessage(`Initial capital updated to $${state.initialCapital.toLocaleString()}`);
+                }
+            });
+        }
+        
+        // Risk management toggles
+        const trailingStopToggle = safeGetElement('trailing-stop-toggle');
+        const trailingStopValue = safeGetElement('trailing-stop-value');
+        if (trailingStopToggle && trailingStopValue) {
+            trailingStopToggle.addEventListener('change', function() {
+                trailingStopValue.disabled = !this.checked;
+                state.settings.trailingStop.enabled = this.checked;
+            });
+        }
+        
+        const takeProfitToggle = safeGetElement('take-profit-toggle');
+        const takeProfitValue = safeGetElement('take-profit-value');
+        if (takeProfitToggle && takeProfitValue) {
+            takeProfitToggle.addEventListener('change', function() {
+                takeProfitValue.disabled = !this.checked;
+                state.settings.takeProfit.enabled = this.checked;
+            });
+        }
+        
+        const stopLossToggle = safeGetElement('stop-loss-toggle');
+        const stopLossValue = safeGetElement('stop-loss-value');
+        if (stopLossToggle && stopLossValue) {
+            stopLossToggle.addEventListener('change', function() {
+                stopLossValue.disabled = !this.checked;
+                state.settings.stopLoss.enabled = this.checked;
+            });
+        }
+        
+        const riskManagementToggle = safeGetElement('risk-management-toggle');
+        const maxDrawdownValue = safeGetElement('max-drawdown-value');
+        const maxDailyLossValue = safeGetElement('max-daily-loss-value');
+        if (riskManagementToggle && maxDrawdownValue && maxDailyLossValue) {
+            riskManagementToggle.addEventListener('change', function() {
+                maxDrawdownValue.disabled = !this.checked;
+                maxDailyLossValue.disabled = !this.checked;
+                state.settings.riskManagement.enabled = this.checked;
+            });
+        }
+        
+        // Auto trade toggle
+        const autoTradeToggle = safeGetElement('auto-trade-toggle');
+        if (autoTradeToggle) {
+            autoTradeToggle.addEventListener('change', function() {
+                state.settings.autoTrade = this.checked;
+            });
+        }
+        
+        // Alert toggles
+        const browserAlertToggle = safeGetElement('browser-alert-toggle');
+        if (browserAlertToggle) {
+            browserAlertToggle.addEventListener('change', function() {
+                state.alerts.browser.enabled = this.checked;
+            });
+        }
+        
+        const soundAlertToggle = safeGetElement('sound-alert-toggle');
+        const soundVolumeInput = safeGetElement('sound-volume-input');
+        if (soundAlertToggle && soundVolumeInput) {
+            soundAlertToggle.addEventListener('change', function() {
+                state.alerts.sound.enabled = this.checked;
+                soundVolumeInput.disabled = !this.checked;
+            });
             
-            // Add log message
-            addLogMessage('System initialized with historical data');
-        })
-        .catch(error => {
-            hideLoading();
-            console.error('Error fetching initial data:', error);
-            updateBotStatus('idle', 'Error fetching data - Check connection');
-            addLogMessage('Error fetching historical data: ' + error.message, true);
-        });
+            soundVolumeInput.addEventListener('input', function() {
+                state.alerts.sound.volume = parseFloat(this.value);
+            });
+        }
+        
+        const discordAlertToggle = safeGetElement('discord-alert-toggle');
+        const discordWebhookInput = safeGetElement('discord-webhook-input');
+        if (discordAlertToggle && discordWebhookInput) {
+            discordAlertToggle.addEventListener('change', function() {
+                state.alerts.discord.enabled = this.checked;
+                discordWebhookInput.disabled = !this.checked;
+            });
+            
+            discordWebhookInput.addEventListener('input', function() {
+                state.alerts.discord.webhook = this.value;
+            });
+        }
+        
+        const telegramAlertToggle = safeGetElement('telegram-alert-toggle');
+        const telegramTokenInput = safeGetElement('telegram-token-input');
+        const telegramChatIdInput = safeGetElement('telegram-chatid-input');
+        if (telegramAlertToggle && telegramTokenInput && telegramChatIdInput) {
+            telegramAlertToggle.addEventListener('change', function() {
+                state.alerts.telegram.enabled = this.checked;
+                telegramTokenInput.disabled = !this.checked;
+                telegramChatIdInput.disabled = !this.checked;
+            });
+            
+            telegramTokenInput.addEventListener('input', function() {
+                state.alerts.telegram.botToken = this.value;
+            });
+            
+            telegramChatIdInput.addEventListener('input', function() {
+                state.alerts.telegram.chatId = this.value;
+            });
+        }
+        
+        // Initialize UI based on selected trading mode
+        switchToTradingMode('paper');
+        
+        // Initialize settings toggles
+        loadSettings();
+        
+        // Check if using mobile device
+        checkMobileDevice();
+        
+        // Initial bot status
+        updateBotStatus('idle', 'System initialized - Waiting for data...');
+        
+        // Update fee display
+        if (statFeeRate) {
+            statFeeRate.textContent = `${state.feeSettings.makerFee.toFixed(2)}% / ${state.feeSettings.takerFee.toFixed(2)}%`;
+        }
+        
+        // Market symbol display
+        const marketSymbol = safeGetElement('market-symbol');
+        if (marketSymbol) {
+            marketSymbol.textContent = state.symbol;
+        }
+        
+        // Show loading indicator
+        showLoading();
+        
+        // Initial data fetch
+        fetchHistoricalData(state.symbol, state.timeframe, 500)
+            .then(data => {
+                hideLoading();
+                state.priceData = data;
+                
+                // Update current price and market data
+                if (data.length > 0) {
+                    const lastCandle = data[data.length - 1];
+                    state.currentPrice = lastCandle.close;
+                    state.botStats.marketData.price = lastCandle.close;
+                    
+                    // Calculate 24h price change
+                    const oneDayInMs = 24 * 60 * 60 * 1000;
+                    const prevDayData = data.find(d => d.datetime.getTime() < (lastCandle.datetime.getTime() - oneDayInMs));
+                    
+                    if (prevDayData) {
+                        const change = ((lastCandle.close - prevDayData.close) / prevDayData.close) * 100;
+                        state.botStats.marketData.change24h = change;
+                    }
+                    
+                    // Calculate 24h volume
+                    const last24hData = data.filter(d => d.datetime.getTime() > (lastCandle.datetime.getTime() - oneDayInMs));
+                    const volume = last24hData.reduce((sum, candle) => sum + candle.volume, 0);
+                    state.botStats.marketData.volume = volume;
+                    
+                    // Update market data display
+                    updateMarketData();
+                }
+                
+                // Generate signals
+                const strategy = new VoltyStrategy(state.atrLength, state.atrMultiplier);
+                state.indicators = strategy.generateSignals(state.priceData);
+                
+                // Initialize charts
+                initCharts();
+                
+                // Try to initialize TradingView if available
+                if (typeof TradingView !== 'undefined') {
+                    initTradingViewWidget();
+                }
+                
+                // Update bot status
+                updateBotStatus('idle', 'Ready to start trading');
+                
+                // Add log message
+                addLogMessage('System initialized with historical data');
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error fetching initial data:', error);
+                updateBotStatus('idle', 'Error fetching data - Check connection');
+                addLogMessage('Error fetching historical data: ' + error.message, true);
+            });
+            
+    } catch (error) {
+        console.error('Error initializing UI:', error);
+        addLogMessage('Error initializing UI: ' + error.message, true);
+    }
 }
 
 // Add a log message
 function addLogMessage(message, isError = false) {
-    // Get the log element or create it if it doesn't exist yet
-    const logElement = document.getElementById('logMessages');
-    if (!logElement) {
-        console.error('Log element not found');
-        console.log(message); // Fallback to console
-        return;
-    }
-    
-    const timestamp = new Date().toLocaleTimeString();
-    
-    const logItem = document.createElement('div');
-    logItem.className = isError ? 'negative' : '';
-    logItem.innerHTML = `<strong>${timestamp}</strong>: ${message}`;
-    
-    logElement.prepend(logItem);
-    
-    // Trim log if too many messages
-    if (logElement.children.length > 100) {
-        logElement.removeChild(logElement.lastChild);
+    try {
+        // Get the log element or create it if it doesn't exist yet
+        const logElement = safeGetElement('logMessages');
+        if (!logElement) {
+            console.error('Log element not found');
+            console.log(message); // Fallback to console
+            return;
+        }
+        
+        const timestamp = new Date().toLocaleTimeString();
+        
+        const logItem = document.createElement('div');
+        logItem.className = isError ? 'negative' : '';
+        logItem.innerHTML = `<strong>${timestamp}</strong>: ${message}`;
+        
+        logElement.prepend(logItem);
+        
+        // Trim log if too many messages
+        if (logElement.children.length > 100) {
+            logElement.removeChild(logElement.lastChild);
+        }
+    } catch (error) {
+        console.error('Error adding log message:', error);
     }
 }
 
@@ -666,9 +1000,13 @@ function startTrading() {
     disableFormInputs(true);
     
     // Update buttons
-    document.getElementById('start-trading-btn').disabled = true;
-    document.getElementById('stop-trading-btn').disabled = false;
-    document.getElementById('reset-trading-btn').disabled = true;
+    const startTradingBtn = safeGetElement('start-trading-btn');
+    const stopTradingBtn = safeGetElement('stop-trading-btn');
+    const resetTradingBtn = safeGetElement('reset-trading-btn');
+    
+    if (startTradingBtn) startTradingBtn.disabled = true;
+    if (stopTradingBtn) stopTradingBtn.disabled = false;
+    if (resetTradingBtn) resetTradingBtn.disabled = true;
     
     // Start polling for new data
     state.interval = setInterval(pollForNewData, state.settings.chartUpdateFrequency);
@@ -696,16 +1034,27 @@ function stopTrading() {
     
     // Update buttons based on trading mode
     if (state.futuresTrading.enabled) {
-        document.getElementById('start-live-trading-btn').disabled = false;
-        document.getElementById('stop-live-trading-btn').disabled = true;
-        document.getElementById('configure-api-btn').disabled = false;
-        document.getElementById('long-position-btn').disabled = true;
-        document.getElementById('short-position-btn').disabled = true;
-        document.getElementById('close-positions-btn').disabled = true;
+        const startLiveTradingBtn = safeGetElement('start-live-trading-btn');
+        const stopLiveTradingBtn = safeGetElement('stop-live-trading-btn');
+        const configureApiBtn = safeGetElement('configure-api-btn');
+        const longPositionBtn = safeGetElement('long-position-btn');
+        const shortPositionBtn = safeGetElement('short-position-btn');
+        const closePositionsBtn = safeGetElement('close-positions-btn');
+        
+        if (startLiveTradingBtn) startLiveTradingBtn.disabled = false;
+        if (stopLiveTradingBtn) stopLiveTradingBtn.disabled = true;
+        if (configureApiBtn) configureApiBtn.disabled = false;
+        if (longPositionBtn) longPositionBtn.disabled = true;
+        if (shortPositionBtn) shortPositionBtn.disabled = true;
+        if (closePositionsBtn) closePositionsBtn.disabled = true;
     } else {
-        document.getElementById('start-trading-btn').disabled = false;
-        document.getElementById('stop-trading-btn').disabled = true;
-        document.getElementById('reset-trading-btn').disabled = false;
+        const startTradingBtn = safeGetElement('start-trading-btn');
+        const stopTradingBtn = safeGetElement('stop-trading-btn');
+        const resetTradingBtn = safeGetElement('reset-trading-btn');
+        
+        if (startTradingBtn) startTradingBtn.disabled = false;
+        if (stopTradingBtn) stopTradingBtn.disabled = true;
+        if (resetTradingBtn) resetTradingBtn.disabled = false;
     }
     
     // Enable form inputs
@@ -778,15 +1127,24 @@ function resetTrading() {
             state.indicators = strategy.generateSignals(state.priceData);
             
             // Update UI
-            updatePriceChart();
+            updatePriceChart(true);
             updateEquityChart();
             updateMetrics();
             updateTradeHistory();
             updatePositionCard();
             updateTradingStats();
             
-            // Clear log
-            document.getElementById('logMessages').innerHTML = '';
+            // Hide position card
+            const positionCard = safeGetElement('position-card');
+            if (positionCard) positionCard.style.display = 'none';
+            
+            // Show empty trade history, hide trade history container
+            const emptyTradeHistory = safeGetElement('empty-trade-history');
+            const tradeHistoryContainer = safeGetElement('trade-history-container');
+            if (emptyTradeHistory && tradeHistoryContainer) {
+                emptyTradeHistory.style.display = 'block';
+                tradeHistoryContainer.style.display = 'none';
+            }
             
             // Update bot status
             updateBotStatus('idle', 'System reset complete - Ready to start trading');
@@ -806,7 +1164,7 @@ function resetTrading() {
 
 // Show loading indicator
 function showLoading() {
-    const loadingIndicator = document.getElementById('loadingIndicator');
+    const loadingIndicator = safeGetElement('loadingIndicator');
     if (loadingIndicator) {
         loadingIndicator.style.display = 'flex';
     }
@@ -814,7 +1172,7 @@ function showLoading() {
 
 // Hide loading indicator
 function hideLoading() {
-    const loadingIndicator = document.getElementById('loadingIndicator');
+    const loadingIndicator = safeGetElement('loadingIndicator');
     if (loadingIndicator) {
         loadingIndicator.style.display = 'none';
     }
@@ -822,11 +1180,11 @@ function hideLoading() {
 
 // Show status indicator
 function showStatusIndicator(message, type = 'info') {
-    const statusBar = document.getElementById('status-bar');
-    const statusMessage = document.getElementById('status-message');
-    const statusProgress = document.getElementById('status-progress');
+    const statusBar = safeGetElement('status-bar');
+    const statusMessage = safeGetElement('status-message');
+    const statusProgress = safeGetElement('status-progress');
     
-    if (statusBar && statusMessage) {
+    if (statusBar && statusMessage && statusProgress) {
         // Reset existing classes
         statusBar.className = 'status-bar';
         
@@ -862,7 +1220,7 @@ function showStatusIndicator(message, type = 'info') {
 
 // Hide status indicator
 function hideStatusIndicator() {
-    const statusBar = document.getElementById('status-bar');
+    const statusBar = safeGetElement('status-bar');
     if (statusBar) {
         statusBar.style.display = 'none';
     }
@@ -870,7 +1228,7 @@ function hideStatusIndicator() {
 
 // Update bot status
 function updateBotStatus(status, message) {
-    const botStatus = document.getElementById('bot-status');
+    const botStatus = safeGetElement('bot-status');
     if (botStatus) {
         // Remove existing classes
         botStatus.className = 'status-indicator';
@@ -879,22 +1237,22 @@ function updateBotStatus(status, message) {
         botStatus.classList.add(status);
         
         // Update the status text
-        let emoji = '⏸️';
+        let emoji = '<i class="fas fa-pause-circle"></i>';
         let statusText = 'IDLE';
         
         if (status === 'active') {
-            emoji = '▶️';
+            emoji = '<i class="fas fa-play-circle"></i>';
             statusText = 'ACTIVE';
         } else if (status === 'live') {
-            emoji = '🔴';
+            emoji = '<i class="fas fa-bolt"></i>';
             statusText = 'LIVE';
         }
         
-        botStatus.textContent = `${emoji} BOT ${statusText}`;
+        botStatus.innerHTML = `${emoji} BOT ${statusText}`;
     }
     
     // Update activity status message
-    const activityStatus = document.getElementById('activity-status');
+    const activityStatus = safeGetElement('activity-status');
     if (activityStatus) {
         activityStatus.textContent = message;
     }
@@ -902,7 +1260,7 @@ function updateBotStatus(status, message) {
 
 // Update bot activity indicator
 function updateBotActivity(activityType) {
-    const botActivity = document.getElementById('bot-activity');
+    const botActivity = safeGetElement('bot-activity');
     if (botActivity) {
         // Remove existing classes
         botActivity.className = 'bot-activity';
@@ -912,92 +1270,151 @@ function updateBotActivity(activityType) {
     }
 }
 
-// Function to reload data when settings change
-function reloadDataWithSettings() {
-    // Show loading indicator
-    showLoading();
-    showStatusIndicator('Loading data with new settings...', 'info');
+// Toggle between TradingView and Plotly charts
+function toggleChartType() {
+    const tradingViewContainer = safeGetElement('tradingview-chart');
+    const plotlyChart = safeGetElement('priceChart');
+    const toggleChartBtn = safeGetElement('toggle-chart-btn');
     
-    // Get current settings from UI elements
-    state.symbol = document.getElementById('symbol').value;
-    state.timeframe = document.getElementById('timeframe').value;
-    state.atrLength = parseInt(document.getElementById('atr-length').value);
-    state.atrMultiplier = parseFloat(document.getElementById('atr-mult').value);
+    if (!tradingViewContainer || !plotlyChart) return;
     
-    // Update bot status
-    updateBotStatus('idle', 'Fetching data with new settings...');
-    
-    // Reset the price chart data
-    if (state.charts.price) {
-        // Reset the chart by recreating it
-        Plotly.purge('priceChart');
-        state.charts.price = false;
+    if (state.usingTradingView) {
+        // Switch to Plotly
+        tradingViewContainer.style.display = 'none';
+        plotlyChart.style.display = 'block';
+        state.usingTradingView = false;
+        
+        if (toggleChartBtn) {
+            toggleChartBtn.textContent = 'Switch to TradingView';
+        }
+        
+        // Update Plotly chart
+        updatePriceChart(true);
+    } else {
+        // Switch to TradingView
+        plotlyChart.style.display = 'none';
+        tradingViewContainer.style.display = 'block';
+        state.usingTradingView = true;
+        
+        if (toggleChartBtn) {
+            toggleChartBtn.textContent = 'Switch to Basic Chart';
+        }
+        
+        // Initialize TradingView if not already done
+        if (typeof TradingView !== 'undefined' && !document.querySelector('#tradingview-chart iframe')) {
+            initTradingViewWidget();
+        }
     }
-    
-    // Fetch historical data with new settings
-    fetchHistoricalData(state.symbol, state.timeframe, 500)
-        .then(data => {
-            hideLoading();
-            hideStatusIndicator();
-            
-            // Verify we got valid data
-            if (!data || data.length === 0) {
-                throw new Error('No data returned for this timeframe');
-            }
-            
-            state.priceData = data;
-            
-            // Update current price and market data
-            if (data.length > 0) {
-                const lastCandle = data[data.length - 1];
-                state.currentPrice = lastCandle.close;
-                state.botStats.marketData.price = lastCandle.close;
-                
-                // Calculate 24h price change
-                const oneDayInMs = 24 * 60 * 60 * 1000;
-                const prevDayData = data.find(d => d.datetime.getTime() < (lastCandle.datetime.getTime() - oneDayInMs));
-                
-                if (prevDayData) {
-                    const change = ((lastCandle.close - prevDayData.close) / prevDayData.close) * 100;
-                    state.botStats.marketData.change24h = change;
-                }
-                
-                // Calculate 24h volume
-                const last24hData = data.filter(d => d.datetime.getTime() > (lastCandle.datetime.getTime() - oneDayInMs));
-                const volume = last24hData.reduce((sum, candle) => sum + candle.volume, 0);
-                state.botStats.marketData.volume = volume;
-                
-                // Update market data display
-                updateMarketData();
-            }
-            
-            // Generate signals with the updated settings
-            const strategy = new VoltyStrategy(state.atrLength, state.atrMultiplier);
-            state.indicators = strategy.generateSignals(state.priceData);
-            
-            // Initialize charts again instead of just updating
-            try {
-                initCharts();
-            } catch (error) {
-                console.error('Error initializing charts after timeframe change:', error);
-                addLogMessage('Error initializing charts: ' + error.message, true);
-            }
-            
-            // Update bot status
-            updateBotStatus('idle', 'Data updated with new settings');
-            
-            // Add log message
-            addLogMessage(`Data reloaded for ${state.symbol} (${state.timeframe}) with new strategy parameters`);
-        })
-        .catch(error => {
-            hideLoading();
-            hideStatusIndicator();
-            console.error('Error fetching data with new settings:', error);
-            updateBotStatus('idle', 'Error fetching data - Check connection');
-            addLogMessage('Error fetching data: ' + error.message, true);
-        });
 }
 
+// Initialize TradingView widget with proper exchange formatting
+function initTradingViewWidget() {
+    try {
+        const tradingViewContainer = safeGetElement('tradingview-chart');
+        if (!tradingViewContainer) {
+            console.error('TradingView container not found');
+            return false;
+        }
+        
+        // Clear any existing content
+        tradingViewContainer.innerHTML = '';
+        
+        // Format symbol correctly for TradingView with exchange prefix
+        // TradingView requires exchange prefix for accurate data
+        const formattedSymbol = `BINANCE:${state.symbol}`;
+        
+        // Create a new widget with more complete configuration
+        new TradingView.widget({
+            "width": "100%",
+            "height": 500,
+            "symbol": formattedSymbol,
+            "interval": state.timeframe,
+            "timezone": "Etc/UTC",
+            "theme": state.settings.theme === 'dark' ? "dark" : "light",
+            "style": "1", // Candles
+            "locale": "en",
+            "toolbar_bg": "#f1f3f6",
+            "enable_publishing": false,
+            "allow_symbol_change": true,
+            "container_id": "tradingview-chart",
+            "hide_side_toolbar": false,
+            "hide_top_toolbar": false,
+            "withdateranges": true,
+            "save_image": false,
+            "hideideas": true,
+            "studies": [
+                {"id": "ATR", "inputs": {"length": state.atrLength}}
+            ],
+            "supported_resolutions": ["1", "5", "15", "30", "60", "240", "1D"],
+            "show_popup_button": false,
+            "popup_width": "1000",
+            "popup_height": "650",
+            "autosize": true
+        });
+        
+        // Set flag to indicate we're using TradingView
+        state.usingTradingView = true;
+        
+        // Hide the Plotly chart if using TradingView
+        const plotlyChart = safeGetElement('priceChart');
+        if (plotlyChart) {
+            plotlyChart.style.display = 'none';
+        }
+        
+        // Update toggle button text
+        const toggleChartBtn = safeGetElement('toggle-chart-btn');
+        if (toggleChartBtn) {
+            toggleChartBtn.textContent = 'Switch to Basic Chart';
+        }
+        
+        // Add debug listener to check if TradingView loaded properly
+        setTimeout(() => {
+            const tvIframe = document.querySelector('#tradingview-chart iframe');
+            if (tvIframe) {
+                addLogMessage('TradingView chart loaded successfully');
+            } else {
+                addLogMessage('TradingView chart failed to load, using fallback chart', true);
+                // Fall back to Plotly chart if TradingView fails
+                state.usingTradingView = false;
+                if (plotlyChart) {
+                    plotlyChart.style.display = 'block';
+                }
+                if (tradingViewContainer) {
+                    tradingViewContainer.style.display = 'none';
+                }
+                if (toggleChartBtn) {
+                    toggleChartBtn.textContent = 'Switch to TradingView';
+                }
+                // Update Plotly chart
+                updatePriceChart(true);
+            }
+        }, 3000);
+        
+        return true;
+    } catch (error) {
+        console.error('Error initializing TradingView widget:', error);
+        addLogMessage('Failed to initialize TradingView chart: ' + error.message, true);
+        
+        // Fall back to Plotly chart
+        state.usingTradingView = false;
+        const plotlyChart = safeGetElement('priceChart');
+        const tradingViewContainer = safeGetElement('tradingview-chart');
+        
+        if (plotlyChart) plotlyChart.style.display = 'block';
+        if (tradingViewContainer) tradingViewContainer.style.display = 'none';
+        
+        // Update toggle button text
+        const toggleChartBtn = safeGetElement('toggle-chart-btn');
+        if (toggleChartBtn) {
+            toggleChartBtn.textContent = 'Switch to TradingView';
+        }
+        
+        // Update Plotly chart
+        updatePriceChart(true);
+        
+        return false;
+    }
+}
 // Enhanced fetch historical data to load more data points
 async function fetchHistoricalData(symbol, interval, limit = 500) {
     try {
@@ -1009,33 +1426,16 @@ async function fetchHistoricalData(symbol, interval, limit = 500) {
         const endpoint = state.futuresTrading.enabled ? '/fapi/v1/klines' : '/api/v3/klines';
         const url = `${baseUrl}${endpoint}`;
         
-        // Adjust limit based on timeframe to get sufficient historical data
-        let adjustedLimit = limit;
-        if (interval === '4h' || interval === '1d') {
-            adjustedLimit = Math.min(1000, limit * 2); // Get more data for higher timeframes
-        }
-        
+        // Increased limit for more data points
         const params = new URLSearchParams({
             symbol: symbol,
             interval: interval,
-            limit: adjustedLimit
+            limit: limit
         });
         
-        const response = await fetch(`${url}?${params.toString()}`);
+        const data = await safeApiFetch(`${url}?${params.toString()}`);
         
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`API error (${response.status}): ${errorText}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.length === 0) {
-            addLogMessage(`No data returned for ${symbol} with ${interval} timeframe`, true);
-            return [];
-        }
-        
-        // Format the data and ensure all required fields are present
+        // Format the data
         return data.map(d => ({
             datetime: new Date(d[0]),
             open: parseFloat(d[1]),
@@ -1052,28 +1452,48 @@ async function fetchHistoricalData(symbol, interval, limit = 500) {
 
 // Update market data display
 function updateMarketData() {
-    document.getElementById('market-price').textContent = `$${state.botStats.marketData.price.toFixed(2)}`;
-    
-    if (state.botStats.marketData.change24h !== 0) {
-        const changeElement = document.getElementById('market-change');
-        changeElement.textContent = `${state.botStats.marketData.change24h >= 0 ? '+' : ''}${state.botStats.marketData.change24h.toFixed(2)}%`;
-        changeElement.className = state.botStats.marketData.change24h >= 0 ? 'market-value up' : 'market-value down';
-    }
-    
-    if (state.botStats.marketData.volume > 0) {
-        document.getElementById('market-volume').textContent = `$${(state.botStats.marketData.volume / 1000000).toFixed(1)}M`;
+    try {
+        const marketPrice = safeGetElement('market-price');
+        if (marketPrice) {
+            marketPrice.textContent = `$${state.botStats.marketData.price.toFixed(2)}`;
+        }
+        
+        const marketChange = safeGetElement('market-change');
+        if (marketChange && state.botStats.marketData.change24h !== 0) {
+            marketChange.textContent = `${state.botStats.marketData.change24h >= 0 ? '+' : ''}${state.botStats.marketData.change24h.toFixed(2)}%`;
+            marketChange.className = state.botStats.marketData.change24h >= 0 ? 'market-value up' : 'market-value down';
+        }
+        
+        const marketVolume = safeGetElement('market-volume');
+        if (marketVolume && state.botStats.marketData.volume > 0) {
+            marketVolume.textContent = `$${(state.botStats.marketData.volume / 1000000).toFixed(1)}M`;
+        }
+    } catch (error) {
+        console.error('Error updating market data:', error);
     }
 }
 
 // Update trading stats
 function updateTradingStats() {
-    document.getElementById('stat-daily-trades').textContent = state.botStats.dailyTrades;
-    
-    const dailyPnlElement = document.getElementById('stat-daily-pnl');
-    dailyPnlElement.textContent = `${state.botStats.dailyPnL >= 0 ? '+' : ''}$${state.botStats.dailyPnL.toFixed(2)}`;
-    dailyPnlElement.className = 'metric-value ' + (state.botStats.dailyPnL >= 0 ? 'positive' : 'negative');
-    
-    document.getElementById('stat-execution').textContent = `${state.botStats.executionTime}ms`;
+    try {
+        const dailyTrades = safeGetElement('stat-daily-trades');
+        if (dailyTrades) {
+            dailyTrades.textContent = state.botStats.dailyTrades;
+        }
+        
+        const dailyPnl = safeGetElement('stat-daily-pnl');
+        if (dailyPnl) {
+            dailyPnl.textContent = `${state.botStats.dailyPnL >= 0 ? '+' : ''}$${state.botStats.dailyPnL.toFixed(2)}`;
+            dailyPnl.className = 'stat-value ' + (state.botStats.dailyPnL >= 0 ? 'positive' : 'negative');
+        }
+        
+        const executionTime = safeGetElement('stat-execution');
+        if (executionTime) {
+            executionTime.textContent = `${state.botStats.executionTime}ms`;
+        }
+    } catch (error) {
+        console.error('Error updating trading stats:', error);
+    }
 }
 
 // Start live trading
@@ -1094,7 +1514,10 @@ function startLiveTrading() {
     }
     
     // Show confirmation modal
-    document.getElementById('liveTradingConfirmModal').style.display = 'block';
+    const liveTradingModal = safeGetElement('liveTradingConfirmModal');
+    if (liveTradingModal) {
+        liveTradingModal.style.display = 'block';
+    }
 }
 
 // Emergency stop function - immediately halt all trading and close positions
@@ -1141,12 +1564,20 @@ function emergencyStop() {
                     hideStatusIndicator();
                     
                     // Update UI
-                    document.getElementById('start-live-trading-btn').disabled = false;
-                    document.getElementById('stop-live-trading-btn').disabled = true;
-                    document.getElementById('emergency-stop-btn').disabled = false;
-                    document.getElementById('long-position-btn').disabled = true;
-                    document.getElementById('short-position-btn').disabled = true;
-                    document.getElementById('close-positions-btn').disabled = true;
+                    const startLiveTradingBtn = safeGetElement('start-live-trading-btn');
+                    const stopLiveTradingBtn = safeGetElement('stop-live-trading-btn');
+                    const emergencyStopBtn = safeGetElement('emergency-stop-btn');
+                    const longPositionBtn = safeGetElement('long-position-btn');
+                    const shortPositionBtn = safeGetElement('short-position-btn');
+                    const closePositionsBtn = safeGetElement('close-positions-btn');
+                    
+                    if (startLiveTradingBtn) startLiveTradingBtn.disabled = false;
+                    if (stopLiveTradingBtn) stopLiveTradingBtn.disabled = true;
+                    if (emergencyStopBtn) emergencyStopBtn.disabled = false;
+                    if (longPositionBtn) longPositionBtn.disabled = true;
+                    if (shortPositionBtn) shortPositionBtn.disabled = true;
+                    if (closePositionsBtn) closePositionsBtn.disabled = true;
+                    
                     disableFormInputs(false);
                     
                     // Send alert
@@ -1183,9 +1614,13 @@ function emergencyStop() {
             hideStatusIndicator();
             
             // Update UI
-            document.getElementById('start-trading-btn').disabled = false;
-            document.getElementById('stop-trading-btn').disabled = true;
-            document.getElementById('reset-trading-btn').disabled = false;
+            const startTradingBtn = safeGetElement('start-trading-btn');
+            const stopTradingBtn = safeGetElement('stop-trading-btn');
+            const resetTradingBtn = safeGetElement('reset-trading-btn');
+            
+            if (startTradingBtn) startTradingBtn.disabled = false;
+            if (stopTradingBtn) stopTradingBtn.disabled = true;
+            if (resetTradingBtn) resetTradingBtn.disabled = false;
             disableFormInputs(false);
             
             // Send alert
@@ -1218,16 +1653,40 @@ async function cancelAllOrders() {
     try {
         addLogMessage('Canceling all open orders...');
         
-        // In a real implementation, this would make an API call to the exchange
-        // For demo purposes, we'll simulate a successful cancellation
-        await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API delay
+        // Use the appropriate API URL
+        const baseUrl = state.futuresTrading.testnet ? 
+            BINANCE_FUTURES_TESTNET_API_URL : 
+            BINANCE_FUTURES_API_URL;
         
+        const endpoint = '/fapi/v1/allOpenOrders';
+        const url = `${baseUrl}${endpoint}`;
+        
+        // Add timestamp and signature for authenticated request
+        const timestamp = Date.now();
+        const queryString = `symbol=${state.symbol}&timestamp=${timestamp}`;
+        
+        // In a real implementation, you would create a valid signature here
+        // For demo purposes, we're skipping that step
+        
+        const response = await fetch(`${url}?${queryString}`, {
+            method: 'DELETE',
+            headers: {
+                'X-MBX-APIKEY': state.futuresTrading.apiKey
+            }
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API error (${response.status}): ${errorText}`);
+        }
+        
+        const data = await response.json();
         addLogMessage('All orders canceled successfully');
-        return Promise.resolve();
+        return data;
     } catch (error) {
         console.error('Error canceling orders:', error);
         addLogMessage('Error canceling orders: ' + error.message, true);
-        return Promise.reject(error);
+        throw error;
     }
 }
 
@@ -1241,9 +1700,20 @@ async function closeAllPositions() {
     try {
         addLogMessage('Closing all open positions...');
         
-        // In a real implementation, this would make an API call to the exchange
-        // For demo purposes, we'll simulate a successful position closure
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+        // First, get current positions
+        const positions = await getOpenPositions();
+        
+        if (!positions || positions.length === 0) {
+            addLogMessage('No open positions to close');
+            return [];
+        }
+        
+        // Close each position
+        const closePromises = positions.map(position => {
+            return closePosition(position.symbol, position.positionSide, position.positionAmt);
+        });
+        
+        await Promise.all(closePromises);
         
         // Close local tracking of position
         if (state.currentPosition) {
@@ -1251,11 +1721,96 @@ async function closeAllPositions() {
         }
         
         addLogMessage('All positions closed successfully');
-        return Promise.resolve();
+        return positions;
     } catch (error) {
         console.error('Error closing positions:', error);
         addLogMessage('Error closing positions: ' + error.message, true);
-        return Promise.reject(error);
+        throw error;
+    }
+}
+
+// Get open positions
+async function getOpenPositions() {
+    try {
+        // Use the appropriate API URL
+        const baseUrl = state.futuresTrading.testnet ? 
+            BINANCE_FUTURES_TESTNET_API_URL : 
+            BINANCE_FUTURES_API_URL;
+        
+        const endpoint = '/fapi/v2/positionRisk';
+        const url = `${baseUrl}${endpoint}`;
+        
+        // Add timestamp and signature for authenticated request
+        const timestamp = Date.now();
+        const queryString = `timestamp=${timestamp}`;
+        
+        // In a real implementation, you would create a valid signature here
+        // For demo purposes, we're skipping that step
+        
+        const response = await fetch(`${url}?${queryString}`, {
+            method: 'GET',
+            headers: {
+                'X-MBX-APIKEY': state.futuresTrading.apiKey
+            }
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API error (${response.status}): ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Filter for positions with non-zero amount
+        return data.filter(p => parseFloat(p.positionAmt) !== 0);
+    } catch (error) {
+        console.error('Error getting open positions:', error);
+        addLogMessage('Error getting positions: ' + error.message, true);
+        throw error;
+    }
+}
+
+// Close a specific position
+async function closePosition(symbol, positionSide, positionAmt) {
+    try {
+        // Use the appropriate API URL
+        const baseUrl = state.futuresTrading.testnet ? 
+            BINANCE_FUTURES_TESTNET_API_URL : 
+            BINANCE_FUTURES_API_URL;
+        
+        const endpoint = '/fapi/v1/order';
+        const url = `${baseUrl}${endpoint}`;
+        
+        // Calculate the opposite side for closing
+        const side = parseFloat(positionAmt) > 0 ? 'SELL' : 'BUY';
+        const quantity = Math.abs(parseFloat(positionAmt));
+        
+        // Add parameters for the request
+        const timestamp = Date.now();
+        const queryString = `symbol=${symbol}&side=${side}&type=MARKET&quantity=${quantity}&reduceOnly=true&timestamp=${timestamp}`;
+        
+        // In a real implementation, you would create a valid signature here
+        // For demo purposes, we're skipping that step
+        
+        const response = await fetch(`${url}?${queryString}`, {
+            method: 'POST',
+            headers: {
+                'X-MBX-APIKEY': state.futuresTrading.apiKey
+            }
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API error (${response.status}): ${errorText}`);
+        }
+        
+        const data = await response.json();
+        addLogMessage(`Closed ${symbol} position of ${quantity} contracts`);
+        return data;
+    } catch (error) {
+        console.error(`Error closing position for ${symbol}:`, error);
+        addLogMessage(`Error closing ${symbol} position: ${error.message}`, true);
+        throw error;
     }
 }
 
@@ -1265,12 +1820,19 @@ function startActualLiveTrading() {
     disableFormInputs(true);
     
     // Update buttons
-    document.getElementById('start-live-trading-btn').disabled = true;
-    document.getElementById('stop-live-trading-btn').disabled = false;
-    document.getElementById('long-position-btn').disabled = false;
-    document.getElementById('short-position-btn').disabled = false;
-    document.getElementById('close-positions-btn').disabled = true;
-    document.getElementById('emergency-stop-btn').disabled = false;
+    const startLiveTradingBtn = safeGetElement('start-live-trading-btn');
+    const stopLiveTradingBtn = safeGetElement('stop-live-trading-btn');
+    const longPositionBtn = safeGetElement('long-position-btn');
+    const shortPositionBtn = safeGetElement('short-position-btn');
+    const closePositionsBtn = safeGetElement('close-positions-btn');
+    const emergencyStopBtn = safeGetElement('emergency-stop-btn');
+    
+    if (startLiveTradingBtn) startLiveTradingBtn.disabled = true;
+    if (stopLiveTradingBtn) stopLiveTradingBtn.disabled = false;
+    if (longPositionBtn) longPositionBtn.disabled = false;
+    if (shortPositionBtn) shortPositionBtn.disabled = false;
+    if (closePositionsBtn) closePositionsBtn.disabled = true;
+    if (emergencyStopBtn) emergencyStopBtn.disabled = false;
     
     // Start polling for futures data
     state.interval = setInterval(pollForFuturesData, state.settings.chartUpdateFrequency);
@@ -1278,6 +1840,13 @@ function startActualLiveTrading() {
     // Update state
     state.isTrading = true;
     state.futuresTrading.enabled = true;
+    
+    // Update mode indicators
+    const practiceIndicator = safeGetElement('practice-mode-indicator');
+    const liveIndicator = safeGetElement('live-mode-indicator');
+    
+    if (practiceIndicator) practiceIndicator.style.display = 'none';
+    if (liveIndicator) liveIndicator.style.display = 'flex';
     
     // Update bot status
     updateBotStatus('live', 'LIVE trading active - Monitoring market');
@@ -1292,67 +1861,35 @@ function saveSettings() {
         // Get settings from UI elements
         
         // Risk management settings
-        state.settings.trailingStop.enabled = document.getElementById('trailing-stop-toggle').checked;
-        state.settings.trailingStop.percentage = parseFloat(document.getElementById('trailing-stop-value').value);
+        const trailingStopToggle = safeGetElement('trailing-stop-toggle');
+        const trailingStopValue = safeGetElement('trailing-stop-value');
         
-        state.settings.takeProfit.enabled = document.getElementById('take-profit-toggle').checked;
-        state.settings.takeProfit.percentage = parseFloat(document.getElementById('take-profit-value').value);
+        const takeProfitToggle = safeGetElement('take-profit-toggle');
+        const takeProfitValue = safeGetElement('take-profit-value');
         
-        state.settings.stopLoss.enabled = document.getElementById('stop-loss-toggle').checked;
-        state.settings.stopLoss.percentage = parseFloat(document.getElementById('stop-loss-value').value);
+        const stopLossToggle = safeGetElement('stop-loss-toggle');
+        const stopLossValue = safeGetElement('stop-loss-value');
         
-        state.settings.riskManagement.enabled = document.getElementById('risk-management-toggle').checked;
-        state.settings.riskManagement.maxDrawdown = parseFloat(document.getElementById('max-drawdown-value').value);
-        state.settings.riskManagement.maxDailyLoss = parseFloat(document.getElementById('max-daily-loss-value').value);
+        const riskManagementToggle = safeGetElement('risk-management-toggle');
+        const maxDrawdownValue = safeGetElement('max-drawdown-value');
+        const maxDailyLossValue = safeGetElement('max-daily-loss-value');
+        
+        if (trailingStopToggle) state.settings.trailingStop.enabled = trailingStopToggle.checked;
+        if (trailingStopValue) state.settings.trailingStop.percentage = parseFloat(trailingStopValue.value);
+        
+        if (takeProfitToggle) state.settings.takeProfit.enabled = takeProfitToggle.checked;
+        if (takeProfitValue) state.settings.takeProfit.percentage = parseFloat(takeProfitValue.value);
+        
+        if (stopLossToggle) state.settings.stopLoss.enabled = stopLossToggle.checked;
+        if (stopLossValue) state.settings.stopLoss.percentage = parseFloat(stopLossValue.value);
+        
+        if (riskManagementToggle) state.settings.riskManagement.enabled = riskManagementToggle.checked;
+        if (maxDrawdownValue) state.settings.riskManagement.maxDrawdown = parseFloat(maxDrawdownValue.value);
+        if (maxDailyLossValue) state.settings.riskManagement.maxDailyLoss = parseFloat(maxDailyLossValue.value);
         
         // Trading settings
-        state.settings.autoTrade = document.getElementById('auto-trade-toggle').checked;
-        state.settings.theme = document.getElementById('theme-select').value;
-        state.settings.chartUpdateFrequency = parseInt(document.getElementById('chart-update-frequency').value) * 1000;
-        
-        // Fee settings
-        state.feeSettings.makerFee = parseFloat(document.getElementById('maker-fee').value);
-        state.feeSettings.takerFee = parseFloat(document.getElementById('taker-fee').value);
-        
-        // Update fee display
-        document.getElementById('futures-maker-fee').textContent = state.feeSettings.makerFee.toFixed(2) + '%';
-        document.getElementById('futures-taker-fee').textContent = state.feeSettings.takerFee.toFixed(2) + '%';
-        document.getElementById('stat-fee-rate').textContent = `${state.feeSettings.makerFee.toFixed(2)}% / ${state.feeSettings.takerFee.toFixed(2)}%`;
-        
-        // Update theme if it was changed
-        if (state.settings.theme === 'dark') {
-            document.body.classList.remove('light-theme');
-            document.body.classList.add('dark-theme');
-        } else {
-            document.body.classList.remove('dark-theme');
-            document.body.classList.add('light-theme');
-        }
-        
-        // Alert settings
-        state.alerts.discord.enabled = document.getElementById('discord-alert-toggle').checked;
-        state.alerts.discord.webhook = document.getElementById('discord-webhook-input').value;
-        
-        state.alerts.telegram.enabled = document.getElementById('telegram-alert-toggle').checked;
-        state.alerts.telegram.botToken = document.getElementById('telegram-token-input').value;
-        state.alerts.telegram.chatId = document.getElementById('telegram-chatid-input').value;
-        
-        state.alerts.email.enabled = document.getElementById('email-alert-toggle').checked;
-        state.alerts.email.address = document.getElementById('email-address-input').value;
-        
-        state.alerts.browser.enabled = document.getElementById('browser-alert-toggle').checked;
-        
-        state.alerts.sound.enabled = document.getElementById('sound-alert-toggle').checked;
-        state.alerts.sound.volume = parseFloat(document.getElementById('sound-volume-input').value);
-        
-        // If we're trading, update polling interval with new frequency
-        if (state.isTrading && state.interval) {
-            clearInterval(state.interval);
-            if (state.futuresTrading.enabled) {
-                state.interval = setInterval(pollForFuturesData, state.settings.chartUpdateFrequency);
-            } else {
-                state.interval = setInterval(pollForNewData, state.settings.chartUpdateFrequency);
-            }
-        }
+        const autoTradeToggle = safeGetElement('auto-trade-toggle');
+        if (autoTradeToggle) state.settings.autoTrade = autoTradeToggle.checked;
         
         // Update position risk levels if we have an active position
         if (state.currentPosition) {
@@ -1369,8 +1906,75 @@ function saveSettings() {
                 takeProfit: state.settings.takeProfit,
                 stopLoss: state.settings.stopLoss,
                 riskManagement: state.settings.riskManagement
-            },
-            alerts: state.alerts
+            }
+        };
+        
+        localStorage.setItem('voltyBotSettings', JSON.stringify(settingsToSave));
+        
+        // Update UI elements for conditional fields
+        if (trailingStopValue) trailingStopValue.disabled = !state.settings.trailingStop.enabled;
+        if (takeProfitValue) takeProfitValue.disabled = !state.settings.takeProfit.enabled;
+        if (stopLossValue) stopLossValue.disabled = !state.settings.stopLoss.enabled;
+        if (maxDrawdownValue) maxDrawdownValue.disabled = !state.settings.riskManagement.enabled;
+        if (maxDailyLossValue) maxDailyLossValue.disabled = !state.settings.riskManagement.enabled;
+        
+        // Sync settings between paper and live trading modes
+        syncTradingModeSettings();
+        
+        // Show confirmation
+        addLogMessage('Risk management settings saved successfully');
+        showStatusIndicator('Settings saved', 'success');
+        
+    } catch (error) {
+        console.error('Error saving settings:', error);
+        addLogMessage('Error saving settings: ' + error.message, true);
+    }
+}
+
+// Save general settings
+function saveGeneralSettings() {
+    try {
+        // Get settings from UI elements
+        const themeSelect = safeGetElement('theme-select');
+        const chartUpdateFrequency = safeGetElement('chart-update-frequency');
+        const makerFeeInput = safeGetElement('maker-fee');
+        const takerFeeInput = safeGetElement('taker-fee');
+        
+        // Update state with new values
+        if (themeSelect) state.settings.theme = themeSelect.value;
+        if (chartUpdateFrequency) {
+            const frequencyValue = parseInt(chartUpdateFrequency.value) * 1000;
+            state.settings.chartUpdateFrequency = frequencyValue;
+            
+            // If we're trading, update polling interval with new frequency
+            if (state.isTrading && state.interval) {
+                clearInterval(state.interval);
+                if (state.futuresTrading.enabled) {
+                    state.interval = setInterval(pollForFuturesData, frequencyValue);
+                } else {
+                    state.interval = setInterval(pollForNewData, frequencyValue);
+                }
+            }
+        }
+        
+        // Update fee settings
+        if (makerFeeInput) state.feeSettings.makerFee = parseFloat(makerFeeInput.value);
+        if (takerFeeInput) state.feeSettings.takerFee = parseFloat(takerFeeInput.value);
+        
+        // Update fee display
+        const futureMakerFee = safeGetElement('futures-maker-fee');
+        const futureTakerFee = safeGetElement('futures-taker-fee');
+        const statFeeRate = safeGetElement('stat-fee-rate');
+        
+        if (futureMakerFee) futureMakerFee.textContent = state.feeSettings.makerFee.toFixed(2) + '%';
+        if (futureTakerFee) futureTakerFee.textContent = state.feeSettings.takerFee.toFixed(2) + '%';
+        if (statFeeRate) statFeeRate.textContent = `${state.feeSettings.makerFee.toFixed(2)}% / ${state.feeSettings.takerFee.toFixed(2)}%`;
+        
+        // Save to localStorage
+        const settingsToSave = {
+            settings: {
+                ...state.settings
+            }
         };
         
         localStorage.setItem('voltyBotSettings', JSON.stringify(settingsToSave));
@@ -1383,24 +1987,107 @@ function saveSettings() {
         
         localStorage.setItem('voltyBotFeeSettings', JSON.stringify(feeSettingsToSave));
         
-        addLogMessage('Settings saved successfully');
-        
-        // Update UI elements for conditional fields
-        document.getElementById('trailing-stop-value').disabled = !state.settings.trailingStop.enabled;
-        document.getElementById('take-profit-value').disabled = !state.settings.takeProfit.enabled;
-        document.getElementById('stop-loss-value').disabled = !state.settings.stopLoss.enabled;
-        document.getElementById('max-drawdown-value').disabled = !state.settings.riskManagement.enabled;
-        document.getElementById('max-daily-loss-value').disabled = !state.settings.riskManagement.enabled;
-        
-        document.getElementById('discord-webhook-input').disabled = !state.alerts.discord.enabled;
-        document.getElementById('telegram-token-input').disabled = !state.alerts.telegram.enabled;
-        document.getElementById('telegram-chatid-input').disabled = !state.alerts.telegram.enabled;
-        document.getElementById('email-address-input').disabled = !state.alerts.email.enabled;
-        document.getElementById('sound-volume-input').disabled = !state.alerts.sound.enabled;
+        // Show confirmation
+        addLogMessage('General settings saved successfully');
+        showStatusIndicator('Settings saved', 'success');
         
     } catch (error) {
-        console.error('Error saving settings:', error);
-        addLogMessage('Error saving settings: ' + error.message, true);
+        console.error('Error saving general settings:', error);
+        addLogMessage('Error saving general settings: ' + error.message, true);
+    }
+}
+
+// Save alert settings
+function saveAlertSettings() {
+    try {
+        // Get alert settings from UI elements
+        const browserAlertToggle = safeGetElement('browser-alert-toggle');
+        const soundAlertToggle = safeGetElement('sound-alert-toggle');
+        const soundVolumeInput = safeGetElement('sound-volume-input');
+        const discordAlertToggle = safeGetElement('discord-alert-toggle');
+        const discordWebhookInput = safeGetElement('discord-webhook-input');
+        const telegramAlertToggle = safeGetElement('telegram-alert-toggle');
+        const telegramTokenInput = safeGetElement('telegram-token-input');
+        const telegramChatIdInput = safeGetElement('telegram-chatid-input');
+        
+        // Update state with new values
+        if (browserAlertToggle) state.alerts.browser.enabled = browserAlertToggle.checked;
+        
+        if (soundAlertToggle) state.alerts.sound.enabled = soundAlertToggle.checked;
+        if (soundVolumeInput) state.alerts.sound.volume = parseFloat(soundVolumeInput.value);
+        
+        if (discordAlertToggle) state.alerts.discord.enabled = discordAlertToggle.checked;
+        if (discordWebhookInput) state.alerts.discord.webhook = discordWebhookInput.value;
+        
+        if (telegramAlertToggle) state.alerts.telegram.enabled = telegramAlertToggle.checked;
+        if (telegramTokenInput) state.alerts.telegram.botToken = telegramTokenInput.value;
+        if (telegramChatIdInput) state.alerts.telegram.chatId = telegramChatIdInput.value;
+        
+        // Save to localStorage
+        const alertsToSave = {
+            alerts: {
+                ...state.alerts
+            }
+        };
+        
+        // Merge with existing settings
+        const existingSettings = localStorage.getItem('voltyBotSettings');
+        if (existingSettings) {
+            const parsedSettings = JSON.parse(existingSettings);
+            const mergedSettings = {
+                ...parsedSettings,
+                alerts: alertsToSave.alerts
+            };
+            localStorage.setItem('voltyBotSettings', JSON.stringify(mergedSettings));
+        } else {
+            localStorage.setItem('voltyBotSettings', JSON.stringify(alertsToSave));
+        }
+        
+        // Show confirmation
+        addLogMessage('Alert settings saved successfully');
+        showStatusIndicator('Settings saved', 'success');
+        
+    } catch (error) {
+        console.error('Error saving alert settings:', error);
+        addLogMessage('Error saving alert settings: ' + error.message, true);
+    }
+}
+
+// Sync settings between paper and live trading modes
+function syncTradingModeSettings() {
+    try {
+        // Paper trading to live trading
+        const atrLengthSlider = safeGetElement('atr-length');
+        const atrMultSlider = safeGetElement('atr-mult');
+        const symbolSelect = safeGetElement('symbol');
+        const timeframeSelect = safeGetElement('timeframe');
+        
+        const liveAtrLengthSlider = safeGetElement('live-atr-length');
+        const liveAtrLengthValue = safeGetElement('live-atr-length-value');
+        const liveAtrMultSlider = safeGetElement('live-atr-mult');
+        const liveAtrMultValue = safeGetElement('live-atr-mult-value');
+        const liveSymbolSelect = safeGetElement('live-symbol');
+        const liveTimeframeSelect = safeGetElement('live-timeframe');
+        
+        if (atrLengthSlider && liveAtrLengthSlider && liveAtrLengthValue) {
+            liveAtrLengthSlider.value = atrLengthSlider.value;
+            liveAtrLengthValue.textContent = atrLengthSlider.value;
+        }
+        
+        if (atrMultSlider && liveAtrMultSlider && liveAtrMultValue) {
+            liveAtrMultSlider.value = atrMultSlider.value;
+            liveAtrMultValue.textContent = atrMultSlider.value;
+        }
+        
+        if (symbolSelect && liveSymbolSelect) {
+            liveSymbolSelect.value = symbolSelect.value;
+        }
+        
+        if (timeframeSelect && liveTimeframeSelect) {
+            liveTimeframeSelect.value = timeframeSelect.value;
+        }
+    } catch (error) {
+        console.error('Error syncing trading mode settings:', error);
     }
 }
 
@@ -1440,98 +2127,38 @@ function sendAlert(title, message, type = 'info') {
         notificationSound.play().catch(e => console.error('Error playing notification sound:', e));
     }
     
-    // Discord webhook - Enhanced with rich embeds
+    // Discord webhook
     if (state.alerts.discord.enabled && state.alerts.discord.webhook) {
-        // Set color based on type
-        const colorMap = {
-            'error': 16711680,     // Red
-            'success': 65280,      // Green
-            'warning': 16776960,   // Yellow
-            'info': 3447003        // Blue
-        };
-        
-        const color = colorMap[type] || 3447003;
-        
-        // Get current metrics if we have a position
-        let fields = [
-            {
-                name: 'Bot Status',
-                value: `Trading ${state.futuresTrading.enabled ? 'LIVE' : 'Paper'} - ${state.symbol} ${state.timeframe}`,
-                inline: true
-            },
-            {
-                name: 'Current Price',
-                value: `$${state.currentPrice.toFixed(2)}`,
-                inline: true
-            }
-        ];
-        
-        // Add position-specific fields if relevant
-        if (state.currentPosition || (title.includes('Position') && type === 'success')) {
-            // For position alerts, add more trading details
-            fields.push({
-                name: 'Daily P&L',
-                value: `${state.botStats.dailyPnL >= 0 ? '+' : ''}$${state.botStats.dailyPnL.toFixed(2)}`,
-                inline: true
-            });
-            
-            fields.push({
-                name: 'Bot Metrics',
-                value: `Win Rate: ${state.metrics.winRate.toFixed(1)}% | Trades: ${state.metrics.totalTrades}`,
-                inline: false
-            });
-        }
-        
-        // Create timestamp
-        const timestamp = new Date().toISOString();
-        
-        // Create the Discord embed
-        const embed = {
-            embeds: [{
-                title: title,
-                description: message,
-                color: color,
-                timestamp: timestamp,
-                fields: fields,
-                footer: {
-                    text: `Volty Trading Bot v${state.version} | ${state.futuresTrading.enabled ? 'LIVE' : 'Paper'} Trading`,
-                    icon_url: "https://i.imgur.com/fKL31aD.png" // Bot logo
+        try {
+            fetch(state.alerts.discord.webhook, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
                 },
-                thumbnail: {
-                    url: type === 'error' ? 'https://img.icons8.com/color/48/000000/high-priority.png' : 
-                         type === 'success' ? 'https://img.icons8.com/color/48/000000/ok.png' : 
-                         type === 'warning' ? 'https://img.icons8.com/color/48/000000/warning-shield.png' :
-                         'https://img.icons8.com/color/48/000000/info.png'
-                }
-            }]
-        };
-        
-        // Send to Discord
-        fetch(state.alerts.discord.webhook, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(embed)
-        }).catch(error => {
+                body: JSON.stringify({
+                    content: `**${title}**\n${message}`,
+                    username: 'Volty Trading Bot'
+                })
+            }).catch(error => {
+                console.error('Error sending Discord alert:', error);
+            });
+        } catch (error) {
             console.error('Error sending Discord alert:', error);
-        });
+        }
     }
     
-    // Telegram alert
+    // Telegram alerts
     if (state.alerts.telegram.enabled && state.alerts.telegram.botToken && state.alerts.telegram.chatId) {
-        const telegramMessage = `*${title}*\n${message}`;
-        const telegramUrl = `https://api.telegram.org/bot${state.alerts.telegram.botToken}/sendMessage?chat_id=${state.alerts.telegram.chatId}&text=${encodeURIComponent(telegramMessage)}&parse_mode=Markdown`;
-        
-        fetch(telegramUrl).catch(error => {
+        try {
+            const telegramText = `*${title}*\n${message}`;
+            const url = `https://api.telegram.org/bot${state.alerts.telegram.botToken}/sendMessage?chat_id=${state.alerts.telegram.chatId}&text=${encodeURIComponent(telegramText)}&parse_mode=Markdown`;
+            
+            fetch(url).catch(error => {
+                console.error('Error sending Telegram alert:', error);
+            });
+        } catch (error) {
             console.error('Error sending Telegram alert:', error);
-        });
-    }
-    
-    // Email alert - implementation would use a proper email API
-    if (state.alerts.email.enabled && state.alerts.email.address) {
-        // In a real implementation, this would use a proper email API
-        console.log(`Email alert would be sent to ${state.alerts.email.address}: ${title} - ${message}`);
+        }
     }
 }
 
@@ -1570,9 +2197,8 @@ async function pollForFuturesData() {
             updatePositionCard();
         }
         
-        // In a real implementation, we would fetch account information here
-        // For demo purposes, we'll simulate it
-        simulateAccountUpdate();
+        // Fetch account information
+        fetchAccountInfo();
         
         // Check if this is a new candle
         if (latestCandleTimestamp > lastDataTimestamp) {
@@ -1584,7 +2210,9 @@ async function pollForFuturesData() {
             state.indicators = strategy.generateSignals(state.priceData);
             
             // Update the chart
-            updatePriceChart();
+            if (!state.usingTradingView) {
+                updatePriceChart(true);
+            }
             
             // Get the latest signal
             const signal = strategy.getLatestSignal(state.priceData, state.indicators);
@@ -1593,12 +2221,16 @@ async function pollForFuturesData() {
             updateBotActivity('trading');
             updateBotStatus('live', `New candle detected - Signal: ${signal || 'neutral'}`);
             
-            // In auto-trade mode, we would process signals automatically
-            // For safety in live mode, we'll just notify but require manual intervention
-            if (signal && (signal === 'LONG' || signal === 'SHORT')) {
-                const message = `${signal} signal detected at $${latestCandle.close.toFixed(2)}`;
-                addLogMessage(message);
-                sendAlert('Trading Signal', message, 'info');
+            // In auto-trade mode, we process signals automatically
+            if (signal && (signal === 'LONG' || signal === 'SHORT') && state.settings.autoTrade) {
+                processTradeSignal(signal, latestCandle);
+            } else {
+                // Just notify about the signal
+                if (signal) {
+                    const message = `${signal} signal detected at $${latestCandle.close.toFixed(2)}`;
+                    addLogMessage(message);
+                    sendAlert('Trading Signal', message, 'info');
+                }
             }
         }
         
@@ -1612,12 +2244,15 @@ async function pollForFuturesData() {
         state.botStats.executionTime = Math.round(endTime - startTime);
         
         // Update last tick info
-        document.getElementById('last-tick-info').textContent = 
-            `Last check: ${state.botStats.lastCheck.toLocaleTimeString()} - Execution: ${state.botStats.executionTime}ms`;
+        const lastTickInfo = safeGetElement('last-tick-info');
+        if (lastTickInfo) {
+            lastTickInfo.textContent = 
+                `Last check: ${state.botStats.lastCheck.toLocaleTimeString()} - Execution: ${state.botStats.executionTime}ms`;
+        }
         
         // Update trading stats
         updateTradingStats();
-// Poll for futures data (continued)
+        
         // Reset bot activity to waiting
         setTimeout(() => {
             updateBotActivity('waiting');
@@ -1630,6 +2265,93 @@ async function pollForFuturesData() {
         // Update bot status
         updateBotStatus('live', 'Error fetching data - Will retry next cycle');
         updateBotActivity('waiting');
+    }
+}
+
+// Fetch account information for futures trading
+async function fetchAccountInfo() {
+    if (!state.futuresTrading.enabled || !state.futuresTrading.apiKey) {
+        return;
+    }
+    
+    try {
+        // Use the appropriate API URL
+        const baseUrl = state.futuresTrading.testnet ? 
+            BINANCE_FUTURES_TESTNET_API_URL : 
+            BINANCE_FUTURES_API_URL;
+        
+        const endpoint = '/fapi/v2/account';
+        const url = `${baseUrl}${endpoint}`;
+        
+        // Add timestamp and signature for authenticated request
+        const timestamp = Date.now();
+        const queryString = `timestamp=${timestamp}`;
+        
+        // In a real implementation, you would create a valid signature here
+        // For demo purposes, we're skipping that step
+        
+        const response = await fetch(`${url}?${queryString}`, {
+            method: 'GET',
+            headers: {
+                'X-MBX-APIKEY': state.futuresTrading.apiKey
+            }
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API error (${response.status}): ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Update UI with account information
+        updateAccountInfo(data);
+        
+    } catch (error) {
+        console.error('Error fetching account info:', error);
+        // Don't show this error in the log to avoid spam
+    }
+}
+
+// Update account information in UI
+function updateAccountInfo(accountData) {
+    try {
+        const availableBalance = safeGetElement('available-balance');
+        const positionMarginElement = safeGetElement('position-margin');
+        const unrealizedPnlElement = safeGetElement('unrealized-pnl');
+        
+        if (accountData && accountData.availableBalance) {
+            if (availableBalance) {
+                availableBalance.textContent = `${parseFloat(accountData.availableBalance).toFixed(2)} USDT`;
+            }
+        }
+        
+        // Process positions for the current symbol
+        if (accountData && accountData.positions) {
+            const currentPosition = accountData.positions.find(p => 
+                p.symbol === state.symbol && parseFloat(p.positionAmt) !== 0
+            );
+            
+            if (currentPosition) {
+                if (positionMarginElement) {
+                    positionMarginElement.textContent = `${parseFloat(currentPosition.isolatedMargin).toFixed(2)} USDT`;
+                }
+                
+                if (unrealizedPnlElement) {
+                    const unrealizedPnl = parseFloat(currentPosition.unrealizedProfit);
+                    unrealizedPnlElement.textContent = `${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)} USDT`;
+                    unrealizedPnlElement.className = 'stat-value ' + (unrealizedPnl >= 0 ? 'positive' : 'negative');
+                }
+            } else {
+                if (positionMarginElement) positionMarginElement.textContent = '0.00 USDT';
+                if (unrealizedPnlElement) {
+                    unrealizedPnlElement.textContent = '0.00 USDT';
+                    unrealizedPnlElement.className = 'stat-value';
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error updating account info:', error);
     }
 }
 
@@ -1650,14 +2372,7 @@ async function fetchLatestCandle(symbol, interval) {
             limit: 1
         });
         
-        const response = await fetch(`${url}?${params.toString()}`);
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`API error (${response.status}): ${errorText}`);
-        }
-        
-        const data = await response.json();
+        const data = await safeApiFetch(`${url}?${params.toString()}`);
         
         if (data.length === 0) return null;
         
@@ -1677,7 +2392,7 @@ async function fetchLatestCandle(symbol, interval) {
     }
 }
 
-// Poll for new data
+// Poll for new data (paper trading)
 async function pollForNewData() {
     try {
         // Update last check time
@@ -1722,7 +2437,9 @@ async function pollForNewData() {
             state.indicators = strategy.generateSignals(state.priceData);
             
             // Update the chart
-            updatePriceChart();
+            if (!state.usingTradingView) {
+                updatePriceChart(true);
+            }
             
             // Get the latest signal
             const signal = strategy.getLatestSignal(state.priceData, state.indicators);
@@ -1732,8 +2449,13 @@ async function pollForNewData() {
             updateBotStatus('active', `New candle detected - Processing ${signal || 'neutral'} signal`);
             
             // Process the signal
-            if (signal && (signal === 'LONG' || signal === 'SHORT')) {
+            if (signal && (signal === 'LONG' || signal === 'SHORT') && state.settings.autoTrade) {
                 processTradeSignal(signal, latestCandle);
+            } else if (signal) {
+                // Just notify about the signal
+                const message = `${signal} signal detected at $${latestCandle.close.toFixed(2)} (Auto-trading disabled)`;
+                addLogMessage(message);
+                sendAlert('Trading Signal', message, 'info');
             }
         }
         
@@ -1750,8 +2472,11 @@ async function pollForNewData() {
         state.botStats.executionTime = Math.round(endTime - startTime);
         
         // Update last tick info
-        document.getElementById('last-tick-info').textContent = 
-            `Last check: ${state.botStats.lastCheck.toLocaleTimeString()} - Execution: ${state.botStats.executionTime}ms`;
+        const lastTickInfo = safeGetElement('last-tick-info');
+        if (lastTickInfo) {
+            lastTickInfo.textContent = 
+                `Last check: ${state.botStats.lastCheck.toLocaleTimeString()} - Execution: ${state.botStats.executionTime}ms`;
+        }
         
         // Update trading stats
         updateTradingStats();
@@ -1773,27 +2498,37 @@ async function pollForNewData() {
 
 // Show API config modal
 function showAPIConfigModal() {
-    const modal = document.getElementById('apiConfigModal');
+    const modal = safeGetElement('apiConfigModal');
     
-    // Fill in saved values if any
-    document.getElementById('api-key').value = state.futuresTrading.apiKey || '';
-    document.getElementById('api-secret').value = state.futuresTrading.apiSecret ? '********' : '';
-    document.getElementById('testnet-toggle').checked = state.futuresTrading.testnet;
-    
-    modal.style.display = 'block';
+    if (modal) {
+        // Fill in saved values if any
+        const apiKeyInput = safeGetElement('api-key');
+        const apiSecretInput = safeGetElement('api-secret');
+        const testnetToggle = safeGetElement('testnet-toggle');
+        
+        if (apiKeyInput) apiKeyInput.value = state.futuresTrading.apiKey || '';
+        if (apiSecretInput) apiSecretInput.value = state.futuresTrading.apiSecret ? '********' : '';
+        if (testnetToggle) testnetToggle.checked = state.futuresTrading.testnet;
+        
+        modal.style.display = 'block';
+    }
 }
 
 // Save API configuration
 function saveAPIConfig() {
-    const apiKey = document.getElementById('api-key').value.trim();
-    const apiSecret = document.getElementById('api-secret').value;
-    const useTestnet = document.getElementById('testnet-toggle').checked;
+    const apiKeyInput = safeGetElement('api-key');
+    const apiSecretInput = safeGetElement('api-secret');
+    const testnetToggle = safeGetElement('testnet-toggle');
     
     // Validate
-    if (!apiKey) {
+    if (!apiKeyInput || apiKeyInput.value.trim() === '') {
         addLogMessage('API key is required', true);
         return;
     }
+    
+    const apiKey = apiKeyInput.value.trim();
+    const apiSecret = apiSecretInput ? apiSecretInput.value : '';
+    const useTestnet = testnetToggle ? testnetToggle.checked : true;
     
     // Don't update secret if it's masked (unchanged)
     if (apiSecret !== '********') {
@@ -1820,28 +2555,8 @@ function saveAPIConfig() {
     }
     
     // Close modal
-    document.getElementById('apiConfigModal').style.display = 'none';
-}
-
-// Simulate account updates for demo purposes
-function simulateAccountUpdate() {
-    // In a real implementation, this would fetch actual account data from the exchange
-    // For demo purposes, we'll simulate it
-    
-    document.getElementById('available-balance').textContent = `${(state.currentCapital * 0.9).toFixed(2)} USDT`;
-    
-    if (state.currentPosition) {
-        const positionMargin = state.currentPosition.size * state.currentPosition.entryPrice / parseInt(document.getElementById('leverage-select').value);
-        document.getElementById('position-margin').textContent = `${positionMargin.toFixed(2)} USDT`;
-        
-        const unrealizedPnl = state.currentPosition.getUnrealizedPnl(state.currentPrice);
-        document.getElementById('unrealized-pnl').textContent = `${unrealizedPnl >= 0 ? '+' : ''}${unrealizedPnl.toFixed(2)} USDT`;
-        document.getElementById('unrealized-pnl').className = 'stat-value ' + (unrealizedPnl >= 0 ? 'positive' : 'negative');
-    } else {
-        document.getElementById('position-margin').textContent = '0.00 USDT';
-        document.getElementById('unrealized-pnl').textContent = '0.00 USDT';
-        document.getElementById('unrealized-pnl').className = 'stat-value';
-    }
+    const apiConfigModal = safeGetElement('apiConfigModal');
+    if (apiConfigModal) apiConfigModal.style.display = 'none';
 }
 
 // Switch trading mode
@@ -1851,22 +2566,37 @@ function switchToTradingMode(mode) {
         return;
     }
     
+    // Get UI elements
+    const paperTradingBtn = safeGetElement('paper-trading-btn');
+    const liveTradingBtn = safeGetElement('live-trading-btn');
+    const paperTradingSettings = safeGetElement('paper-trading-settings');
+    const liveTradingSettings = safeGetElement('live-trading-settings');
+    const paperTradingButtons = safeGetElement('paper-trading-buttons');
+    const liveTradingButtons = safeGetElement('live-trading-buttons');
+    const accountBalanceSection = safeGetElement('account-balance-section');
+    const feeInformation = safeGetElement('fee-information');
+    const practiceIndicator = safeGetElement('practice-mode-indicator');
+    const liveIndicator = safeGetElement('live-mode-indicator');
+    
     if (mode === 'paper') {
         // Switch to paper trading mode
         state.futuresTrading.enabled = false;
         
         // Update UI
-        document.getElementById('paper-trading-btn').classList.add('active');
-        document.getElementById('live-trading-btn').classList.remove('active');
+        if (paperTradingBtn) paperTradingBtn.classList.add('active');
+        if (liveTradingBtn) liveTradingBtn.classList.remove('active');
         
-        document.getElementById('paper-trading-settings').style.display = 'block';
-        document.getElementById('live-trading-settings').style.display = 'none';
+        if (paperTradingSettings) paperTradingSettings.style.display = 'block';
+        if (liveTradingSettings) liveTradingSettings.style.display = 'none';
         
-        document.getElementById('paper-trading-buttons').style.display = 'block';
-        document.getElementById('live-trading-buttons').style.display = 'none';
+        if (paperTradingButtons) paperTradingButtons.style.display = 'block';
+        if (liveTradingButtons) liveTradingButtons.style.display = 'none';
         
-        document.getElementById('account-balance-section').style.display = 'none';
-        document.getElementById('fee-information').style.display = 'none';
+        if (accountBalanceSection) accountBalanceSection.style.display = 'none';
+        if (feeInformation) feeInformation.style.display = 'none';
+        
+        if (practiceIndicator) practiceIndicator.style.display = 'flex';
+        if (liveIndicator) liveIndicator.style.display = 'none';
         
         addLogMessage('Switched to paper trading mode');
     } else {
@@ -1874,17 +2604,20 @@ function switchToTradingMode(mode) {
         state.futuresTrading.enabled = true;
         
         // Update UI
-        document.getElementById('live-trading-btn').classList.add('active');
-        document.getElementById('paper-trading-btn').classList.remove('active');
+        if (liveTradingBtn) liveTradingBtn.classList.add('active');
+        if (paperTradingBtn) paperTradingBtn.classList.remove('active');
         
-        document.getElementById('paper-trading-settings').style.display = 'none';
-        document.getElementById('live-trading-settings').style.display = 'block';
+        if (paperTradingSettings) paperTradingSettings.style.display = 'none';
+        if (liveTradingSettings) liveTradingSettings.style.display = 'block';
         
-        document.getElementById('paper-trading-buttons').style.display = 'none';
-        document.getElementById('live-trading-buttons').style.display = 'block';
+        if (paperTradingButtons) paperTradingButtons.style.display = 'none';
+        if (liveTradingButtons) liveTradingButtons.style.display = 'block';
         
-        document.getElementById('account-balance-section').style.display = 'block';
-        document.getElementById('fee-information').style.display = 'block';
+        if (accountBalanceSection) accountBalanceSection.style.display = 'block';
+        if (feeInformation) feeInformation.style.display = 'block';
+        
+        if (practiceIndicator) practiceIndicator.style.display = 'none';
+        if (liveIndicator) liveIndicator.style.display = 'flex';
         
         addLogMessage('Switched to futures trading mode');
     }
@@ -1892,125 +2625,110 @@ function switchToTradingMode(mode) {
 
 // Load settings and initialize form fields
 function loadSettings() {
-    // Risk management
-    document.getElementById('trailing-stop-toggle').checked = state.settings.trailingStop.enabled;
-    document.getElementById('trailing-stop-value').value = state.settings.trailingStop.percentage;
-    document.getElementById('trailing-stop-value').disabled = !state.settings.trailingStop.enabled;
-    
-    document.getElementById('take-profit-toggle').checked = state.settings.takeProfit.enabled;
-    document.getElementById('take-profit-value').value = state.settings.takeProfit.percentage;
-    document.getElementById('take-profit-value').disabled = !state.settings.takeProfit.enabled;
-    
-    document.getElementById('stop-loss-toggle').checked = state.settings.stopLoss.enabled;
-    document.getElementById('stop-loss-value').value = state.settings.stopLoss.percentage;
-    document.getElementById('stop-loss-value').disabled = !state.settings.stopLoss.enabled;
-    
-    document.getElementById('risk-management-toggle').checked = state.settings.riskManagement.enabled;
-    document.getElementById('max-drawdown-value').value = state.settings.riskManagement.maxDrawdown;
-    document.getElementById('max-drawdown-value').disabled = !state.settings.riskManagement.enabled;
-    document.getElementById('max-daily-loss-value').value = state.settings.riskManagement.maxDailyLoss;
-    document.getElementById('max-daily-loss-value').disabled = !state.settings.riskManagement.enabled;
-    
-    // Trading settings
-    document.getElementById('auto-trade-toggle').checked = state.settings.autoTrade;
-    document.getElementById('theme-select').value = state.settings.theme;
-    document.getElementById('chart-update-frequency').value = state.settings.chartUpdateFrequency / 1000;
-    
-    // Fee settings
-    document.getElementById('maker-fee').value = state.feeSettings.makerFee;
-    document.getElementById('taker-fee').value = state.feeSettings.takerFee;
-    document.getElementById('futures-maker-fee').textContent = state.feeSettings.makerFee.toFixed(2) + '%';
-    document.getElementById('futures-taker-fee').textContent = state.feeSettings.takerFee.toFixed(2) + '%';
-    
-    // Alert settings
-    document.getElementById('discord-alert-toggle').checked = state.alerts.discord.enabled;
-    document.getElementById('discord-webhook-input').value = state.alerts.discord.webhook;
-    document.getElementById('discord-webhook-input').disabled = !state.alerts.discord.enabled;
-    
-    document.getElementById('telegram-alert-toggle').checked = state.alerts.telegram.enabled;
-    document.getElementById('telegram-token-input').value = state.alerts.telegram.botToken;
-    document.getElementById('telegram-token-input').disabled = !state.alerts.telegram.enabled;
-    document.getElementById('telegram-chatid-input').value = state.alerts.telegram.chatId;
-    document.getElementById('telegram-chatid-input').disabled = !state.alerts.telegram.enabled;
-    
-    document.getElementById('email-alert-toggle').checked = state.alerts.email.enabled;
-    document.getElementById('email-address-input').value = state.alerts.email.address;
-    document.getElementById('email-address-input').disabled = !state.alerts.email.enabled;
-    
-    document.getElementById('browser-alert-toggle').checked = state.alerts.browser.enabled;
-    
-    document.getElementById('sound-alert-toggle').checked = state.alerts.sound.enabled;
-    document.getElementById('sound-volume-input').value = state.alerts.sound.volume;
-    document.getElementById('sound-volume-input').disabled = !state.alerts.sound.enabled;
-    
-    // Add event listeners for toggles
-    document.getElementById('trailing-stop-toggle').addEventListener('change', function() {
-        document.getElementById('trailing-stop-value').disabled = !this.checked;
-    });
-    
-    document.getElementById('take-profit-toggle').addEventListener('change', function() {
-        document.getElementById('take-profit-value').disabled = !this.checked;
-    });
-    
-    document.getElementById('stop-loss-toggle').addEventListener('change', function() {
-        document.getElementById('stop-loss-value').disabled = !this.checked;
-    });
-    
-    document.getElementById('risk-management-toggle').addEventListener('change', function() {
-        document.getElementById('max-drawdown-value').disabled = !this.checked;
-        document.getElementById('max-daily-loss-value').disabled = !this.checked;
-    });
-    
-    document.getElementById('discord-alert-toggle').addEventListener('change', function() {
-        document.getElementById('discord-webhook-input').disabled = !this.checked;
-    });
-    
-    document.getElementById('telegram-alert-toggle').addEventListener('change', function() {
-        document.getElementById('telegram-token-input').disabled = !this.checked;
-        document.getElementById('telegram-chatid-input').disabled = !this.checked;
-    });
-    
-    document.getElementById('email-alert-toggle').addEventListener('change', function() {
-        document.getElementById('email-address-input').disabled = !this.checked;
-    });
-    
-    document.getElementById('sound-alert-toggle').addEventListener('change', function() {
-        document.getElementById('sound-volume-input').disabled = !this.checked;
-    });
-}
-
-// Initialize alerts
-function initAlerts() {
-    // Test alert button
-    document.getElementById('test-alert-btn').addEventListener('click', function() {
-        sendAlert('Test Alert', 'This is a test alert from Volty Trading Bot', 'info');
-    });
-}
-
-// Check if using mobile device
-function checkMobileDevice() {
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    if (isMobile) {
-        document.getElementById('mobile-info').style.display = 'block';
-    }
-}
-
-// Disable or enable form inputs
-function disableFormInputs(disabled) {
-    document.getElementById('symbol').disabled = disabled;
-    document.getElementById('timeframe').disabled = disabled;
-    document.getElementById('atr-length').disabled = disabled;
-    document.getElementById('atr-mult').disabled = disabled;
-    document.getElementById('maker-fee').disabled = disabled;
-    document.getElementById('taker-fee').disabled = disabled;
-    
-    if (state.futuresTrading.enabled) {
-        document.getElementById('live-position-size').disabled = disabled;
-        document.getElementById('leverage-select').disabled = disabled;
-        document.getElementById('margin-type-select').disabled = disabled;
-    } else {
-        document.getElementById('initial-capital').disabled = disabled;
-        document.getElementById('position-size').disabled = disabled;
+    try {
+        // Load settings from localStorage
+        loadSettingsFromLocalStorage();
+        
+        // Risk management
+        const trailingStopToggle = safeGetElement('trailing-stop-toggle');
+        const trailingStopValue = safeGetElement('trailing-stop-value');
+        if (trailingStopToggle && trailingStopValue) {
+            trailingStopToggle.checked = state.settings.trailingStop.enabled;
+            trailingStopValue.value = state.settings.trailingStop.percentage;
+            trailingStopValue.disabled = !state.settings.trailingStop.enabled;
+        }
+        
+        const takeProfitToggle = safeGetElement('take-profit-toggle');
+        const takeProfitValue = safeGetElement('take-profit-value');
+        if (takeProfitToggle && takeProfitValue) {
+            takeProfitToggle.checked = state.settings.takeProfit.enabled;
+            takeProfitValue.value = state.settings.takeProfit.percentage;
+            takeProfitValue.disabled = !state.settings.takeProfit.enabled;
+        }
+        
+        const stopLossToggle = safeGetElement('stop-loss-toggle');
+        const stopLossValue = safeGetElement('stop-loss-value');
+        if (stopLossToggle && stopLossValue) {
+            stopLossToggle.checked = state.settings.stopLoss.enabled;
+            stopLossValue.value = state.settings.stopLoss.percentage;
+            stopLossValue.disabled = !state.settings.stopLoss.enabled;
+        }
+        
+        const riskManagementToggle = safeGetElement('risk-management-toggle');
+        const maxDrawdownValue = safeGetElement('max-drawdown-value');
+        const maxDailyLossValue = safeGetElement('max-daily-loss-value');
+        if (riskManagementToggle && maxDrawdownValue && maxDailyLossValue) {
+            riskManagementToggle.checked = state.settings.riskManagement.enabled;
+            maxDrawdownValue.value = state.settings.riskManagement.maxDrawdown;
+            maxDrawdownValue.disabled = !state.settings.riskManagement.enabled;
+            maxDailyLossValue.value = state.settings.riskManagement.maxDailyLoss;
+            maxDailyLossValue.disabled = !state.settings.riskManagement.enabled;
+        }
+        
+        // Auto-trade toggle
+        const autoTradeToggle = safeGetElement('auto-trade-toggle');
+        if (autoTradeToggle) {
+            autoTradeToggle.checked = state.settings.autoTrade;
+        }
+        
+        // Alert settings
+        const browserAlertToggle = safeGetElement('browser-alert-toggle');
+        if (browserAlertToggle) {
+            browserAlertToggle.checked = state.alerts.browser.enabled;
+        }
+        
+        const soundAlertToggle = safeGetElement('sound-alert-toggle');
+        const soundVolumeInput = safeGetElement('sound-volume-input');
+        if (soundAlertToggle && soundVolumeInput) {
+            soundAlertToggle.checked = state.alerts.sound.enabled;
+            soundVolumeInput.value = state.alerts.sound.volume;
+            soundVolumeInput.disabled = !state.alerts.sound.enabled;
+        }
+        
+        const discordAlertToggle = safeGetElement('discord-alert-toggle');
+        const discordWebhookInput = safeGetElement('discord-webhook-input');
+        if (discordAlertToggle && discordWebhookInput) {
+            discordAlertToggle.checked = state.alerts.discord.enabled;
+            discordWebhookInput.value = state.alerts.discord.webhook;
+            discordWebhookInput.disabled = !state.alerts.discord.enabled;
+        }
+        
+        const telegramAlertToggle = safeGetElement('telegram-alert-toggle');
+        const telegramTokenInput = safeGetElement('telegram-token-input');
+        const telegramChatIdInput = safeGetElement('telegram-chatid-input');
+        if (telegramAlertToggle && telegramTokenInput && telegramChatIdInput) {
+            telegramAlertToggle.checked = state.alerts.telegram.enabled;
+            telegramTokenInput.value = state.alerts.telegram.botToken;
+            telegramTokenInput.disabled = !state.alerts.telegram.enabled;
+            telegramChatIdInput.value = state.alerts.telegram.chatId;
+            telegramChatIdInput.disabled = !state.alerts.telegram.enabled;
+        }
+        
+        // Fee settings
+        const makerFeeInput = safeGetElement('maker-fee');
+        const takerFeeInput = safeGetElement('taker-fee');
+        const futureMakerFee = safeGetElement('futures-maker-fee');
+        const futureTakerFee = safeGetElement('futures-taker-fee');
+        
+        if (makerFeeInput) makerFeeInput.value = state.feeSettings.makerFee;
+        if (takerFeeInput) takerFeeInput.value = state.feeSettings.takerFee;
+        if (futureMakerFee) futureMakerFee.textContent = state.feeSettings.makerFee.toFixed(2) + '%';
+        if (futureTakerFee) futureTakerFee.textContent = state.feeSettings.takerFee.toFixed(2) + '%';
+        
+        // General settings
+        const themeSelect = safeGetElement('theme-select');
+        if (themeSelect) {
+            themeSelect.value = state.settings.theme;
+        }
+        
+        const chartUpdateFrequency = safeGetElement('chart-update-frequency');
+        if (chartUpdateFrequency) {
+            chartUpdateFrequency.value = state.settings.chartUpdateFrequency / 1000;
+        }
+        
+    } catch (error) {
+        console.error('Error loading settings:', error);
+        addLogMessage('Error loading settings: ' + error.message, true);
     }
 }
 
@@ -2021,8 +2739,12 @@ function loadSettingsFromLocalStorage() {
         const savedSettings = localStorage.getItem('voltyBotSettings');
         if (savedSettings) {
             const parsedSettings = JSON.parse(savedSettings);
-            state.settings = { ...state.settings, ...parsedSettings.settings };
-            state.alerts = { ...state.alerts, ...parsedSettings.alerts };
+            if (parsedSettings.settings) {
+                state.settings = { ...state.settings, ...parsedSettings.settings };
+            }
+            if (parsedSettings.alerts) {
+                state.alerts = { ...state.alerts, ...parsedSettings.alerts };
+            }
         }
         
         // Load fee settings
@@ -2038,7 +2760,9 @@ function loadSettingsFromLocalStorage() {
             const parsedConfig = JSON.parse(apiConfig);
             state.futuresTrading.apiKey = parsedConfig.apiKey || '';
             state.futuresTrading.testnet = parsedConfig.testnet !== undefined ? parsedConfig.testnet : true;
-            state.futuresTrading.limits = { ...state.futuresTrading.limits, ...parsedConfig.limits };
+            if (parsedConfig.limits) {
+                state.futuresTrading.limits = { ...state.futuresTrading.limits, ...parsedConfig.limits };
+            }
         }
     } catch (error) {
         console.error('Error loading settings from localStorage:', error);
@@ -2046,22 +2770,48 @@ function loadSettingsFromLocalStorage() {
     }
 }
 
+// Check if using mobile device
+function checkMobileDevice() {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const mobileInfo = safeGetElement('mobile-info');
+    if (isMobile && mobileInfo) {
+        mobileInfo.style.display = 'block';
+    }
+}
+
+// Disable or enable form inputs
+function disableFormInputs(disabled) {
+    try {
+        const formInputs = [
+            'symbol', 'timeframe', 'atr-length', 'atr-mult', 
+            'maker-fee', 'taker-fee', 'live-symbol', 'live-timeframe',
+            'live-atr-length', 'live-atr-mult', 'live-position-size',
+            'leverage-select', 'margin-type-select', 'initial-capital',
+            'position-size'
+        ];
+        
+        formInputs.forEach(id => {
+            const element = safeGetElement(id);
+            if (element) element.disabled = disabled;
+        });
+    } catch (error) {
+        console.error('Error disabling form inputs:', error);
+    }
+}
+
 // Initialize charts
 function initCharts() {
-    // Initialize price chart
-    const priceChartDiv = document.getElementById('priceChart');
-    if (!priceChartDiv) {
-        addLogMessage('Price chart element not found', true);
-        throw new Error('Price chart element not found');
-    }
-    
-    // Check if we have enough data to create charts
-    if (!state.priceData || state.priceData.length === 0) {
-        addLogMessage('No price data available to create charts', true);
-        throw new Error('No price data available');
-    }
-    
     try {
+        // Initialize price chart
+        const priceChartDiv = safeGetElement('priceChart');
+        if (!priceChartDiv) {
+            throw new Error('Price chart element not found');
+        }
+        
+        // Generate signals
+        const strategy = new VoltyStrategy(state.atrLength, state.atrMultiplier);
+        state.indicators = strategy.generateSignals(state.priceData);
+        
         // Create candlestick trace
         const candleTrace = {
             x: state.priceData.map(d => d.datetime),
@@ -2095,86 +2845,358 @@ function initCharts() {
             opacity: 0.5
         };
         
-        // Create long signal trace
-        const longSignalTrace = {
-            x: state.priceData.map(d => d.datetime),
-            y: state.indicators.longSignal,
-            type: 'scatter',
-            mode: 'lines',
-            name: 'Long Signal',
-            line: {
-                color: 'rgba(74, 222, 128, 0.6)',
-                width: 1,
-                dash: 'dot'
-            }
-        };
+        // Determine the range for x-axis (for autoscrolling)
+        const visibleCandles = 100;
+        const startIndex = Math.max(0, state.priceData.length - visibleCandles);
+        const xaxisRange = [
+            state.priceData[startIndex].datetime,
+            // Add a little buffer to the right
+            new Date(state.priceData[state.priceData.length - 1].datetime.getTime() + getTimeframeInMs(state.timeframe) * 0.1)
+        ];
         
-        // Create short signal trace
-        const shortSignalTrace = {
-            x: state.priceData.map(d => d.datetime),
-            y: state.indicators.shortSignal,
-            type: 'scatter',
-            mode: 'lines',
-            name: 'Short Signal',
-            line: {
-                color: 'rgba(248, 113, 113, 0.6)',
-                width: 1,
-                dash: 'dot'
-            }
-        };
-        
-        // Set up layout with improved visuals
+        // Set up layout
         const layout = {
             title: `${state.symbol} ${state.timeframe} Chart`,
             dragmode: 'zoom',
             margin: { l: 50, r: 50, b: 50, t: 50, pad: 4 },
             grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'bottom to top' },
-            annotations: [],
             xaxis: {
                 rangeslider: { visible: false },
                 type: 'date',
                 showgrid: false,
-                range: [
-                    state.priceData[Math.max(0, state.priceData.length - CHART_CONFIG.defaultRange)].datetime,
-                    state.priceData[state.priceData.length - 1].datetime
-                ]
+                range: xaxisRange
             },
             yaxis: {
                 autorange: true,
                 domain: [0.2, 1],
                 type: 'linear',
-                gridcolor: state.settings.theme === 'dark' ? OHLC_COLORS.grid : OHLC_COLORS.gridLight,
-                tickformat: ',.2f'
+                gridcolor: 'rgba(255,255,255,0.1)'
             },
             yaxis2: {
                 domain: [0, 0.1],
-                gridcolor: state.settings.theme === 'dark' ? OHLC_COLORS.grid : OHLC_COLORS.gridLight
+                gridcolor: 'rgba(255,255,255,0.1)'
             },
             plot_bgcolor: 'rgba(0, 0, 0, 0)',
             paper_bgcolor: 'rgba(0, 0, 0, 0)',
             font: {
-                color: state.settings.theme === 'dark' ? '#d1d5db' : '#1f2937',
-                family: CHART_CONFIG.fontFamily
+                color: '#d1d5db'
             },
-            showlegend: false,
-            hovermode: 'closest',
-            hoverlabel: {
-                bgcolor: state.settings.theme === 'dark' ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                font: {
-                    color: state.settings.theme === 'dark' ? '#d1d5db' : '#1f2937',
-                    family: CHART_CONFIG.fontFamily
+            showlegend: false
+        };
+        
+        // Create the chart with candlestick and volume traces first
+        Plotly.newPlot(priceChartDiv, [candleTrace, volumeTrace], layout, {
+            displayModeBar: true,
+            responsive: true,
+            displaylogo: false,
+            modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d', 'toggleSpikelines']
+        });
+        
+        // Add signal traces after chart is created
+        updatePriceChart(true);
+        
+        state.charts.price = true;
+        
+        // Initialize equity chart
+        const equityChartDiv = safeGetElement('equityChart');
+        if (equityChartDiv) {
+            // Create equity curve trace
+            const equityTrace = {
+                x: state.equityCurve.map(d => d.time),
+                y: state.equityCurve.map(d => d.value),
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Equity',
+                line: {
+                    color: '#4f46e5',
+                    width: 2
                 },
-                bordercolor: 'transparent'
+                fill: 'tozeroy',
+                fillcolor: 'rgba(79, 70, 229, 0.1)'
+            };
+            
+            // Set up equity chart layout
+            const equityLayout = {
+                title: 'Equity Curve',
+                margin: { l: 50, r: 50, b: 50, t: 50, pad: 4 },
+                xaxis: {
+                    type: 'date',
+                    showgrid: false
+                },
+                yaxis: {
+                    autorange: true,
+                    type: 'linear', // Use linear scale for clearer representation
+                    gridcolor: 'rgba(255,255,255,0.1)'
+                },
+                plot_bgcolor: 'rgba(0, 0, 0, 0)',
+                paper_bgcolor: 'rgba(0, 0, 0, 0)',
+                font: {
+                    color: '#d1d5db'
+                },
+                showlegend: false,
+                height: 300,
+                width: equityChartDiv.offsetWidth
+            };
+            
+            // Create the equity chart
+            Plotly.newPlot(equityChartDiv, [equityTrace], equityLayout, {
+                displayModeBar: true,
+                responsive: true,
+                displaylogo: false,
+                modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d', 'toggleSpikelines']
+            });
+            
+            state.charts.equity = true;
+        }
+        
+    } catch (error) {
+        console.error('Error creating charts with Plotly:', error);
+        addLogMessage('Failed to create charts: ' + error.message, true);
+    }
+}
+
+// Update price chart with new data and indicators
+function updatePriceChart(autoscroll = true) {
+    try {
+        const priceChartDiv = safeGetElement('priceChart');
+        if (!priceChartDiv) {
+            console.error('Price chart element not found');
+            return;
+        }
+        
+        // Clear any existing data
+        Plotly.purge(priceChartDiv);
+        
+        // Create fresh candlestick trace
+        const candleTrace = {
+            x: state.priceData.map(d => d.datetime),
+            open: state.priceData.map(d => d.open),
+            high: state.priceData.map(d => d.high),
+            low: state.priceData.map(d => d.low),
+            close: state.priceData.map(d => d.close),
+            type: 'candlestick',
+            name: 'Price',
+            increasing: {
+                line: { color: OHLC_COLORS.up },
+                fillcolor: OHLC_COLORS.upFill
             },
-            modebar: {
-                bgcolor: 'transparent',
-                color: state.settings.theme === 'dark' ? '#d1d5db' : '#1f2937',
-                activecolor: state.settings.theme === 'dark' ? '#ffffff' : '#4f46e5'
+            decreasing: {
+                line: { color: OHLC_COLORS.down },
+                fillcolor: OHLC_COLORS.downFill
             }
         };
         
-        // Create the chart
-        Plotly.newPlot(priceChartDiv, [candleTrace, volumeTrace, longSignalTrace, shortSignalTrace], layout, {
+        // Create volume trace
+        const volumeColors = state.priceData.map(d => d.close > d.open ? OHLC_COLORS.volume.up : OHLC_COLORS.volume.down);
+        const volumeTrace = {
+            x: state.priceData.map(d => d.datetime),
+            y: state.priceData.map(d => d.volume),
+            type: 'bar',
+            name: 'Volume',
+            yaxis: 'y2',
+            marker: {
+                color: volumeColors
+            },
+            opacity: 0.5
+        };
+        
+        // Create signal traces (only for direction changes)
+        const dataTraces = [candleTrace, volumeTrace];
+        
+        if (state.indicators && state.indicators.longSignal && state.indicators.shortSignal) {
+            // Create arrays to store direction change points
+            const longChangePoints = {
+                x: [],
+                y: []
+            };
+            
+            const shortChangePoints = {
+                x: [],
+                y: []
+            };
+            
+            // Track the previous signal state
+            let prevSignalState = null; // 'LONG', 'SHORT', or null
+            
+            // Find direction changes
+            for (let i = 0; i < state.priceData.length; i++) {
+                // Determine current signal
+                let currentSignal = null;
+                if (state.indicators.longSignal[i] !== null) {
+                    currentSignal = 'LONG';
+                } else if (state.indicators.shortSignal[i] !== null) {
+                    currentSignal = 'SHORT';
+                }
+                
+                // Check if direction changed
+                if (currentSignal !== null && currentSignal !== prevSignalState) {
+                    // Direction changed - add a marker
+                    if (currentSignal === 'LONG') {
+                        longChangePoints.x.push(state.priceData[i].datetime);
+                        longChangePoints.y.push(state.priceData[i].low - (state.priceData[i].high - state.priceData[i].low) * 0.3);
+                    } else if (currentSignal === 'SHORT') {
+                        shortChangePoints.x.push(state.priceData[i].datetime);
+                        shortChangePoints.y.push(state.priceData[i].high + (state.priceData[i].high - state.priceData[i].low) * 0.3);
+                    }
+                    
+                    // Update previous state
+                    prevSignalState = currentSignal;
+                }
+            }
+            
+            // Create traces for direction changes
+            if (longChangePoints.x.length > 0) {
+                const longSignalTrace = {
+                    x: longChangePoints.x,
+                    y: longChangePoints.y,
+                    type: 'scatter',
+                    mode: 'markers',
+                    name: 'Long Signal',
+                    marker: {
+                        symbol: 'triangle-up',
+                        size: 12,
+                        color: 'rgba(74, 222, 128, 1)',
+                        line: { width: 2, color: 'white' }
+                    }
+                };
+                dataTraces.push(longSignalTrace);
+            }
+            
+            if (shortChangePoints.x.length > 0) {
+                const shortSignalTrace = {
+                    x: shortChangePoints.x,
+                    y: shortChangePoints.y,
+                    type: 'scatter',
+                    mode: 'markers',
+                    name: 'Short Signal',
+                    marker: {
+                        symbol: 'triangle-down',
+                        size: 12,
+                        color: 'rgba(248, 113, 113, 1)',
+                        line: { width: 2, color: 'white' }
+                    }
+                };
+                dataTraces.push(shortSignalTrace);
+            }
+        }
+        
+        // Add trade markers (only when direction changes)
+        if (state.trades && state.trades.length > 0) {
+            // Track the previous trade type
+            let prevTradeType = null;
+            const tradeChangePoints = {
+                long: { x: [], y: [] },
+                short: { x: [], y: [] }
+            };
+            
+            // Sort trades by entry time
+            const sortedTrades = [...state.trades].sort((a, b) => a.entryTime - b.entryTime);
+            
+            // Find direction changes in trades
+            for (const trade of sortedTrades) {
+                if (trade.type !== prevTradeType) {
+                    // Find the candle for this entry time
+                    const candle = state.priceData.find(d => 
+                        d.datetime.getTime() <= trade.entryTime.getTime() && 
+                        d.datetime.getTime() + getTimeframeInMs(state.timeframe) > trade.entryTime.getTime()
+                    );
+                    
+                    if (candle) {
+                        if (trade.type === 'LONG') {
+                            tradeChangePoints.long.x.push(trade.entryTime);
+                            tradeChangePoints.long.y.push(candle.low - (candle.high - candle.low) * 0.5);
+                        } else {
+                            tradeChangePoints.short.x.push(trade.entryTime);
+                            tradeChangePoints.short.y.push(candle.high + (candle.high - candle.low) * 0.5);
+                        }
+                    }
+                    
+                    // Update previous type
+                    prevTradeType = trade.type;
+                }
+            }
+            
+            // Create traces for trade direction changes
+            if (tradeChangePoints.long.x.length > 0) {
+                const longTradeTrace = {
+                    x: tradeChangePoints.long.x,
+                    y: tradeChangePoints.long.y,
+                    mode: 'markers',
+                    type: 'scatter',
+                    marker: {
+                        symbol: 'triangle-up',
+                        size: 16,
+                        color: OHLC_COLORS.up,
+                        line: { width: 2, color: 'white' }
+                    },
+                    name: 'Long Entries'
+                };
+                dataTraces.push(longTradeTrace);
+            }
+            
+            if (tradeChangePoints.short.x.length > 0) {
+                const shortTradeTrace = {
+                    x: tradeChangePoints.short.x,
+                    y: tradeChangePoints.short.y,
+                    mode: 'markers',
+                    type: 'scatter',
+                    marker: {
+                        symbol: 'triangle-down',
+                        size: 16,
+                        color: OHLC_COLORS.down,
+                        line: { width: 2, color: 'white' }
+                    },
+                    name: 'Short Entries'
+                };
+                dataTraces.push(shortTradeTrace);
+            }
+        }
+        
+        // Determine the range for x-axis (for autoscrolling)
+        let xaxisRange = [];
+        if (autoscroll) {
+            // Show the last N candles (adjust as needed)
+            const visibleCandles = 100;
+            const startIndex = Math.max(0, state.priceData.length - visibleCandles);
+            xaxisRange = [
+                state.priceData[startIndex].datetime,
+                // Add a little buffer to the right
+                new Date(state.priceData[state.priceData.length - 1].datetime.getTime() + getTimeframeInMs(state.timeframe) * 0.1)
+            ];
+        }
+        
+        // Set up layout
+        const layout = {
+            title: `${state.symbol} ${state.timeframe} Chart`,
+            dragmode: 'zoom',
+            margin: { l: 50, r: 50, b: 50, t: 50, pad: 4 },
+            grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'bottom to top' },
+            xaxis: {
+                rangeslider: { visible: false },
+                type: 'date',
+                showgrid: false,
+                range: xaxisRange.length ? xaxisRange : undefined
+            },
+            yaxis: {
+                autorange: true,
+                domain: [0.2, 1],
+                type: 'linear',
+                gridcolor: 'rgba(255,255,255,0.1)'
+            },
+            yaxis2: {
+                domain: [0, 0.1],
+                gridcolor: 'rgba(255,255,255,0.1)'
+            },
+            plot_bgcolor: 'rgba(0, 0, 0, 0)',
+            paper_bgcolor: 'rgba(0, 0, 0, 0)',
+            font: {
+                color: '#d1d5db'
+            },
+            showlegend: false
+        };
+        
+        // Create the chart from scratch
+        Plotly.newPlot(priceChartDiv, dataTraces, layout, {
             displayModeBar: true,
             responsive: true,
             displaylogo: false,
@@ -2183,201 +3205,6 @@ function initCharts() {
         
         state.charts.price = true;
         
-        // Initialize equity chart
-        const equityChartDiv = document.getElementById('equityChart');
-        if (!equityChartDiv) {
-            console.warn('Equity chart element not found');
-            return;
-        }
-        
-        // Create equity curve trace
-        const equityTrace = {
-            x: state.equityCurve.map(d => d.time),
-            y: state.equityCurve.map(d => d.value),
-            type: 'scatter',
-            mode: 'lines',
-            name: 'Equity',
-            line: {
-                color: '#4f46e5',
-                width: 2
-            },
-            fill: 'tozeroy',
-            fillcolor: 'rgba(79, 70, 229, 0.1)'
-        };
-        
-        // Set up equity chart layout
-        const equityLayout = {
-            title: 'Equity Curve',
-            margin: { l: 50, r: 50, b: 50, t: 50, pad: 4 },
-            xaxis: {
-                type: 'date',
-                showgrid: false
-            },
-            yaxis: {
-                autorange: true,
-                type: 'linear',
-                gridcolor: state.settings.theme === 'dark' ? OHLC_COLORS.grid : OHLC_COLORS.gridLight,
-                tickformat: ',.2f'
-            },
-            plot_bgcolor: 'rgba(0, 0, 0, 0)',
-            paper_bgcolor: 'rgba(0, 0, 0, 0)',
-            font: {
-                color: state.settings.theme === 'dark' ? '#d1d5db' : '#1f2937',
-                family: CHART_CONFIG.fontFamily
-            },
-            showlegend: false,
-            hovermode: 'closest',
-            hoverlabel: {
-                bgcolor: state.settings.theme === 'dark' ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-                font: {
-                    color: state.settings.theme === 'dark' ? '#d1d5db' : '#1f2937',
-                    family: CHART_CONFIG.fontFamily
-                },
-                bordercolor: 'transparent'
-            }
-        };
-        
-        // Create the equity chart
-        Plotly.newPlot(equityChartDiv, [equityTrace], equityLayout, {
-            displayModeBar: true,
-            responsive: true,
-            displaylogo: false,
-            modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d', 'toggleSpikelines']
-        });
-        
-        state.charts.equity = true;
-    } catch (error) {
-        console.error('Error creating charts with Plotly:', error);
-        addLogMessage('Error creating charts: ' + error.message, true);
-        throw new Error('Failed to create charts: ' + error.message);
-    }
-}
-
-// Update price chart with new data and indicators
-function updatePriceChart() {
-    if (!state.charts.price) return;
-    
-    const priceChartDiv = document.getElementById('priceChart');
-    if (!priceChartDiv) return;
-    
-    try {
-        // Update candlestick data
-        const candleData = {
-            x: state.priceData.map(d => d.datetime),
-            open: state.priceData.map(d => d.open),
-            high: state.priceData.map(d => d.high),
-            low: state.priceData.map(d => d.low),
-            close: state.priceData.map(d => d.close)
-        };
-        
-        // Update volume data
-        const volumeColors = state.priceData.map(d => d.close > d.open ? OHLC_COLORS.volume.up : OHLC_COLORS.volume.down);
-        const volumeData = {
-            x: state.priceData.map(d => d.datetime),
-            y: state.priceData.map(d => d.volume),
-            marker: {
-                color: volumeColors
-            }
-        };
-        
-        // Update long signal data
-        const longSignalData = {
-            x: state.priceData.map(d => d.datetime),
-            y: state.indicators.longSignal
-        };
-        
-        // Update short signal data
-        const shortSignalData = {
-            x: state.priceData.map(d => d.datetime),
-            y: state.indicators.shortSignal
-        };
-        
-        // Update chart
-        Plotly.update(priceChartDiv, 
-            // Update candlestick data (trace 0)
-            candleData, {}, 0);
-        
-        // Update volume data (trace 1)
-        Plotly.update(priceChartDiv, volumeData, {}, 1);
-        
-        // Update signal traces
-        Plotly.update(priceChartDiv, longSignalData, {}, 2);
-        Plotly.update(priceChartDiv, shortSignalData, {}, 3);
-        
-        // Update chart title and focus on recent data
-        Plotly.relayout(priceChartDiv, {
-            title: `${state.symbol} ${state.timeframe} Chart`,
-            xaxis: {
-                range: [
-                    state.priceData[Math.max(0, state.priceData.length - CHART_CONFIG.defaultRange)].datetime,
-                    state.priceData[state.priceData.length - 1].datetime
-                ],
-                rangeslider: { visible: false },
-                type: 'date',
-                showgrid: false
-            }
-        });
-        
-        // Add historical trade markers if there are trades
-        if (state.trades.length > 0) {
-            // First remove any existing trade markers
-            if (priceChartDiv.data.length > 4) {
-                Plotly.deleteTraces(priceChartDiv, [4, 5]);
-            }
-            
-            // Create long trade markers
-            const longTrades = state.trades.filter(t => t.type === 'LONG');
-            const longEntries = {
-                x: longTrades.map(t => t.entryTime),
-                y: longTrades.map(t => {
-                    // Find the candle for this entry time
-                    const candle = state.priceData.find(d => 
-                        d.datetime.getTime() <= t.entryTime.getTime() && 
-                        d.datetime.getTime() + getTimeframeInMs(state.timeframe) > t.entryTime.getTime()
-                    );
-                    return candle ? candle.low - (candle.high - candle.low) * CHART_CONFIG.tradePadding : null;
-                }),
-                mode: 'markers',
-                type: 'scatter',
-                marker: {
-                    symbol: 'triangle-up',
-                    size: 10,
-                    color: OHLC_COLORS.up,
-                    line: { width: 1, color: 'white' }
-                },
-                name: 'Long Entries',
-                hoverinfo: 'text',
-                text: longTrades.map(t => `Long Entry: $${t.entryPrice.toFixed(2)}<br>Size: $${(t.size * t.entryPrice).toFixed(2)}<br>Time: ${t.entryTime.toLocaleTimeString()}`)
-            };
-            
-            // Create short trade markers
-            const shortTrades = state.trades.filter(t => t.type === 'SHORT');
-            const shortEntries = {
-                x: shortTrades.map(t => t.entryTime),
-                y: shortTrades.map(t => {
-                    // Find the candle for this entry time
-                    const candle = state.priceData.find(d => 
-                        d.datetime.getTime() <= t.entryTime.getTime() && 
-                        d.datetime.getTime() + getTimeframeInMs(state.timeframe) > t.entryTime.getTime()
-                    );
-                    return candle ? candle.high + (candle.high - candle.low) * CHART_CONFIG.tradePadding : null;
-                }),
-                mode: 'markers',
-                type: 'scatter',
-                marker: {
-                    symbol: 'triangle-down',
-                    size: 10,
-                    color: OHLC_COLORS.down,
-                    line: { width: 1, color: 'white' }
-                },
-                name: 'Short Entries',
-                hoverinfo: 'text',
-                text: shortTrades.map(t => `Short Entry: $${t.entryPrice.toFixed(2)}<br>Size: $${(t.size * t.entryPrice).toFixed(2)}<br>Time: ${t.entryTime.toLocaleTimeString()}`)
-            };
-            
-            // Add trade markers to chart
-            Plotly.addTraces(priceChartDiv, [longEntries, shortEntries]);
-        }
     } catch (error) {
         console.error('Error updating price chart:', error);
         addLogMessage('Error updating chart: ' + error.message, true);
@@ -2403,7 +3230,7 @@ function getTimeframeInMs(timeframe) {
 function updateEquityChart() {
     if (!state.charts.equity) return;
     
-    const equityChartDiv = document.getElementById('equityChart');
+    const equityChartDiv = safeGetElement('equityChart');
     if (!equityChartDiv) return;
     
     try {
@@ -2415,6 +3242,16 @@ function updateEquityChart() {
         
         // Update chart
         Plotly.update(equityChartDiv, equityData, {}, 0);
+        
+        // Use linear scale for better visualization
+        Plotly.relayout(equityChartDiv, {
+            yaxis: {
+                type: 'linear',
+                autorange: true
+            },
+            height: 300,
+            width: equityChartDiv.offsetWidth
+        });
         
         // Update metrics
         updateMetrics();
@@ -2467,10 +3304,20 @@ function openPosition(type, candle) {
     
     // Update UI
     updatePositionCard();
-    document.getElementById('position-card').style.display = 'block';
+    const positionCard = safeGetElement('position-card');
+    if (positionCard) positionCard.style.display = 'block';
     
-    if (state.futuresTrading.enabled) {
-        document.getElementById('close-positions-btn').disabled = false;
+    const closePositionsBtn = safeGetElement('close-positions-btn');
+    if (closePositionsBtn && state.futuresTrading.enabled) {
+        closePositionsBtn.disabled = false;
+    }
+    
+    // Show/hide empty trade history message
+    const emptyTradeHistory = safeGetElement('empty-trade-history');
+    const tradeHistoryContainer = safeGetElement('trade-history-container');
+    if (emptyTradeHistory && tradeHistoryContainer) {
+        emptyTradeHistory.style.display = 'none';
+        tradeHistoryContainer.style.display = 'block';
     }
     
     // Send alert
@@ -2553,8 +3400,11 @@ function closeCurrentPosition(reason) {
     
     // Update UI
     updatePositionCard();
-    document.getElementById('position-card').style.display = 'none';
-    document.getElementById('close-positions-btn').disabled = true;
+    const positionCard = safeGetElement('position-card');
+    if (positionCard) positionCard.style.display = 'none';
+    
+    const closePositionsBtn = safeGetElement('close-positions-btn');
+    if (closePositionsBtn) closePositionsBtn.disabled = true;
     
     // Update metrics and charts
     updateMetrics();
@@ -2656,218 +3506,365 @@ function updatePositionRiskLevels() {
 
 // Update position card
 function updatePositionCard() {
-    if (!state.currentPosition) {
-        document.getElementById('position-card').style.display = 'none';
-        return;
-    }
-    
-    document.getElementById('position-card').style.display = 'block';
-    
-    // Set position type
-    const positionType = document.getElementById('position-type');
-    positionType.textContent = state.currentPosition.type;
-    positionType.className = 'metric-value ' + (state.currentPosition.type === 'LONG' ? 'positive' : 'negative');
-    
-    // Set entry price
-    document.getElementById('position-entry-price').textContent = `$${state.currentPosition.entryPrice.toFixed(2)}`;
-    
-    // Set current price
-    document.getElementById('position-current-price').textContent = `$${state.currentPrice.toFixed(2)}`;
-    
-    // Calculate and set P&L
-    const unrealizedPnl = state.currentPosition.getUnrealizedPnl(state.currentPrice);
-    const unrealizedPnlPct = state.currentPosition.getUnrealizedPnlPct(state.currentPrice) * 100;
-    
-    const pnlElement = document.getElementById('position-pnl');
-    pnlElement.textContent = `${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)} (${unrealizedPnlPct >= 0 ? '+' : ''}${unrealizedPnlPct.toFixed(2)}%)`;
-    pnlElement.className = 'metric-value ' + (unrealizedPnl >= 0 ? 'positive' : 'negative');
-    
-    // Set entry time
-    document.getElementById('position-entry-time').textContent = state.currentPosition.entryTime.toLocaleTimeString();
-    
-    // Set position size
-    document.getElementById('position-size-info').textContent = `${state.currentPosition.size.toFixed(6)} (≈$${(state.currentPosition.size * state.currentPosition.entryPrice).toFixed(2)})`;
-    
-    // Set risk levels
-    if (state.settings.takeProfit.enabled && state.botStats.positionDetails.takeProfitPrice) {
-        document.getElementById('position-tp').textContent = `$${state.botStats.positionDetails.takeProfitPrice.toFixed(2)}`;
-    } else {
-        document.getElementById('position-tp').textContent = 'Not Set';
-    }
-    
-    if (state.settings.stopLoss.enabled && state.botStats.positionDetails.stopLossPrice) {
-        document.getElementById('position-sl').textContent = `$${state.botStats.positionDetails.stopLossPrice.toFixed(2)}`;
-    } else {
-        document.getElementById('position-sl').textContent = 'Not Set';
+    try {
+        if (!state.currentPosition) {
+            const positionCard = safeGetElement('position-card');
+            if (positionCard) positionCard.style.display = 'none';
+            return;
+        }
+        
+        const positionCard = safeGetElement('position-card');
+        if (positionCard) positionCard.style.display = 'block';
+        
+        // Set position type
+        const positionType = safeGetElement('position-type');
+        if (positionType) {
+            positionType.textContent = state.currentPosition.type;
+            positionType.className = 'metric-value ' + (state.currentPosition.type === 'LONG' ? 'positive' : 'negative');
+        }
+        
+        // Set entry price
+        const positionEntryPrice = safeGetElement('position-entry-price');
+        if (positionEntryPrice) {
+            positionEntryPrice.textContent = `$${state.currentPosition.entryPrice.toFixed(2)}`;
+        }
+        
+        // Set current price
+        const positionCurrentPrice = safeGetElement('position-current-price');
+        if (positionCurrentPrice) {
+            positionCurrentPrice.textContent = `$${state.currentPrice.toFixed(2)}`;
+        }
+        
+        // Calculate and set P&L
+        const unrealizedPnl = state.currentPosition.getUnrealizedPnl(state.currentPrice);
+        const unrealizedPnlPct = state.currentPosition.getUnrealizedPnlPct(state.currentPrice) * 100;
+        
+        const pnlElement = safeGetElement('position-pnl');
+        if (pnlElement) {
+            pnlElement.textContent = `${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)} (${unrealizedPnlPct >= 0 ? '+' : ''}${unrealizedPnlPct.toFixed(2)}%)`;
+            pnlElement.className = 'metric-value ' + (unrealizedPnl >= 0 ? 'positive' : 'negative');
+        }
+        
+        // Set entry time
+        const positionEntryTime = safeGetElement('position-entry-time');
+        if (positionEntryTime) {
+            positionEntryTime.textContent = state.currentPosition.entryTime.toLocaleTimeString();
+        }
+        
+        // Set position size
+        const positionSizeInfo = safeGetElement('position-size-info');
+        if (positionSizeInfo) {
+            positionSizeInfo.textContent = `${state.currentPosition.size.toFixed(6)} (≈$${(state.currentPosition.size * state.currentPosition.entryPrice).toFixed(2)})`;
+        }
+        
+        // Set risk levels
+        const positionTp = safeGetElement('position-tp');
+        if (positionTp) {
+            if (state.settings.takeProfit.enabled && state.botStats.positionDetails.takeProfitPrice) {
+                positionTp.textContent = `$${state.botStats.positionDetails.takeProfitPrice.toFixed(2)}`;
+            } else {
+                positionTp.textContent = 'Not Set';
+            }
+        }
+        
+        const positionSl = safeGetElement('position-sl');
+        if (positionSl) {
+            if (state.settings.stopLoss.enabled && state.botStats.positionDetails.stopLossPrice) {
+                positionSl.textContent = `$${state.botStats.positionDetails.stopLossPrice.toFixed(2)}`;
+            } else {
+                positionSl.textContent = 'Not Set';
+            }
+        }
+        
+        const positionTs = safeGetElement('position-ts');
+        if (positionTs) {
+            if (state.settings.trailingStop.enabled && state.botStats.positionDetails.trailingStopPrice) {
+                positionTs.textContent = `$${state.botStats.positionDetails.trailingStopPrice.toFixed(2)}`;
+            } else {
+                positionTs.textContent = 'Not Set';
+            }
+        }
+    } catch (error) {
+        console.error('Error updating position card:', error);
     }
 }
 
 // Update trade history
 function updateTradeHistory() {
-    const tradeTableBody = document.getElementById('trade-history-body');
-    if (!tradeTableBody) return;
-    
-    // Clear existing rows
-    tradeTableBody.innerHTML = '';
-    
-    // Create rows for each trade (most recent first)
-    const sortedTrades = [...state.trades].reverse();
-    
-    sortedTrades.forEach(trade => {
-        const row = document.createElement('tr');
-        row.className = trade.type === 'LONG' ? 'trade-long' : 'trade-short';
+    try {
+        const tradeTableBody = safeGetElement('trade-history-body');
+        if (!tradeTableBody) return;
         
-        // Add trade data
-        row.innerHTML = `
-            <td>${trade.entryTime.toLocaleString()}</td>
-            <td>${trade.type}</td>
-            <td>$${trade.entryPrice.toFixed(2)}</td>
-            <td>$${trade.exitPrice ? trade.exitPrice.toFixed(2) : '-'}</td>
-            <td>${(trade.size * trade.entryPrice).toFixed(2)} USDT</td>
-            <td class="${trade.pnl >= 0 ? 'positive' : 'negative'}">${trade.pnl >= 0 ? '+' : ''}$${trade.pnl.toFixed(2)} (${(trade.pnlPct * 100).toFixed(2)}%)</td>
-        `;
+        // Clear existing rows
+        tradeTableBody.innerHTML = '';
         
-        tradeTableBody.appendChild(row);
-    });
-    
-    // If no trades yet, show message
-    if (sortedTrades.length === 0) {
-        const row = document.createElement('tr');
-        row.innerHTML = `<td colspan="6" style="text-align: center;">No trades yet</td>`;
-        tradeTableBody.appendChild(row);
+        if (state.trades.length === 0) {
+            const emptyTradeHistory = safeGetElement('empty-trade-history');
+            const tradeHistoryContainer = safeGetElement('trade-history-container');
+            
+            if (emptyTradeHistory) emptyTradeHistory.style.display = 'block';
+            if (tradeHistoryContainer) tradeHistoryContainer.style.display = 'none';
+            return;
+        }
+        
+        // Show trade history container, hide empty state
+        const emptyTradeHistory = safeGetElement('empty-trade-history');
+        const tradeHistoryContainer = safeGetElement('trade-history-container');
+        
+        if (emptyTradeHistory) emptyTradeHistory.style.display = 'none';
+        if (tradeHistoryContainer) tradeHistoryContainer.style.display = 'block';
+        
+        // Create rows for each trade (most recent first)
+        const sortedTrades = [...state.trades].reverse();
+        
+        sortedTrades.forEach(trade => {
+            const row = document.createElement('tr');
+            row.className = trade.type === 'LONG' ? 'trade-long' : 'trade-short';
+            
+            // Add trade data
+            row.innerHTML = `
+                <td>${trade.entryTime.toLocaleString()}</td>
+                <td>${trade.type}</td>
+                <td>$${trade.entryPrice.toFixed(2)}</td>
+                <td>$${trade.exitPrice ? trade.exitPrice.toFixed(2) : '-'}</td>
+                <td>${(trade.size * trade.entryPrice).toFixed(2)} USDT</td>
+                <td class="${trade.pnl >= 0 ? 'positive' : 'negative'}">${trade.pnl >= 0 ? '+' : ''}$${trade.pnl.toFixed(2)} (${(trade.pnlPct * 100).toFixed(2)}%)</td>
+            `;
+            
+            tradeTableBody.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error updating trade history:', error);
     }
 }
 
 // Update metrics
 function updateMetrics() {
-    // Only update if we have trades
-    if (state.trades.length === 0) {
-        document.getElementById('total-return').textContent = '0.00%';
-        document.getElementById('total-return-delta').textContent = '$0.00';
-        document.getElementById('win-rate').textContent = '0.0%';
-        document.getElementById('win-rate-delta').textContent = '0 trades';
-        document.getElementById('profit-factor').textContent = '0.00';
-        document.getElementById('profit-factor-delta').textContent = 'Avg: $0.00';
-        document.getElementById('max-drawdown').textContent = '0.00%';
-        document.getElementById('max-drawdown-delta').textContent = 'Sharpe: 0.00';
-        return;
-    }
-    
-    // Calculate total return
-    const totalReturn = ((state.currentCapital - state.initialCapital) / state.initialCapital) * 100;
-    document.getElementById('total-return').textContent = `${totalReturn >= 0 ? '+' : ''}${totalReturn.toFixed(2)}%`;
-    document.getElementById('total-return-delta').textContent = `${totalReturn >= 0 ? '+' : ''}$${(state.currentCapital - state.initialCapital).toFixed(2)}`;
-    
-    // Calculate win rate
-    const winningTrades = state.trades.filter(t => t.pnl > 0).length;
-    const winRate = (winningTrades / state.trades.length) * 100;
-    document.getElementById('win-rate').textContent = `${winRate.toFixed(1)}%`;
-    document.getElementById('win-rate-delta').textContent = `${winningTrades}/${state.trades.length} trades`;
-    
-    // Calculate profit factor and average trade
-    const grossProfit = state.trades.reduce((sum, t) => t.pnl > 0 ? sum + t.pnl : sum, 0);
-    const grossLoss = Math.abs(state.trades.reduce((sum, t) => t.pnl < 0 ? sum + t.pnl : sum, 0));
-    const profitFactor = grossLoss === 0 ? grossProfit : grossProfit / grossLoss;
-    const avgTrade = state.trades.reduce((sum, t) => sum + t.pnl, 0) / state.trades.length;
-    
-    document.getElementById('profit-factor').textContent = `${profitFactor.toFixed(2)}`;
-    document.getElementById('profit-factor-delta').textContent = `Avg: ${avgTrade >= 0 ? '+' : ''}$${avgTrade.toFixed(2)}`;
-    
-    // Calculate max drawdown
-    let maxDrawdown = 0;
-    let peak = state.initialCapital;
-    
-    // Generate equity curve data if we don't have it
-    if (state.equityCurve.length <= 1) {
-        state.equityCurve = [{ time: new Date(0), value: state.initialCapital }];
+    try {
+        // Only update if we have trades
+        if (state.trades.length === 0) {
+            const totalReturn = safeGetElement('total-return');
+            const totalReturnDelta = safeGetElement('total-return-delta');
+            const winRate = safeGetElement('win-rate');
+            const winRateDelta = safeGetElement('win-rate-delta');
+            const profitFactor = safeGetElement('profit-factor');
+            const profitFactorDelta = safeGetElement('profit-factor-delta');
+            const maxDrawdown = safeGetElement('max-drawdown');
+            const maxDrawdownDelta = safeGetElement('max-drawdown-delta');
+            
+            if (totalReturn) totalReturn.textContent = '0.00%';
+            if (totalReturnDelta) totalReturnDelta.textContent = '$0.00';
+            if (winRate) winRate.textContent = '0.0%';
+            if (winRateDelta) winRateDelta.textContent = '0 trades';
+            if (profitFactor) profitFactor.textContent = '0.00';
+            if (profitFactorDelta) profitFactorDelta.textContent = 'Avg: $0.00';
+            if (maxDrawdown) maxDrawdown.textContent = '0.00%';
+            if (maxDrawdownDelta) maxDrawdownDelta.textContent = 'Sharpe: 0.00';
+            return;
+        }
         
-        // Sort trades by entry time
-        const sortedTrades = [...state.trades].sort((a, b) => a.entryTime - b.entryTime);
+        // Calculate total return
+        const totalReturnPct = ((state.currentCapital - state.initialCapital) / state.initialCapital) * 100;
         
-        // Reconstruct equity curve
-        let currentEquity = state.initialCapital;
-        sortedTrades.forEach(trade => {
-            currentEquity += trade.pnl;
-            state.equityCurve.push({
-                time: new Date(trade.exitTime),
-                value: currentEquity
+        const totalReturn = safeGetElement('total-return');
+        if (totalReturn) {
+            totalReturn.textContent = `${totalReturnPct >= 0 ? '+' : ''}${totalReturnPct.toFixed(2)}%`;
+            totalReturn.className = 'metric-value ' + (totalReturnPct >= 0 ? 'positive' : 'negative');
+        }
+        
+        const totalReturnDelta = safeGetElement('total-return-delta');
+        if (totalReturnDelta) {
+            totalReturnDelta.textContent = `${totalReturnPct >= 0 ? '+' : ''}$${(state.currentCapital - state.initialCapital).toFixed(2)}`;
+        }
+        
+        // Calculate win rate
+        const winningTrades = state.trades.filter(t => t.pnl > 0).length;
+        const winRatePct = (winningTrades / state.trades.length) * 100;
+        
+        const winRate = safeGetElement('win-rate');
+        if (winRate) {
+            winRate.textContent = `${winRatePct.toFixed(1)}%`;
+        }
+        
+        const winRateDelta = safeGetElement('win-rate-delta');
+        if (winRateDelta) {
+            winRateDelta.textContent = `${winningTrades}/${state.trades.length} trades`;
+        }
+        
+        // Calculate profit factor and average trade
+        const grossProfit = state.trades.reduce((sum, t) => t.pnl > 0 ? sum + t.pnl : sum, 0);
+        const grossLoss = Math.abs(state.trades.reduce((sum, t) => t.pnl < 0 ? sum + t.pnl : sum, 0));
+        const profitFactorValue = grossLoss === 0 ? grossProfit : grossProfit / grossLoss;
+        const avgTrade = state.trades.reduce((sum, t) => sum + t.pnl, 0) / state.trades.length;
+        
+        const profitFactor = safeGetElement('profit-factor');
+        if (profitFactor) {
+            profitFactor.textContent = `${profitFactorValue.toFixed(2)}`;
+        }
+        
+        const profitFactorDelta = safeGetElement('profit-factor-delta');
+        if (profitFactorDelta) {
+            profitFactorDelta.textContent = `Avg: ${avgTrade >= 0 ? '+' : ''}$${avgTrade.toFixed(2)}`;
+        }
+        
+        // Calculate max drawdown
+        let maxDrawdownPct = 0;
+        let peak = state.initialCapital;
+        
+        // Generate equity curve data if we don't have it
+        if (state.equityCurve.length <= 1) {
+            state.equityCurve = [{ time: new Date(0), value: state.initialCapital }];
+            
+            // Sort trades by entry time
+            const sortedTrades = [...state.trades].sort((a, b) => a.entryTime - b.entryTime);
+            
+            // Reconstruct equity curve
+            let currentEquity = state.initialCapital;
+            sortedTrades.forEach(trade => {
+                currentEquity += trade.pnl;
+                state.equityCurve.push({
+                    time: new Date(trade.exitTime),
+                    value: currentEquity
+                });
             });
-        });
-    }
-    
-    // Calculate max drawdown from equity curve
-    for (const point of state.equityCurve) {
-        if (point.value > peak) {
-            peak = point.value;
         }
         
-        const drawdown = ((peak - point.value) / peak) * 100;
-        if (drawdown > maxDrawdown) {
-            maxDrawdown = drawdown;
+        // Calculate max drawdown from equity curve
+        for (const point of state.equityCurve) {
+            if (point.value > peak) {
+                peak = point.value;
+            }
+            
+            const drawdown = ((peak - point.value) / peak) * 100;
+            if (drawdown > maxDrawdownPct) {
+                maxDrawdownPct = drawdown;
+            }
         }
-    }
-    
-    document.getElementById('max-drawdown').textContent = `${maxDrawdown.toFixed(2)}%`;
-    
-    // Calculate simple Sharpe ratio (approximation for demo)
-    // Using average return / standard deviation of returns
-    const returns = [];
-    for (let i = 1; i < state.equityCurve.length; i++) {
-        const prevValue = state.equityCurve[i-1].value;
-        const currentValue = state.equityCurve[i].value;
-        returns.push((currentValue - prevValue) / prevValue);
-    }
-    
-    let sharpeRatio = 0;
-    if (returns.length > 0) {
-        const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-        const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
-        const stdDev = Math.sqrt(variance);
-        sharpeRatio = stdDev === 0 ? 0 : (avgReturn / stdDev) * Math.sqrt(252); // Annualized
-    }
-    
-    document.getElementById('max-drawdown-delta').textContent = `Sharpe: ${sharpeRatio.toFixed(2)}`;
-    
-    // Update state metrics
-    state.metrics = {
-        totalReturn,
-        winRate,
-        profitFactor,
-        maxDrawdown,
-        sharpeRatio,
-        totalTrades: state.trades.length,
-        avgTrade,
-        maxWin: Math.max(...state.trades.map(t => t.pnl)),
-        maxLoss: Math.min(...state.trades.map(t => t.pnl))
-    };
-}
-
-// Set a fixed clock display
-function setFixedClock(dateTimeStr) {
-    // Update the clock display with the provided date/time string
-    const clockDisplay = document.getElementById('clock-display');
-    if (clockDisplay) {
-        clockDisplay.textContent = dateTimeStr + ' UTC';
+        
+        const maxDrawdown = safeGetElement('max-drawdown');
+        if (maxDrawdown) {
+            maxDrawdown.textContent = `${maxDrawdownPct.toFixed(2)}%`;
+        }
+        
+        // Calculate simple Sharpe ratio (approximation for demo)
+        // Using average return / standard deviation of returns
+        const returns = [];
+        for (let i = 1; i < state.equityCurve.length; i++) {
+            const prevValue = state.equityCurve[i-1].value;
+            const currentValue = state.equityCurve[i].value;
+            returns.push((currentValue - prevValue) / prevValue);
+        }
+        
+        let sharpeRatio = 0;
+        if (returns.length > 0) {
+            const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+            const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+            const stdDev = Math.sqrt(variance);
+            sharpeRatio = stdDev === 0 ? 0 : (avgReturn / stdDev) * Math.sqrt(252); // Annualized
+        }
+        
+        const maxDrawdownDelta = safeGetElement('max-drawdown-delta');
+        if (maxDrawdownDelta) {
+            maxDrawdownDelta.textContent = `Sharpe: ${sharpeRatio.toFixed(2)}`;
+        }
+        
+        // Update state metrics
+        state.metrics = {
+            totalReturn: totalReturnPct,
+            winRate: winRatePct,
+            profitFactor: profitFactorValue,
+            maxDrawdown: maxDrawdownPct,
+            sharpeRatio,
+            totalTrades: state.trades.length,
+            avgTrade,
+            maxWin: Math.max(...state.trades.map(t => t.pnl)),
+            maxLoss: Math.min(...state.trades.map(t => t.pnl))
+        };
+    } catch (error) {
+        console.error('Error updating metrics:', error);
     }
 }
 
 // Initialize the system when DOM content is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    // Load settings from localStorage
-    loadSettingsFromLocalStorage();
-    
-    // Request notification permission
-    if ('Notification' in window) {
-        Notification.requestPermission();
+    try {
+        // Load settings from localStorage
+        loadSettingsFromLocalStorage();
+        
+        // Request notification permission
+        if ('Notification' in window) {
+            Notification.requestPermission();
+        }
+        
+        // Add user login info
+        const userInfo = safeGetElement('user-info');
+        if (userInfo) {
+            userInfo.textContent = 'User: gelimorto2';
+        }
+        
+        // Set document title with user info
+        document.title = `Volty Trading Bot | ${state.symbol} - ${state.timeframe} | User: gelimorto2`;
+        
+        // Initialize UI
+        initUI();
+        
+        // Start the live clock
+        startLiveClock();
+        
+        // Try to initialize TradingView if available
+        const scriptExists = document.querySelector('script[src*="tradingview.com"]');
+        if (scriptExists) {
+            // Wait for TradingView to load
+            window.addEventListener('load', function() {
+                if (typeof TradingView !== 'undefined') {
+                    initTradingViewWidget();
+                } else {
+                    console.warn('TradingView library not available, using Plotly charts only');
+                }
+            });
+        }
+        
+        // Log user login with current time
+        addLogMessage(`System initialized by user: gelimorto2 at 2025-06-08 20:34:15 UTC`);
+    } catch (error) {
+        console.error('Error during initialization:', error);
+        alert('Error initializing the application. Please check the console for details.');
     }
+});
+
+// Handle window resize for charts
+window.addEventListener('resize', function() {
+    // Update equity chart width on resize for better fit
+    const equityChartDiv = safeGetElement('equityChart');
+    if (equityChartDiv && state.charts.equity) {
+        Plotly.relayout(equityChartDiv, {
+            width: equityChartDiv.offsetWidth
+        });
+    }
+});
+
+// Clean up resources before page unload
+window.addEventListener('beforeunload', function() {
+    // Clear all intervals
+    if (state.interval) clearInterval(state.interval);
+    if (state.clockInterval) clearInterval(state.clockInterval);
     
-    // Initialize UI
-    initUI();
-    
-    // Set fixed clock date from user's specified time
-    setFixedClock('2025-06-08 16:07:20');
-    
-    // Update version info with the current user
-    state.version = '1.1.0';
-    addLogMessage(`System initialized by user: ${CURRENT_USER}`);
+    // Save current state if needed
+    try {
+        // Save current state excluding large data structures
+        const stateToSave = {
+            symbol: state.symbol,
+            timeframe: state.timeframe,
+            initialCapital: state.initialCapital,
+            currentCapital: state.currentCapital,
+            atrLength: state.atrLength,
+            atrMultiplier: state.atrMultiplier,
+            settings: state.settings,
+            feeSettings: state.feeSettings
+        };
+        
+        localStorage.setItem('voltyBotCurrentState', JSON.stringify(stateToSave));
+    } catch (error) {
+        console.error('Error saving state on exit:', error);
+    }
 });
