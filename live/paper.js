@@ -251,11 +251,6 @@ const state = {
         shortSignal: []
     },
     
-    charts: {
-        price: null,
-        equity: null
-    },
-    
     metrics: {
         totalReturn: 0,
         winRate: 0,
@@ -361,7 +356,7 @@ const state = {
         }
     },
     
-    usingTradingView: false
+    usingTradingView: true // Set to true by default since we're now using TradingView as main chart
 };
 
 // Safely get element - returns null if element doesn't exist
@@ -394,16 +389,6 @@ async function safeApiFetch(url, options = {}) {
         
         throw error;
     }
-}
-
-// Update cryptocurrency icon based on symbol
-function updateCryptoIcon() {
-    const cryptoIcon = safeGetElement('crypto-icon');
-    if (!cryptoIcon) return;
-    
-    // Extract the base symbol (e.g., BTC from BTCUSDT)
-    const baseSymbol = state.symbol.replace(/USDT$|USD$|BUSD$/, '').toLowerCase();
-    cryptoIcon.src = `https://cryptoicons.org/api/icon/${baseSymbol}/32`;
 }
 
 // Start a live updating clock
@@ -497,9 +482,6 @@ async function reloadDataWithSettings() {
             const volume = last24hData.reduce((sum, candle) => sum + candle.volume, 0);
             state.botStats.marketData.volume = volume;
             
-            // Update cryptocurrency icon
-            updateCryptoIcon();
-            
             // Update market data display
             updateMarketData();
         }
@@ -508,8 +490,8 @@ async function reloadDataWithSettings() {
         const strategy = new VoltyStrategy(state.atrLength, state.atrMultiplier);
         state.indicators = strategy.generateSignals(state.priceData);
         
-        // Update charts
-        updatePriceChart(true);
+        // Update TradingView symbol
+        updateTradingViewSymbol();
         
         addLogMessage(`Data reloaded for ${state.symbol} (${state.timeframe})`);
     } catch (error) {
@@ -520,411 +502,40 @@ async function reloadDataWithSettings() {
     }
 }
 
-// Initialize TradingView widget with proper exchange formatting
-function initTradingViewWidget() {
+// Update TradingView symbol when changed
+function updateTradingViewSymbol() {
     try {
-        const tradingViewContainer = safeGetElement('tradingview-chart');
-        if (!tradingViewContainer) {
-            console.error('TradingView container not found');
-            return false;
-        }
+        // Update symbol in all TradingView widgets by reloading them
+        const widgets = document.querySelectorAll('.tradingview-widget-container');
         
-        // Clear any existing content
-        tradingViewContainer.innerHTML = '';
-        
-        // Check if TradingView library is available
-        if (typeof TradingView === 'undefined') {
-            console.error('TradingView library not loaded');
-            addLogMessage('TradingView library not available, using Plotly charts instead', true);
-            
-            // Fall back to Plotly
-            const toggleChartBtn = safeGetElement('toggle-chart-btn');
-            if (toggleChartBtn) toggleChartBtn.textContent = 'TradingView unavailable';
-            
-            const plotlyChart = safeGetElement('priceChart');
-            if (plotlyChart) plotlyChart.style.display = 'block';
-            
-            tradingViewContainer.style.display = 'none';
-            state.usingTradingView = false;
-            
-            // Update Plotly chart
-            updatePriceChart(true);
-            
-            return false;
-        }
-        
-        // Format symbol correctly for TradingView with exchange prefix
-        const formattedSymbol = `BINANCE:${state.symbol}`;
-        
-        try {
-            // Create a new widget with more complete configuration
-            new TradingView.widget({
-                "width": "100%",
-                "height": 500,
-                "symbol": formattedSymbol,
-                "interval": state.timeframe,
-                "timezone": "Etc/UTC",
-                "theme": state.settings.theme === 'dark' ? "dark" : "light",
-                "style": "1", // Candles
-                "locale": "en",
-                "toolbar_bg": "#f1f3f6",
-                "enable_publishing": false,
-                "allow_symbol_change": true,
-                "container_id": "tradingview-chart",
-                "hide_side_toolbar": false,
-                "hide_top_toolbar": false,
-                "withdateranges": true,
-                "save_image": false,
-                "hideideas": true,
-                "studies": [
-                    {"id": "ATR@tv-basicstudies", "inputs": {"length": state.atrLength}}
-                ],
-                "supported_resolutions": ["1", "5", "15", "30", "60", "240", "1D"],
-                "show_popup_button": false,
-                "popup_width": "1000",
-                "popup_height": "650",
-                "autosize": true
-            });
-            
-            // Set flag to indicate we're using TradingView
-            state.usingTradingView = true;
-            
-            // Hide the Plotly chart if using TradingView
-            const plotlyChart = safeGetElement('priceChart');
-            if (plotlyChart) {
-                plotlyChart.style.display = 'none';
-            }
-            
-            // Update toggle button text
-            const toggleChartBtn = safeGetElement('toggle-chart-btn');
-            if (toggleChartBtn) {
-                toggleChartBtn.textContent = 'Switch to Basic Chart';
-            }
-            
-            // Add debug listener to check if TradingView loaded properly
-            setTimeout(() => {
-                const tvIframe = document.querySelector('#tradingview-chart iframe');
-                if (tvIframe) {
-                    addLogMessage('TradingView chart loaded successfully');
-                } else {
-                    addLogMessage('TradingView chart failed to load, using fallback chart', true);
-                    // Fall back to Plotly chart if TradingView fails
-                    state.usingTradingView = false;
-                    if (plotlyChart) {
-                        plotlyChart.style.display = 'block';
-                    }
-                    if (tradingViewContainer) {
-                        tradingViewContainer.style.display = 'none';
-                    }
-                    if (toggleChartBtn) {
-                        toggleChartBtn.textContent = 'Switch to TradingView';
-                    }
-                    // Update Plotly chart
-                    updatePriceChart(true);
-                }
-            }, 3000);
-            
-            return true;
-        } catch (tvError) {
-            console.error('Error initializing TradingView widget:', tvError);
-            addLogMessage('Error initializing TradingView widget: ' + tvError.message, true);
-            
-            // Fall back to Plotly
-            state.usingTradingView = false;
-            const plotlyChart = safeGetElement('priceChart');
-            if (plotlyChart) plotlyChart.style.display = 'block';
-            
-            tradingViewContainer.style.display = 'none';
-            
-            // Update toggle button text
-            const toggleChartBtn = safeGetElement('toggle-chart-btn');
-            if (toggleChartBtn) {
-                toggleChartBtn.textContent = 'TradingView unavailable';
-            }
-            
-            // Update Plotly chart
-            updatePriceChart(true);
-            
-            return false;
-        }
-    } catch (error) {
-        console.error('Error setting up TradingView widget:', error);
-        addLogMessage('Failed to initialize TradingView chart: ' + error.message, true);
-        
-        // Fall back to Plotly chart
-        state.usingTradingView = false;
-        const plotlyChart = safeGetElement('priceChart');
-        const tradingViewContainer = safeGetElement('tradingview-chart');
-        
-        if (plotlyChart) plotlyChart.style.display = 'block';
-        if (tradingViewContainer) tradingViewContainer.style.display = 'none';
-        
-        // Update toggle button text
-        const toggleChartBtn = safeGetElement('toggle-chart-btn');
-        if (toggleChartBtn) {
-            toggleChartBtn.textContent = 'TradingView unavailable';
-        }
-        
-        // Update Plotly chart
-        updatePriceChart(true);
-        
-        return false;
-    }
-}
-
-// Update price chart with new data and indicators
-function updatePriceChart(autoscroll = true) {
-    try {
-        const priceChartDiv = safeGetElement('priceChart');
-        if (!priceChartDiv) {
-            console.error('Price chart element not found');
-            return;
-        }
-        
-        // Clear any existing data
-        Plotly.purge(priceChartDiv);
-        
-        // Create fresh candlestick trace
-        const candleTrace = {
-            x: state.priceData.map(d => d.datetime),
-            open: state.priceData.map(d => d.open),
-            high: state.priceData.map(d => d.high),
-            low: state.priceData.map(d => d.low),
-            close: state.priceData.map(d => d.close),
-            type: 'candlestick',
-            name: 'Price',
-            increasing: {
-                line: { color: OHLC_COLORS.up },
-                fillcolor: OHLC_COLORS.upFill
-            },
-            decreasing: {
-                line: { color: OHLC_COLORS.down },
-                fillcolor: OHLC_COLORS.downFill
-            }
-        };
-        
-        // Create volume trace
-        const volumeColors = state.priceData.map(d => d.close > d.open ? OHLC_COLORS.volume.up : OHLC_COLORS.volume.down);
-        const volumeTrace = {
-            x: state.priceData.map(d => d.datetime),
-            y: state.priceData.map(d => d.volume),
-            type: 'bar',
-            name: 'Volume',
-            yaxis: 'y2',
-            marker: {
-                color: volumeColors
-            },
-            opacity: 0.5
-        };
-        
-        // Create signal traces (only for direction changes)
-        const dataTraces = [candleTrace, volumeTrace];
-        
-        if (state.indicators && state.indicators.longSignal && state.indicators.shortSignal && state.settings.showSignals) {
-            // Create arrays to store direction change points
-            const longChangePoints = {
-                x: [],
-                y: []
-            };
-            
-            const shortChangePoints = {
-                x: [],
-                y: []
-            };
-            
-            // Track the previous signal state
-            let prevSignalState = null; // 'LONG', 'SHORT', or null
-            
-            // Find direction changes
-            for (let i = 0; i < state.priceData.length; i++) {
-                // Determine current signal
-                let currentSignal = null;
-                if (state.indicators.longSignal[i] !== null) {
-                    currentSignal = 'LONG';
-                } else if (state.indicators.shortSignal[i] !== null) {
-                    currentSignal = 'SHORT';
+        widgets.forEach(widget => {
+            const scriptTag = widget.querySelector('script');
+            if (scriptTag) {
+                const config = JSON.parse(scriptTag.innerHTML);
+                
+                // Update symbol if it exists in config
+                if (config.symbol) {
+                    config.symbol = `BINANCE:${state.symbol}`;
+                    scriptTag.innerHTML = JSON.stringify(config, null, 2);
                 }
                 
-                // Check if direction changed
-                if (currentSignal !== null && currentSignal !== prevSignalState) {
-                    // Direction changed - add a marker
-                    if (currentSignal === 'LONG') {
-                        longChangePoints.x.push(state.priceData[i].datetime);
-                        longChangePoints.y.push(state.priceData[i].low - (state.priceData[i].high - state.priceData[i].low) * 0.3);
-                    } else if (currentSignal === 'SHORT') {
-                        shortChangePoints.x.push(state.priceData[i].datetime);
-                        shortChangePoints.y.push(state.priceData[i].high + (state.priceData[i].high - state.priceData[i].low) * 0.3);
-                    }
-                    
-                    // Update previous state
-                    prevSignalState = currentSignal;
-                }
+                // Remove the script and re-add it to trigger a reload
+                const parent = scriptTag.parentNode;
+                const newScript = document.createElement('script');
+                newScript.type = 'text/javascript';
+                newScript.src = scriptTag.src;
+                newScript.async = true;
+                newScript.innerHTML = scriptTag.innerHTML;
+                
+                parent.removeChild(scriptTag);
+                parent.appendChild(newScript);
             }
-            
-            // Create traces for direction changes
-            if (longChangePoints.x.length > 0) {
-                const longSignalTrace = {
-                    x: longChangePoints.x,
-                    y: longChangePoints.y,
-                    type: 'scatter',
-                    mode: 'markers',
-                    name: 'Long Signal',
-                    marker: {
-                        symbol: 'triangle-up',
-                        size: 12,
-                        color: 'rgba(74, 222, 128, 1)',
-                        line: { width: 2, color: 'white' }
-                    }
-                };
-                dataTraces.push(longSignalTrace);
-            }
-            
-            if (shortChangePoints.x.length > 0) {
-                const shortSignalTrace = {
-                    x: shortChangePoints.x,
-                    y: shortChangePoints.y,
-                    type: 'scatter',
-                    mode: 'markers',
-                    name: 'Short Signal',
-                    marker: {
-                        symbol: 'triangle-down',
-                        size: 12,
-                        color: 'rgba(248, 113, 113, 1)',
-                        line: { width: 2, color: 'white' }
-                    }
-                };
-                dataTraces.push(shortSignalTrace);
-            }
-        }
-        
-        // Add trade markers (only when direction changes)
-        if (state.trades && state.trades.length > 0 && state.settings.showTrades) {
-            // Track the previous trade type
-            let prevTradeType = null;
-            const tradeChangePoints = {
-                long: { x: [], y: [] },
-                short: { x: [], y: [] }
-            };
-            
-            // Sort trades by entry time
-            const sortedTrades = [...state.trades].sort((a, b) => a.entryTime - b.entryTime);
-            
-            // Find direction changes in trades
-            for (const trade of sortedTrades) {
-                if (trade.type !== prevTradeType) {
-                    // Find the candle for this entry time
-                    const candle = state.priceData.find(d => 
-                        d.datetime.getTime() <= trade.entryTime.getTime() && 
-                        d.datetime.getTime() + getTimeframeInMs(state.timeframe) > trade.entryTime.getTime()
-                    );
-                    
-                    if (candle) {
-                        if (trade.type === 'LONG') {
-                            tradeChangePoints.long.x.push(trade.entryTime);
-                            tradeChangePoints.long.y.push(candle.low - (candle.high - candle.low) * 0.5);
-                        } else {
-                            tradeChangePoints.short.x.push(trade.entryTime);
-                            tradeChangePoints.short.y.push(candle.high + (candle.high - candle.low) * 0.5);
-                        }
-                    }
-                    
-                    // Update previous type
-                    prevTradeType = trade.type;
-                }
-            }
-            
-            // Create traces for trade direction changes
-            if (tradeChangePoints.long.x.length > 0) {
-                const longTradeTrace = {
-                    x: tradeChangePoints.long.x,
-                    y: tradeChangePoints.long.y,
-                    mode: 'markers',
-                    type: 'scatter',
-                    marker: {
-                        symbol: 'triangle-up',
-                        size: 16,
-                        color: OHLC_COLORS.up,
-                        line: { width: 2, color: 'white' }
-                    },
-                    name: 'Long Entries'
-                };
-                dataTraces.push(longTradeTrace);
-            }
-            
-            if (tradeChangePoints.short.x.length > 0) {
-                const shortTradeTrace = {
-                    x: tradeChangePoints.short.x,
-                    y: tradeChangePoints.short.y,
-                    mode: 'markers',
-                    type: 'scatter',
-                    marker: {
-                        symbol: 'triangle-down',
-                        size: 16,
-                        color: OHLC_COLORS.down,
-                        line: { width: 2, color: 'white' }
-                    },
-                    name: 'Short Entries'
-                };
-                dataTraces.push(shortTradeTrace);
-            }
-        }
-        
-        // Determine the range for x-axis (for autoscrolling)
-        let xaxisRange = [];
-        if (autoscroll) {
-            // Show the last N candles (adjust as needed)
-            const visibleCandles = state.settings.visibleCandles || 100;
-            const startIndex = Math.max(0, state.priceData.length - visibleCandles);
-            xaxisRange = [
-                state.priceData[startIndex].datetime,
-                // Add a little buffer to the right
-                new Date(state.priceData[state.priceData.length - 1].datetime.getTime() + getTimeframeInMs(state.timeframe) * 0.1)
-            ];
-        }
-        
-        // Set up layout
-        const layout = {
-            title: `${state.symbol} ${state.timeframe} Chart`,
-            dragmode: 'zoom',
-            margin: { l: 50, r: 50, b: 50, t: 50, pad: 4 },
-            grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'bottom to top' },
-            xaxis: {
-                rangeslider: { visible: false },
-                type: 'date',
-                showgrid: false,
-                range: xaxisRange.length ? xaxisRange : undefined
-            },
-            yaxis: {
-                autorange: true,
-                domain: [0.2, 1],
-                type: 'linear',
-                gridcolor: 'rgba(255,255,255,0.1)'
-            },
-            yaxis2: {
-                domain: [0, 0.1],
-                gridcolor: 'rgba(255,255,255,0.1)'
-            },
-            plot_bgcolor: 'rgba(0, 0, 0, 0)',
-            paper_bgcolor: 'rgba(0, 0, 0, 0)',
-            font: {
-                color: '#d1d5db'
-            },
-            showlegend: false
-        };
-        
-        // Create the chart from scratch
-        Plotly.newPlot(priceChartDiv, dataTraces, layout, {
-            displayModeBar: true,
-            responsive: true,
-            displaylogo: false,
-            modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d', 'toggleSpikelines']
         });
         
-        state.charts.price = true;
-        
+        addLogMessage(`Updated chart symbol to ${state.symbol}`);
     } catch (error) {
-        console.error('Error updating price chart:', error);
-        addLogMessage('Error updating chart: ' + error.message, true);
+        console.error('Error updating TradingView symbol:', error);
+        addLogMessage('Error updating chart symbol: ' + error.message, true);
     }
 }
 
@@ -943,64 +554,67 @@ function getTimeframeInMs(timeframe) {
     return timeframeMap[timeframe] || 60 * 60 * 1000;
 }
 
-// Update equity chart
-function updateEquityChart() {
-    const equityChartDiv = safeGetElement('equityChart');
-    if (!equityChartDiv) return;
-    
+// Update position info in the widget panel
+function updatePositionInfo() {
     try {
-        // Update equity curve data
-        const equityData = {
-            x: state.equityCurve.map(d => d.time),
-            y: state.equityCurve.map(d => d.value),
-            type: 'scatter',
-            mode: 'lines',
-            name: 'Equity',
-            line: {
-                color: '#4f46e5',
-                width: 2
-            },
-            fill: 'tozeroy',
-            fillcolor: 'rgba(79, 70, 229, 0.1)'
-        };
+        const positionInfo = safeGetElement('position-info');
         
-        // Set up equity chart layout
-        const equityLayout = {
-            title: 'Equity Curve',
-            margin: { l: 50, r: 50, b: 50, t: 50, pad: 4 },
-            xaxis: {
-                type: 'date',
-                showgrid: false
-            },
-            yaxis: {
-                autorange: true,
-                type: 'linear', // Use linear scale for clearer representation
-                gridcolor: 'rgba(255,255,255,0.1)'
-            },
-            plot_bgcolor: 'rgba(0, 0, 0, 0)',
-            paper_bgcolor: 'rgba(0, 0, 0, 0)',
-            font: {
-                color: '#d1d5db'
-            },
-            showlegend: false,
-            height: 300
-        };
+        if (!state.currentPosition) {
+            if (positionInfo) positionInfo.style.display = 'none';
+            return;
+        }
         
-        // Create the equity chart
-        Plotly.newPlot(equityChartDiv, [equityData], equityLayout, {
-            displayModeBar: true,
-            responsive: true,
-            displaylogo: false,
-            modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d', 'toggleSpikelines']
-        });
+        if (positionInfo) positionInfo.style.display = 'block';
         
-        state.charts.equity = true;
+        // Set position type
+        const positionType = safeGetElement('position-type');
+        if (positionType) {
+            positionType.textContent = state.currentPosition.type;
+            positionType.className = state.currentPosition.type === 'LONG' ? 'positive' : 'negative';
+        }
         
-        // Update metrics
-        updateMetrics();
+        // Set entry price
+        const positionEntryPrice = safeGetElement('position-entry-price');
+        if (positionEntryPrice) {
+            positionEntryPrice.textContent = `$${state.currentPosition.entryPrice.toFixed(2)}`;
+        }
+        
+        // Set current price
+        const positionCurrentPrice = safeGetElement('position-current-price');
+        if (positionCurrentPrice) {
+            positionCurrentPrice.textContent = `$${state.currentPrice.toFixed(2)}`;
+        }
+        
+        // Calculate and set P&L
+        const unrealizedPnl = state.currentPosition.getUnrealizedPnl(state.currentPrice);
+        const unrealizedPnlPct = state.currentPosition.getUnrealizedPnlPct(state.currentPrice) * 100;
+        
+        const pnlElement = safeGetElement('position-pnl');
+        if (pnlElement) {
+            pnlElement.textContent = `${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)} (${unrealizedPnlPct >= 0 ? '+' : ''}${unrealizedPnlPct.toFixed(2)}%)`;
+            pnlElement.className = unrealizedPnl >= 0 ? 'positive' : 'negative';
+        }
+        
+        // Set risk levels
+        const positionTp = safeGetElement('position-tp');
+        if (positionTp) {
+            if (state.settings.takeProfit.enabled && state.botStats.positionDetails.takeProfitPrice) {
+                positionTp.textContent = `$${state.botStats.positionDetails.takeProfitPrice.toFixed(2)}`;
+            } else {
+                positionTp.textContent = 'Not Set';
+            }
+        }
+        
+        const positionSl = safeGetElement('position-sl');
+        if (positionSl) {
+            if (state.settings.stopLoss.enabled && state.botStats.positionDetails.stopLossPrice) {
+                positionSl.textContent = `$${state.botStats.positionDetails.stopLossPrice.toFixed(2)}`;
+            } else {
+                positionSl.textContent = 'Not Set';
+            }
+        }
     } catch (error) {
-        console.error('Error updating equity chart:', error);
-        addLogMessage('Error updating equity chart: ' + error.message, true);
+        console.error('Error updating position info:', error);
     }
 }
 
@@ -1045,162 +659,20 @@ function updatePositionRiskLevels() {
     state.botStats.positionDetails.entryTime = state.currentPosition.entryTime;
 }
 
-// Update position card
-function updatePositionCard() {
-    try {
-        if (!state.currentPosition) {
-            const positionCard = safeGetElement('position-card');
-            if (positionCard) positionCard.style.display = 'none';
-            return;
-        }
-        
-        const positionCard = safeGetElement('position-card');
-        if (positionCard) positionCard.style.display = 'block';
-        
-        // Set position type
-        const positionType = safeGetElement('position-type');
-        if (positionType) {
-            positionType.textContent = state.currentPosition.type;
-            positionType.className = 'metric-value ' + (state.currentPosition.type === 'LONG' ? 'positive' : 'negative');
-        }
-        
-        // Set entry price
-        const positionEntryPrice = safeGetElement('position-entry-price');
-        if (positionEntryPrice) {
-            positionEntryPrice.textContent = `$${state.currentPosition.entryPrice.toFixed(2)}`;
-        }
-        
-        // Set current price
-        const positionCurrentPrice = safeGetElement('position-current-price');
-        if (positionCurrentPrice) {
-            positionCurrentPrice.textContent = `$${state.currentPrice.toFixed(2)}`;
-        }
-        
-        // Calculate and set P&L
-        const unrealizedPnl = state.currentPosition.getUnrealizedPnl(state.currentPrice);
-        const unrealizedPnlPct = state.currentPosition.getUnrealizedPnlPct(state.currentPrice) * 100;
-        
-        const pnlElement = safeGetElement('position-pnl');
-        if (pnlElement) {
-            pnlElement.textContent = `${unrealizedPnl >= 0 ? '+' : ''}$${unrealizedPnl.toFixed(2)} (${unrealizedPnlPct >= 0 ? '+' : ''}${unrealizedPnlPct.toFixed(2)}%)`;
-            pnlElement.className = 'metric-value ' + (unrealizedPnl >= 0 ? 'positive' : 'negative');
-        }
-        
-        // Set entry time
-        const positionEntryTime = safeGetElement('position-entry-time');
-        if (positionEntryTime) {
-            positionEntryTime.textContent = state.currentPosition.entryTime.toLocaleTimeString();
-        }
-        
-        // Set position size
-        const positionSizeInfo = safeGetElement('position-size-info');
-        if (positionSizeInfo) {
-            positionSizeInfo.textContent = `${state.currentPosition.size.toFixed(6)} (≈$${(state.currentPosition.size * state.currentPosition.entryPrice).toFixed(2)})`;
-        }
-        
-        // Set risk levels
-        const positionTp = safeGetElement('position-tp');
-        if (positionTp) {
-            if (state.settings.takeProfit.enabled && state.botStats.positionDetails.takeProfitPrice) {
-                positionTp.textContent = `$${state.botStats.positionDetails.takeProfitPrice.toFixed(2)}`;
-            } else {
-                positionTp.textContent = 'Not Set';
-            }
-        }
-        
-        const positionSl = safeGetElement('position-sl');
-        if (positionSl) {
-            if (state.settings.stopLoss.enabled && state.botStats.positionDetails.stopLossPrice) {
-                positionSl.textContent = `$${state.botStats.positionDetails.stopLossPrice.toFixed(2)}`;
-            } else {
-                positionSl.textContent = 'Not Set';
-            }
-        }
-        
-        const positionTs = safeGetElement('position-ts');
-        if (positionTs) {
-            if (state.settings.trailingStop.enabled && state.botStats.positionDetails.trailingStopPrice) {
-                positionTs.textContent = `$${state.botStats.positionDetails.trailingStopPrice.toFixed(2)}`;
-            } else {
-                positionTs.textContent = 'Not Set';
-            }
-        }
-    } catch (error) {
-        console.error('Error updating position card:', error);
-    }
-}
-
-// Update trade history
-function updateTradeHistory() {
-    try {
-        const tradeTableBody = safeGetElement('trade-history-body');
-        if (!tradeTableBody) return;
-        
-        // Clear existing rows
-        tradeTableBody.innerHTML = '';
-        
-        if (state.trades.length === 0) {
-            const emptyTradeHistory = safeGetElement('empty-trade-history');
-            const tradeHistoryContainer = safeGetElement('trade-history-container');
-            
-            if (emptyTradeHistory) emptyTradeHistory.style.display = 'block';
-            if (tradeHistoryContainer) tradeHistoryContainer.style.display = 'none';
-            return;
-        }
-        
-        // Show trade history container, hide empty state
-        const emptyTradeHistory = safeGetElement('empty-trade-history');
-        const tradeHistoryContainer = safeGetElement('trade-history-container');
-        
-        if (emptyTradeHistory) emptyTradeHistory.style.display = 'none';
-        if (tradeHistoryContainer) tradeHistoryContainer.style.display = 'block';
-        
-        // Create rows for each trade (most recent first)
-        const sortedTrades = [...state.trades].reverse();
-        
-        sortedTrades.forEach(trade => {
-            const row = document.createElement('tr');
-            row.className = trade.type === 'LONG' ? 'trade-long' : 'trade-short';
-            
-            // Add trade data
-            row.innerHTML = `
-                <td>${trade.entryTime.toLocaleString()}</td>
-                <td>${trade.type}</td>
-                <td>$${trade.entryPrice.toFixed(2)}</td>
-                <td>$${trade.exitPrice ? trade.exitPrice.toFixed(2) : '-'}</td>
-                <td>${(trade.size * trade.entryPrice).toFixed(2)} USDT</td>
-                <td class="${trade.pnl >= 0 ? 'positive' : 'negative'}">${trade.pnl >= 0 ? '+' : ''}$${trade.pnl.toFixed(2)} (${(trade.pnlPct * 100).toFixed(2)}%)</td>
-            `;
-            
-            tradeTableBody.appendChild(row);
-        });
-    } catch (error) {
-        console.error('Error updating trade history:', error);
-    }
-}
-
 // Update metrics
 function updateMetrics() {
     try {
         // Only update if we have trades
         if (state.trades.length === 0) {
             const totalReturn = safeGetElement('total-return');
-            const totalReturnDelta = safeGetElement('total-return-delta');
             const winRate = safeGetElement('win-rate');
-            const winRateDelta = safeGetElement('win-rate-delta');
             const profitFactor = safeGetElement('profit-factor');
-            const profitFactorDelta = safeGetElement('profit-factor-delta');
             const maxDrawdown = safeGetElement('max-drawdown');
-            const maxDrawdownDelta = safeGetElement('max-drawdown-delta');
             
             if (totalReturn) totalReturn.textContent = '0.00%';
-            if (totalReturnDelta) totalReturnDelta.textContent = '$0.00';
             if (winRate) winRate.textContent = '0.0%';
-            if (winRateDelta) winRateDelta.textContent = '0 trades';
             if (profitFactor) profitFactor.textContent = '0.00';
-            if (profitFactorDelta) profitFactorDelta.textContent = 'Avg: $0.00';
             if (maxDrawdown) maxDrawdown.textContent = '0.00%';
-            if (maxDrawdownDelta) maxDrawdownDelta.textContent = 'Sharpe: 0.00';
             return;
         }
         
@@ -1210,12 +682,7 @@ function updateMetrics() {
         const totalReturn = safeGetElement('total-return');
         if (totalReturn) {
             totalReturn.textContent = `${totalReturnPct >= 0 ? '+' : ''}${totalReturnPct.toFixed(2)}%`;
-            totalReturn.className = 'metric-value ' + (totalReturnPct >= 0 ? 'positive' : 'negative');
-        }
-        
-        const totalReturnDelta = safeGetElement('total-return-delta');
-        if (totalReturnDelta) {
-            totalReturnDelta.textContent = `${totalReturnPct >= 0 ? '+' : ''}$${(state.currentCapital - state.initialCapital).toFixed(2)}`;
+            totalReturn.className = 'metric-mini-value ' + (totalReturnPct >= 0 ? 'positive' : 'negative');
         }
         
         // Calculate win rate
@@ -1227,25 +694,14 @@ function updateMetrics() {
             winRate.textContent = `${winRatePct.toFixed(1)}%`;
         }
         
-        const winRateDelta = safeGetElement('win-rate-delta');
-        if (winRateDelta) {
-            winRateDelta.textContent = `${winningTrades}/${state.trades.length} trades`;
-        }
-        
         // Calculate profit factor and average trade
         const grossProfit = state.trades.reduce((sum, t) => t.pnl > 0 ? sum + t.pnl : sum, 0);
         const grossLoss = Math.abs(state.trades.reduce((sum, t) => t.pnl < 0 ? sum + t.pnl : sum, 0));
         const profitFactorValue = grossLoss === 0 ? grossProfit : grossProfit / grossLoss;
-        const avgTrade = state.trades.reduce((sum, t) => sum + t.pnl, 0) / state.trades.length;
         
         const profitFactor = safeGetElement('profit-factor');
         if (profitFactor) {
             profitFactor.textContent = `${profitFactorValue.toFixed(2)}`;
-        }
-        
-        const profitFactorDelta = safeGetElement('profit-factor-delta');
-        if (profitFactorDelta) {
-            profitFactorDelta.textContent = `Avg: ${avgTrade >= 0 ? '+' : ''}$${avgTrade.toFixed(2)}`;
         }
         
         // Calculate max drawdown
@@ -1287,65 +743,19 @@ function updateMetrics() {
             maxDrawdown.textContent = `${maxDrawdownPct.toFixed(2)}%`;
         }
         
-        // Calculate simple Sharpe ratio (approximation for demo)
-        // Using average return / standard deviation of returns
-        const returns = [];
-        for (let i = 1; i < state.equityCurve.length; i++) {
-            const prevValue = state.equityCurve[i-1].value;
-            const currentValue = state.equityCurve[i].value;
-            returns.push((currentValue - prevValue) / prevValue);
-        }
-        
-        let sharpeRatio = 0;
-        if (returns.length > 0) {
-            const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-            const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
-            const stdDev = Math.sqrt(variance);
-            sharpeRatio = stdDev === 0 ? 0 : (avgReturn / stdDev) * Math.sqrt(252); // Annualized
-        }
-        
-        const maxDrawdownDelta = safeGetElement('max-drawdown-delta');
-        if (maxDrawdownDelta) {
-            maxDrawdownDelta.textContent = `Sharpe: ${sharpeRatio.toFixed(2)}`;
-        }
-        
         // Update state metrics
         state.metrics = {
             totalReturn: totalReturnPct,
             winRate: winRatePct,
             profitFactor: profitFactorValue,
             maxDrawdown: maxDrawdownPct,
-            sharpeRatio,
             totalTrades: state.trades.length,
-            avgTrade,
+            avgTrade: state.trades.reduce((sum, t) => sum + t.pnl, 0) / state.trades.length,
             maxWin: Math.max(...state.trades.map(t => t.pnl)),
             maxLoss: Math.min(...state.trades.map(t => t.pnl))
         };
     } catch (error) {
         console.error('Error updating metrics:', error);
-    }
-}
-
-// Update market data display
-function updateMarketData() {
-    try {
-        const marketPrice = safeGetElement('market-price');
-        if (marketPrice) {
-            marketPrice.textContent = `$${state.botStats.marketData.price.toFixed(2)}`;
-        }
-        
-        const marketChange = safeGetElement('market-change');
-        if (marketChange && state.botStats.marketData.change24h !== 0) {
-            marketChange.textContent = `${state.botStats.marketData.change24h >= 0 ? '+' : ''}${state.botStats.marketData.change24h.toFixed(2)}%`;
-            marketChange.className = state.botStats.marketData.change24h >= 0 ? 'market-value up' : 'market-value down';
-        }
-        
-        const marketVolume = safeGetElement('market-volume');
-        if (marketVolume && state.botStats.marketData.volume > 0) {
-            marketVolume.textContent = `$${(state.botStats.marketData.volume / 1000000).toFixed(1)}M`;
-        }
-    } catch (error) {
-        console.error('Error updating market data:', error);
     }
 }
 
@@ -1362,57 +772,8 @@ function updateTradingStats() {
             dailyPnl.textContent = `${state.botStats.dailyPnL >= 0 ? '+' : ''}$${state.botStats.dailyPnL.toFixed(2)}`;
             dailyPnl.className = state.botStats.dailyPnL >= 0 ? 'positive' : 'negative';
         }
-        
-        // Update fee display
-        const statFeeRate = safeGetElement('stat-fee-rate');
-        if (statFeeRate) {
-            statFeeRate.textContent = `${state.feeSettings.makerFee.toFixed(2)}% / ${state.feeSettings.takerFee.toFixed(2)}%`;
-        }
     } catch (error) {
         console.error('Error updating trading stats:', error);
-    }
-}
-
-// Toggle between TradingView and Plotly charts
-function toggleChartType() {
-    const tradingViewContainer = safeGetElement('tradingview-chart');
-    const plotlyChart = safeGetElement('priceChart');
-    const toggleChartBtn = safeGetElement('toggle-chart-btn');
-    
-    if (!tradingViewContainer || !plotlyChart) return;
-    
-    if (state.usingTradingView) {
-        // Switch to Plotly
-        tradingViewContainer.style.display = 'none';
-        plotlyChart.style.display = 'block';
-        state.usingTradingView = false;
-        
-        if (toggleChartBtn) {
-            toggleChartBtn.textContent = 'Switch to TradingView';
-        }
-        
-        // Update Plotly chart
-        updatePriceChart(true);
-    } else {
-        // Check if TradingView library is available
-        if (typeof TradingView === 'undefined') {
-            addLogMessage('TradingView not available', true);
-            return;
-        }
-        
-        // Switch to TradingView
-        plotlyChart.style.display = 'none';
-        tradingViewContainer.style.display = 'block';
-        state.usingTradingView = true;
-        
-        if (toggleChartBtn) {
-            toggleChartBtn.textContent = 'Switch to Basic Chart';
-        }
-        
-        // Initialize TradingView if not already done
-        if (!document.querySelector('#tradingview-chart iframe')) {
-            initTradingViewWidget();
-        }
     }
 }
 
@@ -1447,7 +808,7 @@ function saveSettings() {
         // Update position risk levels if we have an active position
         if (state.currentPosition) {
             updatePositionRiskLevels();
-            updatePositionCard();
+            updatePositionInfo();
         }
         
         // Save settings to localStorage
@@ -1462,9 +823,6 @@ function saveSettings() {
         if (takeProfitValue) takeProfitValue.disabled = !state.settings.takeProfit.enabled;
         if (stopLossValue) stopLossValue.disabled = !state.settings.stopLoss.enabled;
         
-        // Sync settings between paper and live trading modes
-        syncTradingModeSettings();
-        
         // Show confirmation
         addLogMessage('Risk management settings saved successfully');
         showStatusIndicator('Settings saved', 'success');
@@ -1475,54 +833,6 @@ function saveSettings() {
     }
 }
 
-// Save chart settings
-function saveChartSettings() {
-    try {
-        const visibleCandlesInput = safeGetElement('visible-candles');
-        const chartUpdateFrequencyInput = safeGetElement('chart-update-frequency');
-        const showSignalsToggle = safeGetElement('show-signals');
-        const showTradesToggle = safeGetElement('show-trades');
-        
-        // Update settings
-        if (visibleCandlesInput) state.settings.visibleCandles = parseInt(visibleCandlesInput.value);
-        if (chartUpdateFrequencyInput) {
-            state.settings.chartUpdateFrequency = parseInt(chartUpdateFrequencyInput.value) * 1000;
-            
-            // If we're trading, update the polling interval
-            if (state.isTrading && state.interval) {
-                clearInterval(state.interval);
-                const pollingFunction = state.liveTrading.enabled ? pollForLiveData : pollForNewData;
-                state.interval = setInterval(pollingFunction, state.settings.chartUpdateFrequency);
-            }
-        }
-        if (showSignalsToggle) state.settings.showSignals = showSignalsToggle.checked;
-        if (showTradesToggle) state.settings.showTrades = showTradesToggle.checked;
-        
-        // Update chart
-        if (!state.usingTradingView) {
-            updatePriceChart(true);
-        }
-        
-        // Save settings to localStorage
-        const settingsToSave = {
-            settings: state.settings
-        };
-        
-        localStorage.setItem('voltyBotSettings', JSON.stringify(settingsToSave));
-        
-        // Close modal
-        const chartSettingsModal = safeGetElement('chartSettingsModal');
-        if (chartSettingsModal) chartSettingsModal.style.display = 'none';
-        
-        // Show confirmation
-        showStatusIndicator('Chart settings saved', 'success');
-    } catch (error) {
-        console.error('Error saving chart settings:', error);
-        addLogMessage('Error saving chart settings: ' + error.message, true);
-    }
-}
-
-// Send alert through configured channels
 // Send alert through configured channels
 function sendAlert(title, message, type = 'info') {
     // Log message
@@ -1557,40 +867,6 @@ function sendAlert(title, message, type = 'info') {
     if (state.alerts.sound.enabled) {
         notificationSound.volume = state.alerts.sound.volume;
         notificationSound.play().catch(e => console.error('Error playing notification sound:', e));
-    }
-    
-    // Discord webhook
-    if (state.alerts.discord.enabled && state.alerts.discord.webhook) {
-        try {
-            fetch(state.alerts.discord.webhook, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    content: `**${title}**\n${message}`,
-                    username: 'Volty Trading Bot'
-                })
-            }).catch(error => {
-                console.error('Error sending Discord alert:', error);
-            });
-        } catch (error) {
-            console.error('Error sending Discord alert:', error);
-        }
-    }
-    
-    // Telegram alerts
-    if (state.alerts.telegram.enabled && state.alerts.telegram.botToken && state.alerts.telegram.chatId) {
-        try {
-            const telegramText = `*${title}*\n${message}`;
-            const url = `https://api.telegram.org/bot${state.alerts.telegram.botToken}/sendMessage?chat_id=${state.alerts.telegram.chatId}&text=${encodeURIComponent(telegramText)}&parse_mode=Markdown`;
-            
-            fetch(url).catch(error => {
-                console.error('Error sending Telegram alert:', error);
-            });
-        } catch (error) {
-            console.error('Error sending Telegram alert:', error);
-        }
     }
 }
 
@@ -1654,239 +930,6 @@ function loadSettingsFromLocalStorage() {
     }
 }
 
-// Sync settings between paper and live trading modes
-function syncTradingModeSettings() {
-    try {
-        // Paper trading to live trading
-        const atrLengthSlider = safeGetElement('atr-length');
-        const atrMultSlider = safeGetElement('atr-mult');
-        const symbolSelect = safeGetElement('symbol');
-        const timeframeSelect = safeGetElement('timeframe');
-        
-        const liveAtrLengthSlider = safeGetElement('live-atr-length');
-        const liveAtrLengthValue = safeGetElement('live-atr-length-value');
-        const liveAtrMultSlider = safeGetElement('live-atr-mult');
-        const liveAtrMultValue = safeGetElement('live-atr-mult-value');
-        const liveSymbolSelect = safeGetElement('live-symbol');
-        const liveTimeframeSelect = safeGetElement('live-timeframe');
-        
-        if (atrLengthSlider && liveAtrLengthSlider && liveAtrLengthValue) {
-            liveAtrLengthSlider.value = atrLengthSlider.value;
-            liveAtrLengthValue.textContent = atrLengthSlider.value;
-        }
-        
-        if (atrMultSlider && liveAtrMultSlider && liveAtrMultValue) {
-            liveAtrMultSlider.value = atrMultSlider.value;
-            liveAtrMultValue.textContent = atrMultSlider.value;
-        }
-        
-        if (symbolSelect && liveSymbolSelect) {
-            liveSymbolSelect.value = symbolSelect.value;
-        }
-        
-        if (timeframeSelect && liveTimeframeSelect) {
-            liveTimeframeSelect.value = timeframeSelect.value;
-        }
-    } catch (error) {
-        console.error('Error syncing trading mode settings:', error);
-    }
-}
-
-// Save API configuration
-function saveAPIConfig() {
-    const apiKeyInput = safeGetElement('api-key');
-    const apiSecretInput = safeGetElement('api-secret');
-    const testnetToggle = safeGetElement('testnet-toggle');
-    
-    // Validate
-    if (!apiKeyInput || apiKeyInput.value.trim() === '') {
-        addLogMessage('API key is required', true);
-        return;
-    }
-    
-    const apiKey = apiKeyInput.value.trim();
-    const apiSecret = apiSecretInput ? apiSecretInput.value.trim() : '';
-    const useTestnet = testnetToggle ? testnetToggle.checked : true;
-    
-    // Don't update secret if it's masked (unchanged)
-    if (apiSecret !== '********' && apiSecret !== '') {
-        state.liveTrading.apiSecret = apiSecret;
-    }
-    
-    state.liveTrading.apiKey = apiKey;
-    state.liveTrading.useTestnet = useTestnet;
-    
-    // Update testnet toggle in UI
-    const useTestnetToggle = safeGetElement('use-testnet-toggle');
-    if (useTestnetToggle) {
-        useTestnetToggle.checked = useTestnet;
-    }
-    
-    // Save to localStorage
-    try {
-        const apiConfig = {
-            apiKey: apiKey,
-            useTestnet: useTestnet
-        };
-        
-        // Only save apiSecret if it's been changed (not masked)
-        if (apiSecret !== '********' && apiSecret !== '') {
-            apiConfig.apiSecret = apiSecret;
-        }
-        
-        localStorage.setItem('voltyBotAPIConfig', JSON.stringify(apiConfig));
-        
-        addLogMessage('API configuration saved successfully');
-        showStatusIndicator('API configuration saved', 'success');
-    } catch (error) {
-        console.error('Error saving API config:', error);
-        addLogMessage('Error saving API configuration: ' + error.message, true);
-    }
-    
-    // Close modal
-    const apiConfigModal = safeGetElement('apiConfigModal');
-    if (apiConfigModal) apiConfigModal.style.display = 'none';
-}
-
-// Initialize charts
-function initCharts() {
-    try {
-        // Initialize price chart
-        const priceChartDiv = safeGetElement('priceChart');
-        if (!priceChartDiv) {
-            throw new Error('Price chart element not found');
-        }
-        
-        // Create fresh candlestick trace
-        const candleTrace = {
-            x: state.priceData.map(d => d.datetime),
-            open: state.priceData.map(d => d.open),
-            high: state.priceData.map(d => d.high),
-            low: state.priceData.map(d => d.low),
-            close: state.priceData.map(d => d.close),
-            type: 'candlestick',
-            name: 'Price',
-            increasing: {
-                line: { color: OHLC_COLORS.up },
-                fillcolor: OHLC_COLORS.upFill
-            },
-            decreasing: {
-                line: { color: OHLC_COLORS.down },
-                fillcolor: OHLC_COLORS.downFill
-            }
-        };
-        
-        // Create volume trace
-        const volumeColors = state.priceData.map(d => d.close > d.open ? OHLC_COLORS.volume.up : OHLC_COLORS.volume.down);
-        const volumeTrace = {
-            x: state.priceData.map(d => d.datetime),
-            y: state.priceData.map(d => d.volume),
-            type: 'bar',
-            name: 'Volume',
-            yaxis: 'y2',
-            marker: {
-                color: volumeColors
-            },
-            opacity: 0.5
-        };
-        
-        // Create traces array
-        const dataTraces = [candleTrace, volumeTrace];
-        
-        // Set up layout
-        const layout = {
-            title: `${state.symbol} ${state.timeframe} Chart`,
-            dragmode: 'zoom',
-            margin: { l: 50, r: 50, b: 50, t: 50, pad: 4 },
-            grid: { rows: 2, columns: 1, pattern: 'independent', roworder: 'bottom to top' },
-            xaxis: {
-                rangeslider: { visible: false },
-                type: 'date',
-                showgrid: false
-            },
-            yaxis: {
-                autorange: true,
-                domain: [0.2, 1],
-                type: 'linear',
-                gridcolor: 'rgba(255,255,255,0.1)'
-            },
-            yaxis2: {
-                domain: [0, 0.1],
-                gridcolor: 'rgba(255,255,255,0.1)'
-            },
-            plot_bgcolor: 'rgba(0, 0, 0, 0)',
-            paper_bgcolor: 'rgba(0, 0, 0, 0)',
-            font: {
-                color: '#d1d5db'
-            },
-            showlegend: false
-        };
-        
-        // Create the chart
-        Plotly.newPlot(priceChartDiv, dataTraces, layout, {
-            displayModeBar: true,
-            responsive: true,
-            displaylogo: false,
-            modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d', 'toggleSpikelines']
-        });
-        
-        state.charts.price = true;
-
-        // Initialize equity chart
-        const equityChartDiv = safeGetElement('equityChart');
-        if (!equityChartDiv) {
-            throw new Error('Equity chart element not found');
-        }
-
-        const equityData = {
-            x: state.equityCurve.map(d => d.time),
-            y: state.equityCurve.map(d => d.value),
-            type: 'scatter',
-            mode: 'lines',
-            name: 'Equity',
-            line: {
-                color: '#4f46e5',
-                width: 2
-            },
-            fill: 'tozeroy',
-            fillcolor: 'rgba(79, 70, 229, 0.1)'
-        };
-
-        const equityLayout = {
-            title: 'Equity Curve',
-            margin: { l: 50, r: 50, b: 50, t: 50, pad: 4 },
-            xaxis: {
-                type: 'date',
-                showgrid: false
-            },
-            yaxis: {
-                autorange: true,
-                type: 'linear',
-                gridcolor: 'rgba(255,255,255,0.1)'
-            },
-            plot_bgcolor: 'rgba(0, 0, 0, 0)',
-            paper_bgcolor: 'rgba(0, 0, 0, 0)',
-            font: {
-                color: '#d1d5db'
-            },
-            showlegend: false,
-            height: 300
-        };
-
-        Plotly.newPlot(equityChartDiv, [equityData], equityLayout, {
-            displayModeBar: true,
-            responsive: true,
-            displaylogo: false,
-            modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d', 'toggleSpikelines']
-        });
-
-        state.charts.equity = true;
-
-    } catch (error) {
-        console.error('Error initializing charts:', error);
-        addLogMessage('Error initializing charts: ' + error.message, true);
-    }
-}
 // Show loading indicator
 function showLoading() {
     const loadingIndicator = safeGetElement('loadingIndicator');
@@ -1895,7 +938,6 @@ function showLoading() {
     }
 }
 
-
 // Hide loading indicator
 function hideLoading() {
     const loadingIndicator = safeGetElement('loadingIndicator');
@@ -1903,11 +945,6 @@ function hideLoading() {
         loadingIndicator.style.display = 'none';
     }
 }
-
-// Initialize the app when DOM is loaded
-document.addEventListener('DOMContentLoaded', initApp);
-
-// Last modification: 2025-06-09 18:13:23 UTC by gelimorto2
 
 // Show status indicator
 function showStatusIndicator(message, type = 'info') {
@@ -2020,8 +1057,6 @@ function disableFormInputs(disabled) {
             'take-profit-toggle', 'take-profit-value',
             'stop-loss-toggle', 'stop-loss-value',
             'auto-trade-toggle',
-            'live-symbol', 'live-timeframe',
-            'live-atr-length', 'live-atr-mult', 'live-position-size',
             'use-testnet-toggle'
         ];
         
@@ -2152,15 +1187,9 @@ function stopTrading() {
     if (state.liveTrading.enabled) {
         const startLiveTradingBtn = safeGetElement('start-live-trading-btn');
         const stopLiveTradingBtn = safeGetElement('stop-live-trading-btn');
-        const longPositionBtn = safeGetElement('long-position-btn');
-        const shortPositionBtn = safeGetElement('short-position-btn');
-        const closePositionsBtn = safeGetElement('close-positions-btn');
         
         if (startLiveTradingBtn) startLiveTradingBtn.disabled = false;
         if (stopLiveTradingBtn) stopLiveTradingBtn.disabled = true;
-        if (longPositionBtn) longPositionBtn.disabled = true;
-        if (shortPositionBtn) shortPositionBtn.disabled = true;
-        if (closePositionsBtn) closePositionsBtn.disabled = true;
     } else {
         const startTradingBtn = safeGetElement('start-trading-btn');
         const stopTradingBtn = safeGetElement('stop-trading-btn');
@@ -2232,9 +1261,6 @@ function resetTrading() {
                 const lastCandle = data[data.length - 1];
                 state.currentPrice = lastCandle.close;
                 state.botStats.marketData.price = lastCandle.close;
-                
-                // Update market data display
-                updateMarketData();
             }
             
             // Generate signals
@@ -2242,24 +1268,13 @@ function resetTrading() {
             state.indicators = strategy.generateSignals(state.priceData);
             
             // Update UI
-            updatePriceChart(true);
-            updateEquityChart();
             updateMetrics();
-            updateTradeHistory();
-            updatePositionCard();
+            updatePositionInfo();
             updateTradingStats();
             
-            // Hide position card
-            const positionCard = safeGetElement('position-card');
-            if (positionCard) positionCard.style.display = 'none';
-            
-            // Show empty trade history, hide trade history container
-            const emptyTradeHistory = safeGetElement('empty-trade-history');
-            const tradeHistoryContainer = safeGetElement('trade-history-container');
-            if (emptyTradeHistory && tradeHistoryContainer) {
-                emptyTradeHistory.style.display = 'block';
-                tradeHistoryContainer.style.display = 'none';
-            }
+            // Hide position info
+            const positionInfo = safeGetElement('position-info');
+            if (positionInfo) positionInfo.style.display = 'none';
             
             // Update bot status
             updateBotStatus('idle', 'System reset complete - Ready to start trading');
@@ -2304,20 +1319,9 @@ async function pollForNewData() {
         const lastDataTimestamp = state.priceData[state.priceData.length - 1].datetime.getTime();
         const latestCandleTimestamp = latestCandle.datetime.getTime();
         
-        // Update market data
-        state.botStats.marketData.price = latestCandle.close;
-        updateMarketData();
-        
-        // Update position card if we have an active position
+        // Update position info if we have an active position
         if (state.currentPosition) {
-            updatePositionCard();
-        }
-        
-        // Update last tick info
-        const lastTickInfo = safeGetElement('last-tick-info');
-        if (lastTickInfo) {
-            lastTickInfo.textContent = 
-                `Last check: ${state.botStats.lastCheck.toLocaleTimeString()} | Execution: ${state.botStats.executionTime}ms`;
+            updatePositionInfo();
         }
         
         // Check if this is a new candle
@@ -2328,11 +1332,6 @@ async function pollForNewData() {
             // Generate signals
             const strategy = new VoltyStrategy(state.atrLength, state.atrMultiplier);
             state.indicators = strategy.generateSignals(state.priceData);
-            
-            // Update the chart
-            if (!state.usingTradingView) {
-                updatePriceChart(true);
-            }
             
             // Get the latest signal
             const signal = strategy.getLatestSignal(state.priceData, state.indicators);
@@ -2352,9 +1351,9 @@ async function pollForNewData() {
             }
         }
         
-        // Update position card again after potential trades
+        // Update position info again after potential trades
         if (state.currentPosition) {
-            updatePositionCard();
+            updatePositionInfo();
         }
         
         // Check take profit and stop loss
@@ -2424,22 +1423,9 @@ function openPosition(type, candle) {
     updatePositionRiskLevels();
     
     // Update UI
-    updatePositionCard();
-    const positionCard = safeGetElement('position-card');
-    if (positionCard) positionCard.style.display = 'block';
-    
-    const closePositionsBtn = safeGetElement('close-positions-btn');
-    if (closePositionsBtn && state.liveTrading.enabled) {
-        closePositionsBtn.disabled = false;
-    }
-    
-    // Show/hide empty trade history message
-    const emptyTradeHistory = safeGetElement('empty-trade-history');
-    const tradeHistoryContainer = safeGetElement('trade-history-container');
-    if (emptyTradeHistory && tradeHistoryContainer) {
-        emptyTradeHistory.style.display = 'none';
-        tradeHistoryContainer.style.display = 'block';
-    }
+    updatePositionInfo();
+    const positionInfo = safeGetElement('position-info');
+    if (positionInfo) positionInfo.style.display = 'block';
     
     // Send alert
     sendAlert(
@@ -2501,17 +1487,13 @@ function closeCurrentPosition(reason) {
     state.currentPosition = null;
     
     // Update UI
-    updatePositionCard();
-    const positionCard = safeGetElement('position-card');
-    if (positionCard) positionCard.style.display = 'none';
+    updatePositionInfo();
+    const positionInfo = safeGetElement('position-info');
+    if (positionInfo) positionInfo.style.display = 'none';
     
-    const closePositionsBtn = safeGetElement('close-positions-btn');
-    if (closePositionsBtn) closePositionsBtn.disabled = true;
-    
-    // Update metrics and charts
+    // Update metrics
     updateMetrics();
-    updateEquityChart();
-    updateTradeHistory();
+    updateTradingStats();
 }
 
 // Check position exit conditions
@@ -2556,32 +1538,13 @@ function checkPositionExitConditions() {
         if (positionType === 'LONG' && currentPrice > state.botStats.positionDetails.trailingStopPrice + (entryPrice * state.settings.trailingStop.percentage / 100)) {
             // New trailing stop level = current price - trailing stop distance
             state.botStats.positionDetails.trailingStopPrice = currentPrice - (entryPrice * state.settings.trailingStop.percentage / 100);
-            updatePositionCard();
+            updatePositionInfo();
         } else if (positionType === 'SHORT' && currentPrice < state.botStats.positionDetails.trailingStopPrice - (entryPrice * state.settings.trailingStop.percentage / 100)) {
             // New trailing stop level = current price + trailing stop distance
             state.botStats.positionDetails.trailingStopPrice = currentPrice + (entryPrice * state.settings.trailingStop.percentage / 100);
-            updatePositionCard();
+            updatePositionInfo();
         }
     }
-}
-
-// Open manual position (from UI)
-function openManualPosition(type) {
-    if (!state.isTrading) {
-        addLogMessage('Cannot open position: Trading is not active', true);
-        return;
-    }
-    
-    if (state.currentPosition) {
-        addLogMessage('Cannot open position: Already have an active position', true);
-        return;
-    }
-    
-    // Get current candle
-    const currentCandle = state.priceData[state.priceData.length - 1];
-    
-    // Open position
-    openPosition(type, currentCandle);
 }
 
 // Switch trading mode
@@ -2594,8 +1557,6 @@ function switchToTradingMode(mode) {
     // Get UI elements
     const paperTradingBtn = safeGetElement('paper-trading-btn');
     const liveTradingBtn = safeGetElement('live-trading-btn');
-    const paperTradingSettings = safeGetElement('paper-trading-settings');
-    const liveTradingSettings = safeGetElement('live-trading-settings');
     const paperTradingButtons = safeGetElement('paper-trading-buttons');
     const liveTradingButtons = safeGetElement('live-trading-buttons');
     const practiceIndicator = safeGetElement('practice-mode-indicator');
@@ -2609,10 +1570,7 @@ function switchToTradingMode(mode) {
         if (paperTradingBtn) paperTradingBtn.classList.add('active');
         if (liveTradingBtn) liveTradingBtn.classList.remove('active');
         
-        if (paperTradingSettings) paperTradingSettings.style.display = 'block';
-        if (liveTradingSettings) liveTradingSettings.style.display = 'none';
-        
-        if (paperTradingButtons) paperTradingButtons.style.display = 'block';
+        if (paperTradingButtons) paperTradingButtons.style.display = 'flex';
         if (liveTradingButtons) liveTradingButtons.style.display = 'none';
         
         if (practiceIndicator) practiceIndicator.style.display = 'flex';
@@ -2627,11 +1585,8 @@ function switchToTradingMode(mode) {
         if (liveTradingBtn) liveTradingBtn.classList.add('active');
         if (paperTradingBtn) paperTradingBtn.classList.remove('active');
         
-        if (paperTradingSettings) paperTradingSettings.style.display = 'none';
-        if (liveTradingSettings) liveTradingSettings.style.display = 'block';
-        
         if (paperTradingButtons) paperTradingButtons.style.display = 'none';
-        if (liveTradingButtons) liveTradingButtons.style.display = 'block';
+        if (liveTradingButtons) liveTradingButtons.style.display = 'flex';
         
         if (practiceIndicator) practiceIndicator.style.display = 'none';
         if (liveIndicator) liveIndicator.style.display = 'flex';
@@ -2640,176 +1595,8 @@ function switchToTradingMode(mode) {
     }
 }
 
-// Start live trading
-function startLiveTrading() {
-    if (state.isTrading) return;
-    
-    // Check if API is configured
-    if (!state.liveTrading.apiKey || !state.liveTrading.apiSecret) {
-        addLogMessage('API key and secret required for live trading', true);
-        showAPIConfigModal();
-        return;
-    }
-    
-    // Check that we have price data
-    if (state.priceData.length === 0) {
-        addLogMessage('Cannot start trading: No price data available', true);
-        return;
-    }
-    
-    // Show confirmation modal
-    const liveTradingModal = safeGetElement('liveTradingConfirmModal');
-    if (liveTradingModal) {
-        liveTradingModal.style.display = 'block';
-    }
-}
-
-// Start actual live trading after confirmation
-function startActualLiveTrading() {
-    // Disable form inputs
-    disableFormInputs(true);
-    
-    // Update buttons
-    const startLiveTradingBtn = safeGetElement('start-live-trading-btn');
-    const stopLiveTradingBtn = safeGetElement('stop-live-trading-btn');
-    const longPositionBtn = safeGetElement('long-position-btn');
-    const shortPositionBtn = safeGetElement('short-position-btn');
-    const closePositionsBtn = safeGetElement('close-positions-btn');
-    const emergencyStopBtn = safeGetElement('emergency-stop-btn');
-    
-    if (startLiveTradingBtn) startLiveTradingBtn.disabled = true;
-    if (stopLiveTradingBtn) stopLiveTradingBtn.disabled = false;
-    if (longPositionBtn) longPositionBtn.disabled = false;
-    if (shortPositionBtn) shortPositionBtn.disabled = false;
-    if (closePositionsBtn) closePositionsBtn.disabled = true;
-    if (emergencyStopBtn) emergencyStopBtn.disabled = false;
-    
-    // Start polling for live data
-    state.interval = setInterval(pollForLiveData, state.settings.chartUpdateFrequency);
-    
-    // Update state
-    state.isTrading = true;
-    state.liveTrading.enabled = true;
-    
-    // Update mode indicators
-    const practiceIndicator = safeGetElement('practice-mode-indicator');
-    const liveIndicator = safeGetElement('live-mode-indicator');
-    
-    if (practiceIndicator) practiceIndicator.style.display = 'none';
-    if (liveIndicator) liveIndicator.style.display = 'flex';
-    
-    // Update bot status
-    updateBotStatus('live', 'LIVE trading active - Monitoring market');
-    updateBotActivity('scanning');
-    
-    addLogMessage(`Started LIVE trading for ${state.symbol} on ${state.liveTrading.useTestnet ? 'TESTNET' : 'MAINNET'}`);
-    sendAlert('Live Trading Started', 'Bot has started live trading in ' + (state.liveTrading.useTestnet ? 'testnet' : 'mainnet') + ' mode. Please monitor carefully.', 'warning');
-}
-
-// Poll for live data (similar to paper trading but using live API)
-async function pollForLiveData() {
-    try {
-        // Update last check time
-        state.botStats.lastCheck = new Date();
-        
-        // Measure execution time
-        const startTime = performance.now();
-        
-        // Update bot activity status
-        updateBotActivity('scanning');
-        
-        // Update bot status
-        updateBotStatus('live', 'Fetching latest market data...');
-        
-        // Fetch latest candle
-        const latestCandle = await fetchLatestCandle(state.symbol, state.timeframe);
-        if (!latestCandle) throw new Error('Failed to fetch latest candle');
-        
-        // Update current price
-        state.currentPrice = latestCandle.close;
-        
-        // Check if we need to update our data
-        const lastDataTimestamp = state.priceData[state.priceData.length - 1].datetime.getTime();
-        const latestCandleTimestamp = latestCandle.datetime.getTime();
-        
-        // Update market data
-        state.botStats.marketData.price = latestCandle.close;
-        updateMarketData();
-        
-        // Update position card if we have an active position
-        if (state.currentPosition) {
-            updatePositionCard();
-        }
-        
-        // Update last tick info
-        const lastTickInfo = safeGetElement('last-tick-info');
-        if (lastTickInfo) {
-            lastTickInfo.textContent = 
-                `Last check: ${state.botStats.lastCheck.toLocaleTimeString()} | Execution: ${state.botStats.executionTime}ms`;
-        }
-        
-        // Check if this is a new candle
-        if (latestCandleTimestamp > lastDataTimestamp) {
-            // Add the new candle to our data
-            state.priceData.push(latestCandle);
-            
-            // Generate signals
-            const strategy = new VoltyStrategy(state.atrLength, state.atrMultiplier);
-            state.indicators = strategy.generateSignals(state.priceData);
-            
-            // Update the chart
-            if (!state.usingTradingView) {
-                updatePriceChart(true);
-            }
-            
-            // Get the latest signal
-            const signal = strategy.getLatestSignal(state.priceData, state.indicators);
-            
-            // Update bot status
-            updateBotActivity('trading');
-            updateBotStatus('live', `New candle detected - Signal: ${signal || 'neutral'}`);
-            
-            // In auto-trade mode, we process signals automatically
-            if (signal && (signal === 'LONG' || signal === 'SHORT') && state.settings.autoTrade) {
-                processTradeSignal(signal, latestCandle);
-            } else {
-                // Just notify about the signal
-                if (signal) {
-                    const message = `${signal} signal detected at $${latestCandle.close.toFixed(2)}`;
-                    addLogMessage(message);
-                    sendAlert('Trading Signal', message, 'info');
-                }
-            }
-        }
-        
-        // Check position exit conditions
-        if (state.currentPosition) {
-            checkPositionExitConditions();
-        }
-        
-        // Calculate execution time
-        const endTime = performance.now();
-        state.botStats.executionTime = Math.round(endTime - startTime);
-        
-        // Update trading stats
-        updateTradingStats();
-        
-        // Reset bot activity to waiting
-        setTimeout(() => {
-            updateBotActivity('waiting');
-            updateBotStatus('live', 'LIVE trading active - Waiting for next check');
-        }, 1000);
-    } catch (error) {
-        console.error('Error polling for live data:', error);
-        addLogMessage('Error fetching data: ' + error.message, true);
-        
-        // Update bot status
-        updateBotStatus('live', 'Error fetching data - Will retry next cycle');
-        updateBotActivity('waiting');
-    }
-}
-
-function emergencyStopBtn() {
+// Emergency stop function
+function emergencyStop() {
     // Display confirmation modal
     const confirmed = confirm("⚠️ EMERGENCY STOP: This will immediately cancel all orders and close all open positions. Continue?");
     
@@ -2842,53 +1629,35 @@ function emergencyStopBtn() {
         // Set trading state to stopped
         state.isTrading = false;
 
-        // Logic for live trading mode
-        if (state.liveTrading.enabled) {
-            if (state.currentPosition) {
-                closeCurrentPosition('Emergency Stop');
-            }
-
-            // Update UI
-            const startLiveTradingBtn = safeGetElement('start-live-trading-btn');
-            const stopLiveTradingBtn = safeGetElement('stop-live-trading-btn');
-            const emergencyStopBtn = safeGetElement('emergency-stop-btn');
-            const longPositionBtn = safeGetElement('long-position-btn');
-            const shortPositionBtn = safeGetElement('short-position-btn');
-            const closePositionsBtn = safeGetElement('close-positions-btn');
-
-            if (startLiveTradingBtn) startLiveTradingBtn.disabled = false;
-            if (stopLiveTradingBtn) stopLiveTradingBtn.disabled = true;
-            if (emergencyStopBtn) emergencyStopBtn.disabled = false;
-            if (longPositionBtn) longPositionBtn.disabled = true;
-            if (shortPositionBtn) shortPositionBtn.disabled = true;
-            if (closePositionsBtn) closePositionsBtn.disabled = true;
-
-            disableFormInputs(false);
-
-            sendAlert('Emergency Stop Executed', 'All positions have been closed.', 'error');
-            updateBotStatus('idle', 'Emergency stop completed - System halted');
-            updateBotActivity('waiting');
-        } else {
-            // Logic for paper trading mode
-            if (state.currentPosition) {
-                closeCurrentPosition('Emergency Stop');
-            }
-
-            // Update UI
-            const startTradingBtn = safeGetElement('start-trading-btn');
-            const stopTradingBtn = safeGetElement('stop-trading-btn');
-            const resetTradingBtn = safeGetElement('reset-trading-btn');
-
-            if (startTradingBtn) startTradingBtn.disabled = false;
-            if (stopTradingBtn) stopTradingBtn.disabled = true;
-            if (resetTradingBtn) resetTradingBtn.disabled = false;
-
-            disableFormInputs(false);
-
-            sendAlert('Emergency Stop Executed', 'Paper trading halted. All positions closed.', 'error');
-            updateBotStatus('idle', 'Emergency stop completed - System halted');
-            updateBotActivity('waiting');
+        // Close any open positions
+        if (state.currentPosition) {
+            closeCurrentPosition('Emergency Stop');
         }
+
+        // Update UI buttons
+        const startTradingBtn = safeGetElement('start-trading-btn');
+        const stopTradingBtn = safeGetElement('stop-trading-btn');
+        const resetTradingBtn = safeGetElement('reset-trading-btn');
+        const startLiveTradingBtn = safeGetElement('start-live-trading-btn');
+        const stopLiveTradingBtn = safeGetElement('stop-live-trading-btn');
+        const emergencyStopBtn = safeGetElement('emergency-stop-btn');
+
+        if (startTradingBtn) startTradingBtn.disabled = false;
+        if (stopTradingBtn) stopTradingBtn.disabled = true;
+        if (resetTradingBtn) resetTradingBtn.disabled = false;
+        if (startLiveTradingBtn) startLiveTradingBtn.disabled = false;
+        if (stopLiveTradingBtn) stopLiveTradingBtn.disabled = true;
+        if (emergencyStopBtn) emergencyStopBtn.disabled = false;
+
+        // Enable form inputs
+        disableFormInputs(false);
+
+        sendAlert('Emergency Stop Executed', 'All positions have been closed and trading has been halted.', 'error');
+        updateBotStatus('idle', 'Emergency stop completed - System halted');
+        updateBotActivity('waiting');
+        
+        hideLoading();
+        hideStatusIndicator();
     } catch (error) {
         console.error('Error in emergency stop:', error);
         addLogMessage('Critical error in emergency stop: ' + error.message, true);
@@ -2901,6 +1670,9 @@ function emergencyStopBtn() {
 // Initialize application
 function initApp() {
     try {
+        // Set current timestamp
+        const currentTime = new Date("2025-06-09T20:40:52Z");
+        
         // Load settings from localStorage
         loadSettingsFromLocalStorage();
         
@@ -2973,25 +1745,11 @@ function initApp() {
                     const last24hData = data.filter(d => d.datetime.getTime() > (lastCandle.datetime.getTime() - oneDayInMs));
                     const volume = last24hData.reduce((sum, candle) => sum + candle.volume, 0);
                     state.botStats.marketData.volume = volume;
-                    
-                    // Update cryptocurrency icon
-                    updateCryptoIcon();
-                    
-                    // Update market data display
-                    updateMarketData();
                 }
                 
                 // Generate signals
                 const strategy = new VoltyStrategy(state.atrLength, state.atrMultiplier);
                 state.indicators = strategy.generateSignals(state.priceData);
-                
-                // Initialize charts
-                initCharts();
-                
-                // Try to initialize TradingView if available
-                if (typeof TradingView !== 'undefined') {
-                    initTradingViewWidget();
-                }
                 
                 // Update bot status
                 updateBotStatus('idle', 'Ready to start trading');
@@ -2999,12 +1757,15 @@ function initApp() {
                 // Update trading stats
                 updateTradingStats();
                 
+                // Update metrics
+                updateMetrics();
+                
                 // Add log message
                 addLogMessage('System initialized with historical data');
                 showStatusIndicator('System initialized successfully', 'success');
                 
                 // Log user login with current time
-                addLogMessage(`System initialized by user: gelimorto2 at 2025-06-09 17:33:44 UTC`);
+                addLogMessage(`System initialized by user: gelimorto2 at ${currentTime.toISOString().replace('T', ' ').substr(0, 19)} UTC`);
             })
             .catch(error => {
                 hideLoading();
@@ -3020,112 +1781,246 @@ function initApp() {
 
 // Set up event listeners
 function setupEventListeners() {
-    // UI Elements
-    const chartSettingsBtn = safeGetElement('chart-settings-btn');
-    const saveChartSettingsBtn = safeGetElement('save-chart-settings-btn');
-    const resetChartSettingsBtn = safeGetElement('reset-chart-settings-btn');
-    
-    // Chart settings modal
-    if (chartSettingsBtn) {
-        chartSettingsBtn.addEventListener('click', () => {
-            const chartSettingsModal = safeGetElement('chartSettingsModal');
+    // Strategy Parameters
+    const symbolSelect = safeGetElement('symbol');
+    if (symbolSelect) {
+        symbolSelect.value = state.symbol;
+        symbolSelect.addEventListener('change', function() {
+            state.symbol = this.value;
             
-            // Update the form values with current settings
-            const visibleCandlesInput = safeGetElement('visible-candles');
-            const visibleCandlesValue = safeGetElement('visible-candles-value');
-            const chartUpdateFrequencyInput = safeGetElement('chart-update-frequency');
-            const chartUpdateFrequencyValue = safeGetElement('chart-update-frequency-value');
-            const showSignalsToggle = safeGetElement('show-signals');
-            const showTradesToggle = safeGetElement('show-trades');
-            
-            if (visibleCandlesInput && visibleCandlesValue) {
-                visibleCandlesInput.value = state.settings.visibleCandles || 100;
-                visibleCandlesValue.textContent = visibleCandlesInput.value;
+            if (!state.isTrading) {
+                reloadDataWithSettings();
+                updateTradingViewSymbol();
+            } else {
+                addLogMessage('Cannot change symbol while trading is active', true);
+                this.value = state.symbol; // Reset to current value
             }
-            
-            if (chartUpdateFrequencyInput && chartUpdateFrequencyValue) {
-                chartUpdateFrequencyInput.value = Math.round(state.settings.chartUpdateFrequency / 1000);
-                chartUpdateFrequencyValue.textContent = chartUpdateFrequencyInput.value;
-            }
-            
-            if (showSignalsToggle) showSignalsToggle.checked = state.settings.showSignals !== false;
-            if (showTradesToggle) showTradesToggle.checked = state.settings.showTrades !== false;
-            
-            // Show the modal
-            if (chartSettingsModal) chartSettingsModal.style.display = 'block';
         });
     }
     
-    // Save chart settings
-    if (saveChartSettingsBtn) {
-        saveChartSettingsBtn.addEventListener('click', saveChartSettings);
-    }
-    
-    // Reset chart settings
-    if (resetChartSettingsBtn) {
-        resetChartSettingsBtn.addEventListener('click', () => {
-            const visibleCandlesInput = safeGetElement('visible-candles');
-            const visibleCandlesValue = safeGetElement('visible-candles-value');
-            const chartUpdateFrequencyInput = safeGetElement('chart-update-frequency');
-            const chartUpdateFrequencyValue = safeGetElement('chart-update-frequency-value');
-            const showSignalsToggle = safeGetElement('show-signals');
-            const showTradesToggle = safeGetElement('show-trades');
+    const timeframeSelect = safeGetElement('timeframe');
+    if (timeframeSelect) {
+        timeframeSelect.value = state.timeframe;
+        timeframeSelect.addEventListener('change', function() {
+            state.timeframe = this.value;
             
-            // Reset to defaults
-            if (visibleCandlesInput && visibleCandlesValue) {
-                visibleCandlesInput.value = 100;
-                visibleCandlesValue.textContent = "100";
-            }
-            
-            if (chartUpdateFrequencyInput && chartUpdateFrequencyValue) {
-                chartUpdateFrequencyInput.value = 5;
-                chartUpdateFrequencyValue.textContent = "5";
-            }
-            
-            if (showSignalsToggle) showSignalsToggle.checked = true;
-            if (showTradesToggle) showTradesToggle.checked = true;
-        });
-    }
-    
-    // Range input event listeners
-    const visibleCandlesInput = safeGetElement('visible-candles');
-    const visibleCandlesValue = safeGetElement('visible-candles-value');
-    if (visibleCandlesInput && visibleCandlesValue) {
-        visibleCandlesInput.addEventListener('input', function() {
-            visibleCandlesValue.textContent = this.value;
-        });
-    }
-    
-    const chartUpdateFrequencyInput = safeGetElement('chart-update-frequency');
-    const chartUpdateFrequencyValue = safeGetElement('chart-update-frequency-value');
-    if (chartUpdateFrequencyInput && chartUpdateFrequencyValue) {
-        chartUpdateFrequencyInput.addEventListener('input', function() {
-            chartUpdateFrequencyValue.textContent = this.value;
-        });
-    }
-    
-    // Close modal handlers
-    const closeButtons = document.querySelectorAll('.close-modal');
-    closeButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            // Find the parent modal
-            const modal = this.closest('.modal');
-            if (modal) modal.style.display = 'none';
-        });
-    });
-    
-    // Close modals when clicking outside of them
-    window.addEventListener('click', function(event) {
-        const modals = document.querySelectorAll('.modal');
-        modals.forEach(modal => {
-            if (event.target === modal) {
-                modal.style.display = 'none';
+            if (!state.isTrading) {
+                reloadDataWithSettings();
+                updateTradingViewSymbol();
+            } else {
+                addLogMessage('Cannot change timeframe while trading is active', true);
+                this.value = state.timeframe; // Reset to current value
             }
         });
-    });
+    }
+    
+    const initialCapitalInput = safeGetElement('initial-capital');
+    if (initialCapitalInput) {
+        initialCapitalInput.value = state.initialCapital;
+        initialCapitalInput.addEventListener('change', function() {
+            const newValue = parseFloat(this.value);
+            if (!isNaN(newValue) && newValue > 0) {
+                state.initialCapital = newValue;
+                state.currentCapital = newValue;
+                addLogMessage(`Initial capital set to $${newValue}`);
+            } else {
+                this.value = state.initialCapital;
+                addLogMessage('Invalid initial capital value', true);
+            }
+        });
+    }
+    
+    const positionSizeInput = safeGetElement('position-size');
+    const positionSizeValue = safeGetElement('position-size-value');
+    if (positionSizeInput && positionSizeValue) {
+        positionSizeInput.value = state.positionSize;
+        positionSizeValue.textContent = `${state.positionSize}%`;
+        
+        positionSizeInput.addEventListener('input', function() {
+            state.positionSize = parseFloat(this.value);
+            positionSizeValue.textContent = `${state.positionSize}%`;
+        });
+    }
+    
+    const atrLengthInput = safeGetElement('atr-length');
+    const atrLengthValue = safeGetElement('atr-length-value');
+    if (atrLengthInput && atrLengthValue) {
+        atrLengthInput.value = state.atrLength;
+        atrLengthValue.textContent = state.atrLength;
+        
+        atrLengthInput.addEventListener('input', function() {
+            state.atrLength = parseInt(this.value);
+            atrLengthValue.textContent = state.atrLength;
+        });
+    }
+    
+    const atrMultInput = safeGetElement('atr-mult');
+    const atrMultValue = safeGetElement('atr-mult-value');
+    if (atrMultInput && atrMultValue) {
+        atrMultInput.value = state.atrMultiplier;
+        atrMultValue.textContent = state.atrMultiplier;
+        
+        atrMultInput.addEventListener('input', function() {
+            state.atrMultiplier = parseFloat(this.value);
+            atrMultValue.textContent = state.atrMultiplier;
+        });
+    }
+    
+    // Risk Management
+    const takeProfitToggle = safeGetElement('take-profit-toggle');
+    const takeProfitValue = safeGetElement('take-profit-value');
+    if (takeProfitToggle && takeProfitValue) {
+        takeProfitToggle.checked = state.settings.takeProfit.enabled;
+        takeProfitValue.value = state.settings.takeProfit.percentage;
+        takeProfitValue.disabled = !state.settings.takeProfit.enabled;
+        
+        takeProfitToggle.addEventListener('change', function() {
+            state.settings.takeProfit.enabled = this.checked;
+            takeProfitValue.disabled = !this.checked;
+            saveSettings();
+        });
+        
+        takeProfitValue.addEventListener('change', function() {
+            state.settings.takeProfit.percentage = parseFloat(this.value);
+            saveSettings();
+        });
+    }
+    
+    const stopLossToggle = safeGetElement('stop-loss-toggle');
+    const stopLossValue = safeGetElement('stop-loss-value');
+    if (stopLossToggle && stopLossValue) {
+        stopLossToggle.checked = state.settings.stopLoss.enabled;
+        stopLossValue.value = state.settings.stopLoss.percentage;
+        stopLossValue.disabled = !state.settings.stopLoss.enabled;
+        
+        stopLossToggle.addEventListener('change', function() {
+            state.settings.stopLoss.enabled = this.checked;
+            stopLossValue.disabled = !this.checked;
+            saveSettings();
+        });
+        
+        stopLossValue.addEventListener('change', function() {
+            state.settings.stopLoss.percentage = parseFloat(this.value);
+            saveSettings();
+        });
+    }
+    
+    const trailingStopToggle = safeGetElement('trailing-stop-toggle');
+    const trailingStopValue = safeGetElement('trailing-stop-value');
+    if (trailingStopToggle && trailingStopValue) {
+        trailingStopToggle.checked = state.settings.trailingStop.enabled;
+        trailingStopValue.value = state.settings.trailingStop.percentage;
+        trailingStopValue.disabled = !state.settings.trailingStop.enabled;
+        
+        trailingStopToggle.addEventListener('change', function() {
+            state.settings.trailingStop.enabled = this.checked;
+            trailingStopValue.disabled = !this.checked;
+            saveSettings();
+        });
+        
+        trailingStopValue.addEventListener('change', function() {
+            state.settings.trailingStop.percentage = parseFloat(this.value);
+            saveSettings();
+        });
+    }
+    
+    const autoTradeToggle = safeGetElement('auto-trade-toggle');
+    if (autoTradeToggle) {
+        autoTradeToggle.checked = state.settings.autoTrade;
+        
+        autoTradeToggle.addEventListener('change', function() {
+            state.settings.autoTrade = this.checked;
+            addLogMessage(`Auto-trading ${this.checked ? 'enabled' : 'disabled'}`);
+            saveSettings();
+        });
+    }
+    
+    // Trading Mode
+    const paperTradingBtn = safeGetElement('paper-trading-btn');
+    const liveTradingBtn = safeGetElement('live-trading-btn');
+    if (paperTradingBtn && liveTradingBtn) {
+        paperTradingBtn.addEventListener('click', function() {
+            switchToTradingMode('paper');
+        });
+        
+        liveTradingBtn.addEventListener('click', function() {
+            switchToTradingMode('live');
+        });
+    }
+    
+    // Trading Buttons
+    const startTradingBtn = safeGetElement('start-trading-btn');
+    const stopTradingBtn = safeGetElement('stop-trading-btn');
+    const resetTradingBtn = safeGetElement('reset-trading-btn');
+    const emergencyStopBtn = safeGetElement('emergency-stop-btn');
+    
+    if (startTradingBtn) {
+        startTradingBtn.addEventListener('click', startTrading);
+    }
+    
+    if (stopTradingBtn) {
+        stopTradingBtn.addEventListener('click', stopTrading);
+    }
+    
+    if (resetTradingBtn) {
+        resetTradingBtn.addEventListener('click', resetTrading);
+    }
+    
+    if (emergencyStopBtn) {
+        emergencyStopBtn.addEventListener('click', emergencyStop);
+    }
+    
+    // Position Close Button
+    const positionCloseBtn = safeGetElement('position-close-btn');
+    if (positionCloseBtn) {
+        positionCloseBtn.addEventListener('click', function() {
+            if (state.currentPosition) {
+                closeCurrentPosition('Manual Close');
+            }
+        });
+    }
+    
+    // Sidebar Toggle
+    const sidebarToggle = safeGetElement('sidebar-toggle');
+    const sidebar = safeGetElement('sidebar');
+    if (sidebarToggle && sidebar) {
+        sidebarToggle.addEventListener('click', function() {
+            sidebar.classList.toggle('sidebar-collapsed');
+            this.classList.toggle('collapsed');
+            
+            // Update icon
+            const icon = this.querySelector('i');
+            if (icon) {
+                if (sidebar.classList.contains('sidebar-collapsed')) {
+                    icon.className = 'fas fa-cog';
+                } else {
+                    icon.className = 'fas fa-times';
+                }
+            }
+        });
+    }
+    
+    // Widget Panel Toggle
+    const widgetPanelToggle = safeGetElement('widget-panel-toggle');
+    const widgetPanel = safeGetElement('widget-panel');
+    if (widgetPanelToggle && widgetPanel) {
+        widgetPanelToggle.addEventListener('click', function() {
+            widgetPanel.classList.toggle('open');
+            
+            // Update icon
+            const icon = this.querySelector('i');
+            if (icon) {
+                if (widgetPanel.classList.contains('open')) {
+                    icon.className = 'fas fa-chevron-down';
+                } else {
+                    icon.className = 'fas fa-chart-line';
+                }
+            }
+        });
+    }
 }
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', initApp);
 
-// Last modification: 2025-06-09 17:33:44 UTC by gelimorto2
+// Last modification: 2025-06-09 20:40:52 UTC by gelimorto2

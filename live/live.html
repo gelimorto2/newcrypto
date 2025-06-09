@@ -14,12 +14,6 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Plotly.js for charts -->
-    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
-    
-    <!-- TradingView Widget -->
-    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-    
     <style>
         :root {
             --primary-color: #4f46e5;
@@ -49,12 +43,14 @@
             margin: 0;
             padding: 0;
             min-height: 100vh;
+            overflow: hidden;
         }
         
         .navbar {
             background-color: var(--card-dark);
             border-bottom: 1px solid var(--border-dark);
             padding: 0.5rem 1rem;
+            height: 56px;
         }
         
         .navbar-brand {
@@ -70,9 +66,52 @@
         }
         
         .app-container {
-            max-width: 1600px;
-            margin: 0 auto;
-            padding: 1rem;
+            height: calc(100vh - 56px);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .main-content {
+            display: flex;
+            height: 100%;
+        }
+        
+        .chart-container {
+            flex: 1;
+            position: relative;
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        .sidebar {
+            width: 300px;
+            background-color: var(--card-dark);
+            border-left: 1px solid var(--border-dark);
+            overflow-y: auto;
+            height: 100%;
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar-collapsed {
+            transform: translateX(300px);
+        }
+        
+        .sidebar-toggle {
+            position: absolute;
+            top: 10px;
+            right: 310px;
+            z-index: 100;
+            padding: 0.5rem;
+            background-color: var(--card-dark);
+            border-radius: 50%;
+            border: 1px solid var(--border-dark);
+            color: var(--text-light);
+            cursor: pointer;
+            transition: right 0.3s ease;
+        }
+        
+        .sidebar-toggle.collapsed {
+            right: 10px;
         }
         
         .card {
@@ -169,101 +208,62 @@
             color: var(--text-gray);
         }
         
-        .tab-button {
+        .widget-container {
+            padding: 10px;
+            height: 100%;
+        }
+        
+        .widget-panel {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: var(--card-dark);
+            border-top: 1px solid var(--border-dark);
+            padding: 10px;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            height: 40%;
+            overflow-y: auto;
+            z-index: 50;
+        }
+        
+        .widget-panel.open {
+            transform: translateY(0);
+        }
+        
+        .widget-panel-toggle {
+            position: absolute;
+            top: -35px;
+            right: 10px;
             background-color: var(--card-dark);
             border: 1px solid var(--border-dark);
             border-bottom: none;
-            border-radius: 0.5rem 0.5rem 0 0;
-            padding: 0.5rem 1rem;
-            font-weight: 500;
+            border-radius: 4px 4px 0 0;
+            padding: 5px 10px;
             cursor: pointer;
-            color: var(--text-gray);
-            margin-right: 0.25rem;
+            z-index: 51;
         }
         
-        .tab-button.active {
-            background-color: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
+        .bot-controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            z-index: 100;
+            display: flex;
+            gap: 5px;
         }
         
-        .tab-content {
-            display: none;
-            padding: 1rem;
-            background-color: var(--card-dark);
-            border: 1px solid var(--border-dark);
-            border-radius: 0 0.5rem 0.5rem 0.5rem;
-        }
-        
-        .tab-content.active {
-            display: block;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 1rem;
-        }
-        
-        table th, table td {
-            padding: 0.75rem;
-            text-align: left;
-            border-bottom: 1px solid var(--border-dark);
-        }
-        
-        table th {
-            font-weight: 600;
-            color: var(--text-gray);
-        }
-        
-        .trade-long {
-            border-left: 3px solid var(--success-color);
-        }
-        
-        .trade-short {
-            border-left: 3px solid var(--danger-color);
-        }
-        
-        .metric-card {
-            background-color: var(--card-darker);
-            border-radius: 0.5rem;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
-        
-        .metric-title {
-            font-size: 0.875rem;
-            color: var(--text-gray);
-            margin-bottom: 0.5rem;
-        }
-        
-        .metric-value {
-            font-size: 1.25rem;
-            font-weight: 600;
-        }
-        
-        .metric-delta {
-            font-size: 0.875rem;
-            color: var(--text-gray);
-        }
-        
-        .form-control[type="range"] {
-            appearance: none;
-            width: 100%;
-            height: 8px;
+        .overlay-controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            padding: 5px;
+            background-color: rgba(31, 41, 55, 0.8);
             border-radius: 4px;
-            background: var(--card-darker);
-            outline: none;
-            padding: 0;
-        }
-        
-        .form-control[type="range"]::-webkit-slider-thumb {
-            appearance: none;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: var(--primary-color);
-            cursor: pointer;
+            display: flex;
+            align-items: center;
         }
         
         .bot-activity {
@@ -337,72 +337,42 @@
         }
         
         .log-container {
-            height: 300px;
+            height: 200px;
             overflow-y: auto;
             background-color: var(--card-darker);
             border: 1px solid var(--border-dark);
             border-radius: 0.5rem;
-            padding: 1rem;
+            padding: 0.5rem;
             font-family: 'Courier New', monospace;
-            font-size: 0.875rem;
+            font-size: 0.75rem;
         }
         
         #logMessages div {
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.25rem;
             word-wrap: break-word;
         }
         
-        .form-check-input {
-            background-color: var(--card-darker);
-            border: 1px solid var(--border-dark);
-        }
-        
-        .form-check-input:checked {
-            background-color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
-        
-        .market-value {
-            font-weight: 600;
-        }
-        
-        .market-value.up {
-            color: var(--success-color);
-        }
-        
-        .market-value.down {
-            color: var(--danger-color);
-        }
-        
-        /* Loading indicator */
-        #loadingIndicator {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
+        .mode-indicator {
             display: flex;
-            justify-content: center;
             align-items: center;
-            z-index: 9999;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-weight: 500;
+            font-size: 0.75rem;
+            margin-left: 0.5rem;
         }
         
-        .spinner {
-            width: 60px;
-            height: 60px;
-            border: 5px solid var(--text-gray);
-            border-top: 5px solid var(--primary-color);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+        #practice-mode-indicator {
+            background-color: var(--warning-color);
+            color: black;
         }
         
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        #live-mode-indicator {
+            background-color: var(--danger-color);
+            color: white;
+            animation: live-pulse 2s infinite;
         }
         
-        /* Status bar */
         .status-bar {
             position: fixed;
             bottom: 20px;
@@ -443,6 +413,112 @@
             margin-top: 0.5rem;
             width: 0%;
             transition: width 0.1s;
+        }
+        
+        .loading-indicator {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 5px solid var(--text-gray);
+            border-top: 5px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .accordion-header {
+            margin: 0;
+        }
+        
+        .accordion-button {
+            background-color: var(--card-darker) !important;
+            color: var(--text-light) !important;
+            border-bottom: 1px solid var(--border-dark);
+            box-shadow: none !important;
+            padding: 0.75rem 1rem;
+        }
+        
+        .accordion-button:not(.collapsed) {
+            background-color: var(--card-darker) !important;
+            color: var(--text-light) !important;
+        }
+        
+        .accordion-button:focus {
+            box-shadow: none;
+        }
+        
+        .accordion-button::after {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23f3f4f6'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
+        }
+        
+        .accordion-body {
+            background-color: var(--card-dark);
+            padding: 0.75rem;
+        }
+        
+        .accordion-item {
+            background-color: var(--card-dark);
+            border: 1px solid var(--border-dark);
+        }
+        
+        .metric-mini {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.25rem 0;
+            border-bottom: 1px solid var(--border-dark);
+        }
+        
+        .metric-mini:last-child {
+            border-bottom: none;
+        }
+        
+        .metric-mini-title {
+            color: var(--text-gray);
+            font-size: 0.75rem;
+        }
+        
+        .metric-mini-value {
+            font-weight: 500;
+            font-size: 0.75rem;
+        }
+        
+        .widget-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            background-color: var(--card-darker);
+            border-bottom: 1px solid var(--border-dark);
+        }
+        
+        .widget-header-title {
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+        
+        .widget-header-actions {
+            display: flex;
+            gap: 0.25rem;
+        }
+        
+        .widget-content {
+            padding: 0.5rem;
         }
         
         /* Modal styles */
@@ -507,137 +583,30 @@
             border-top: 1px solid var(--border-dark);
         }
         
-        /* Mode indicators */
-        .mode-indicator {
-            display: flex;
-            align-items: center;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-            font-weight: 500;
-            font-size: 0.75rem;
-            margin-left: 1rem;
-        }
-        
-        #practice-mode-indicator {
-            background-color: var(--warning-color);
-            color: black;
-        }
-        
-        #live-mode-indicator {
-            background-color: var(--danger-color);
-            color: white;
-            animation: live-pulse 2s infinite;
-        }
-        
-        /* Alert indicator */
-        .alert-badge {
-            position: relative;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .alert-badge .badge {
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.375rem;
-            font-size: 0.75rem;
-            font-weight: 700;
-            background-color: var(--danger-color);
-            color: white;
-        }
-        
-        /* Tooltip styles */
-        .tooltip-container {
-            position: relative;
-            display: inline-block;
-        }
-        
-        .tooltip-text {
-            visibility: hidden;
-            width: 200px;
-            background-color: var(--card-darker);
-            color: var(--text-light);
-            text-align: center;
-            border-radius: 6px;
-            padding: 5px;
-            position: absolute;
-            z-index: 1;
-            bottom: 125%;
-            left: 50%;
-            margin-left: -100px;
-            opacity: 0;
-            transition: opacity 0.3s;
-            font-size: 0.8rem;
-            border: 1px solid var(--border-dark);
-        }
-        
-        .tooltip-container:hover .tooltip-text {
-            visibility: visible;
-            opacity: 1;
-        }
-        
-        /* Mobile responsive */
+        /* Responsive */
         @media (max-width: 768px) {
-            .app-container {
-                padding: 0.5rem;
+            .sidebar {
+                width: 100%;
+                position: fixed;
+                top: 56px;
+                left: 0;
+                height: calc(100vh - 56px);
+                transform: translateX(100%);
             }
             
-            .card-body {
-                padding: 0.75rem;
+            .sidebar-toggle {
+                right: 10px;
             }
             
-            .btn {
-                padding: 0.375rem 0.75rem;
-                font-size: 0.875rem;
+            .widget-panel {
+                height: 60%;
             }
-            
-            .modal-content {
-                width: 95%;
-                margin: 5% auto;
-            }
-        }
-        
-        /* Trading view and chart switcher */
-        .chart-container {
-            position: relative;
-        }
-        
-        .chart-toolbar {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 100;
-            background-color: rgba(31, 41, 55, 0.8);
-            border-radius: 0.375rem;
-            padding: 0.25rem;
-            display: flex;
-            gap: 0.25rem;
-        }
-        
-        .chart-toolbar button {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.75rem;
-        }
-        
-        /* Trade history table */
-        .trade-history-container {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        
-        .empty-trade-history {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-gray);
         }
     </style>
 </head>
 <body>
     <!-- Loading Indicator -->
-    <div id="loadingIndicator" style="display: none;">
+    <div id="loadingIndicator" class="loading-indicator" style="display: none;">
         <div class="spinner"></div>
     </div>
     
@@ -671,185 +640,195 @@
     
     <!-- Main Container -->
     <div class="app-container">
-        <div class="row g-3">
-            <!-- Left Column: Charts and Trading Interface -->
-            <div class="col-lg-8">
-                <!-- Trading Status Card -->
-                <div class="card mb-3">
-                    <div class="card-body p-2">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="d-flex align-items-center">
-                                <div id="bot-activity" class="bot-activity waiting"></div>
-                                <div id="bot-status" class="status-indicator idle">⏸️ BOT IDLE</div>
-                            </div>
-                            <div id="activity-status" class="text-muted small">System initializing...</div>
-                            <div id="last-tick-info" class="text-muted small">Last check: - | Execution: 0ms</div>
-                        </div>
+        <div class="main-content">
+            <!-- Chart Area -->
+            
+            <div class="chart-container">
+                <!-- TradingView Chart (Central) -->
+                <div class="tradingview-widget-container" style="height:100%;width:100%">
+                  <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
+                  <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span class="blue-text">Track all markets on TradingView</span></a></div>
+                  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+                  {
+                  "autosize": true,
+                  "symbol": "BINANCE:BTCUSDT",
+                  "interval": "1",
+                  "timezone": "Etc/UTC",
+                  "theme": "dark",
+                  "style": "1",
+                  "locale": "en",
+                  "withdateranges": true,
+                  "hide_side_toolbar": false,
+                  "allow_symbol_change": true,
+                  "show_popup_button": true,
+                  "popup_width": "1000",
+                  "popup_height": "650",
+                  "support_host": "https://www.tradingview.com"
+                  }
+                  </script>
+                </div>
+                
+                <!-- Overlay Controls -->
+                <div class="overlay-controls">
+                    <div id="bot-activity" class="bot-activity waiting"></div>
+                    <div id="bot-status" class="status-indicator idle">⏸️ BOT IDLE</div>
+                    <div id="activity-status" class="text-muted small ms-2">System initializing...</div>
+                </div>
+
+                <!-- Add this right after the overlay-controls div in the chart-container div -->
+<div class="tradingview-widget-container" style="position: absolute; top: 100px; left: 100px; z-index: 50; width: auto;">
+  <div class="tradingview-widget-container__widget"></div>
+  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-single-quote.js" async>
+  {
+  "symbol": "BINANCE:BTCUSDT",
+  "width": "350",
+  "colorTheme": "dark",
+  "isTransparent": true,
+  "locale": "en"
+  }
+  </script>
+</div>
+
+                <!-- Bot Controls -->
+                <div class="bot-controls">
+                    <!-- Paper Trading Controls -->
+                    <div id="paper-trading-buttons">
+                        <button id="start-trading-btn" class="btn btn-success btn-sm">
+                            <i class="fas fa-play me-1"></i> Start Paper Trading
+                        </button>
+                        <button id="stop-trading-btn" class="btn btn-danger btn-sm" disabled>
+                            <i class="fas fa-stop me-1"></i> Stop
+                        </button>
+                        <button id="reset-trading-btn" class="btn btn-warning btn-sm">
+                            <i class="fas fa-redo me-1"></i> Reset
+                        </button>
+                    </div>
+                    
+                    <!-- Live Trading Controls -->
+                    <div id="live-trading-buttons" style="display: none;">
+                        <button id="start-live-trading-btn" class="btn btn-danger btn-sm">
+                            <i class="fas fa-play me-1"></i> Start Live
+                        </button>
+                        <button id="stop-live-trading-btn" class="btn btn-secondary btn-sm" disabled>
+                            <i class="fas fa-stop me-1"></i> Stop
+                        </button>
+                        <button id="emergency-stop-btn" class="btn btn-outline-danger btn-sm">
+                            <i class="fas fa-exclamation-triangle me-1"></i> EMERGENCY
+                        </button>
                     </div>
                 </div>
                 
-                <!-- Market Info Card -->
-                <div class="card mb-3">
-                    <div class="card-body p-2">
-                        <div class="row align-items-center">
-                            <div class="col-md-4 d-flex align-items-center">
-                                <img src="https://cryptoicons.org/api/icon/btc/32" alt="BTC" class="me-2" id="crypto-icon">
-                                <div>
-                                    <div class="fs-5 fw-bold" id="market-symbol">BTCUSDT</div>
-                                    <div id="market-price" class="fw-bold">$0.00</div>
+                <!-- Sidebar Toggle -->
+                <button class="sidebar-toggle" id="sidebar-toggle">
+                    <i class="fas fa-cog"></i>
+                </button>
+                
+                <!-- Bottom Widget Panel -->
+                <div class="widget-panel" id="widget-panel">
+                    <div class="widget-panel-toggle" id="widget-panel-toggle">
+                        <i class="fas fa-chart-line"></i> Market Data
+                    </div>
+                    
+                    <div class="row g-2">
+                        <!-- TradingView Technical Analysis Widget -->
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="widget-header">
+                                    <div class="widget-header-title">Technical Analysis</div>
                                 </div>
-                            </div>
-                            <div class="col-md-4 text-center">
-                                <div class="text-muted small">24h Change</div>
-                                <div id="market-change" class="market-value">0.00%</div>
-                            </div>
-                            <div class="col-md-4 text-center">
-                                <div class="text-muted small">24h Volume</div>
-                                <div id="market-volume" class="market-value">$0M</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Chart Card -->
-                <div class="card mb-3">
-                    <div class="card-header">
-                        <div>Price Chart</div>
-                        <div class="chart-toolbar">
-                            <button id="toggle-chart-btn" class="btn btn-sm btn-secondary">Switch to TradingView</button>
-                            <button id="chart-settings-btn" class="btn btn-sm btn-outline-light">
-                                <i class="fas fa-cog"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="card-body chart-container p-0">
-                        <div id="priceChart" style="width: 100%; height: 500px;"></div>
-                        <div id="tradingview-chart" style="display: none; width: 100%; height: 500px;"></div>
-                    </div>
-                </div>
-                
-                <!-- Position Card (hidden by default) -->
-                <div id="position-card" class="card mb-3" style="display: none;">
-                    <div class="card-header">
-                        <div>Current Position</div>
-                        <button id="position-close-btn" class="btn btn-sm btn-danger">Close Position</button>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="metric-card">
-                                    <div class="metric-title">Position Type</div>
-                                    <div id="position-type" class="metric-value">-</div>
-                                    <div class="metric-delta">Entry: <span id="position-entry-time">-</span></div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="metric-card">
-                                    <div class="metric-title">Entry / Current</div>
-                                    <div class="metric-value">
-                                        <span id="position-entry-price">$0.00</span> / <span id="position-current-price">$0.00</span>
+                                <div class="widget-content p-0">
+                                    <!-- TradingView Technical Analysis Widget -->
+                                    <div class="tradingview-widget-container">
+                                      <div class="tradingview-widget-container__widget"></div>
+                                      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js" async>
+                                      {
+                                      "interval": "1D",
+                                      "width": "100%",
+                                      "isTransparent": true,
+                                      "height": "100%",
+                                      "symbol": "BINANCE:BTCUSDT",
+                                      "showIntervalTabs": true,
+                                      "locale": "en",
+                                      "colorTheme": "dark"
+                                      }
+                                      </script>
                                     </div>
-                                    <div class="metric-delta">Size: <span id="position-size-info">0 (≈$0.00)</span></div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="metric-card">
-                                    <div class="metric-title">Unrealized P&L</div>
-                                    <div id="position-pnl" class="metric-value">$0.00 (0.00%)</div>
-                                    <div class="metric-delta">Inc. fees</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row mt-3">
-                            <div class="col-md-4">
-                                <div class="d-flex justify-content-between">
-                                    <div class="text-muted small">Take Profit:</div>
-                                    <div id="position-tp" class="small">Not Set</div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="d-flex justify-content-between">
-                                    <div class="text-muted small">Stop Loss:</div>
-                                    <div id="position-sl" class="small">Not Set</div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="d-flex justify-content-between">
-                                    <div class="text-muted small">Trailing Stop:</div>
-                                    <div id="position-ts" class="small">Not Set</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Equity Chart Card -->
-                <div class="card mb-3">
-                    <div class="card-header">Equity Curve</div>
-                    <div class="card-body p-0">
-                        <div id="equityChart" style="width: 100%; height: 300px;"></div>
-                    </div>
-                </div>
-                
-                <!-- Trading Controls Card -->
-                <div class="card mb-3">
-                    <div class="card-header">Trading Controls</div>
-                    <div class="card-body">
-                        <!-- Paper Trading Controls -->
-                        <div id="paper-trading-buttons">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <button id="start-trading-btn" class="btn btn-success w-100 mb-2">
-                                        <i class="fas fa-play me-1"></i> Start Paper Trading
-                                    </button>
-                                </div>
-                                <div class="col-md-4">
-                                    <button id="stop-trading-btn" class="btn btn-danger w-100 mb-2" disabled>
-                                        <i class="fas fa-stop me-1"></i> Stop Trading
-                                    </button>
-                                </div>
-                                <div class="col-md-4">
-                                    <button id="reset-trading-btn" class="btn btn-warning w-100 mb-2">
-                                        <i class="fas fa-redo me-1"></i> Reset System
-                                    </button>
                                 </div>
                             </div>
                         </div>
                         
-                        <!-- Live Trading Controls -->
-                        <div id="live-trading-buttons" style="display: none;">
-                            <div class="row">
-                                <div class="col-md-3">
-                                    <button id="start-live-trading-btn" class="btn btn-danger w-100 mb-2">
-                                        <i class="fas fa-play me-1"></i> Start Live Trading
-                                    </button>
+                        <!-- Position & Stats -->
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="widget-header">
+                                    <div class="widget-header-title">Position & Performance</div>
                                 </div>
-                                <div class="col-md-3">
-                                    <button id="stop-live-trading-btn" class="btn btn-secondary w-100 mb-2" disabled>
-                                        <i class="fas fa-stop me-1"></i> Stop Trading
-                                    </button>
-                                </div>
-                                <div class="col-md-6">
-                                    <button id="emergency-stop-btn" class="btn btn-outline-danger w-100 mb-2">
-                                        <i class="fas fa-exclamation-triangle me-1"></i> EMERGENCY STOP
-                                    </button>
+                                <div class="widget-content">
+                                    <!-- Current Position (if any) -->
+                                    <div id="position-info" style="display: none;">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <div><strong>Position:</strong> <span id="position-type" class="positive">LONG</span></div>
+                                            <div><span id="position-pnl">+$0.00 (0.00%)</span></div>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <div>Entry: <span id="position-entry-price">$0.00</span></div>
+                                            <div>Current: <span id="position-current-price">$0.00</span></div>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <div>TP: <span id="position-tp">Not Set</span></div>
+                                            <div>SL: <span id="position-sl">Not Set</span></div>
+                                        </div>
+                                        <button id="position-close-btn" class="btn btn-danger btn-sm w-100">Close Position</button>
+                                        <hr>
+                                    </div>
+                                    
+                                    <!-- Performance Metrics -->
+                                    <div class="metric-mini">
+                                        <div class="metric-mini-title">Total Return</div>
+                                        <div id="total-return" class="metric-mini-value">0.00%</div>
+                                    </div>
+                                    <div class="metric-mini">
+                                        <div class="metric-mini-title">Win Rate</div>
+                                        <div id="win-rate" class="metric-mini-value">0.0%</div>
+                                    </div>
+                                    <div class="metric-mini">
+                                        <div class="metric-mini-title">Profit Factor</div>
+                                        <div id="profit-factor" class="metric-mini-value">0.00</div>
+                                    </div>
+                                    <div class="metric-mini">
+                                        <div class="metric-mini-title">Max Drawdown</div>
+                                        <div id="max-drawdown" class="metric-mini-value">0.00%</div>
+                                    </div>
+                                    <div class="metric-mini">
+                                        <div class="metric-mini-title">Daily Trades / P&L</div>
+                                        <div class="metric-mini-value">
+                                            <span id="stat-daily-trades">0</span> / <span id="stat-daily-pnl">$0.00</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="row mt-2">
-                                <div class="col-md-4">
-                                    <button id="long-position-btn" class="btn btn-success w-100 mb-2" disabled>
-                                        <i class="fas fa-arrow-up me-1"></i> LONG
-                                    </button>
+                        </div>
+                        
+                        <!-- TradingView Symbol Info Widget -->
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="widget-header">
+                                    <div class="widget-header-title">Symbol Info</div>
                                 </div>
-                                <div class="col-md-4">
-                                    <button id="short-position-btn" class="btn btn-danger w-100 mb-2" disabled>
-                                        <i class="fas fa-arrow-down me-1"></i> SHORT
-                                    </button>
-                                </div>
-                                <div class="col-md-4">
-                                    <button id="close-positions-btn" class="btn btn-warning w-100 mb-2" disabled>
-                                        <i class="fas fa-times me-1"></i> Close Position
-                                    </button>
+                                <div class="widget-content p-0">
+                                    <!-- TradingView Symbol Info Widget -->
+                                    <div class="tradingview-widget-container">
+                                      <div class="tradingview-widget-container__widget"></div>
+                                      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-symbol-info.js" async>
+                                      {
+                                      "symbol": "BINANCE:BTCUSDT",
+                                      "width": "100%",
+                                      "locale": "en",
+                                      "colorTheme": "dark",
+                                      "isTransparent": true
+                                      }
+                                      </script>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -857,402 +836,251 @@
                 </div>
             </div>
             
-            <!-- Right Column: Trading Stats, Settings, and Logs -->
-            <div class="col-lg-4">
-                <!-- Mode Switcher -->
-                <div class="card mb-3">
-                    <div class="card-header">Trading Mode</div>
-                    <div class="card-body">
-                        <div class="d-flex">
-                            <button id="paper-trading-btn" class="btn btn-outline-warning flex-grow-1 me-2 active">
-                                <i class="fas fa-flask me-1"></i> Paper Trading
+            <!-- Settings Sidebar -->
+            <div class="sidebar" id="sidebar">
+                <div class="accordion" id="settingsAccordion">
+                    <!-- Trading Mode -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingMode">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMode" aria-expanded="true" aria-controls="collapseMode">
+                                Trading Mode
                             </button>
-                            <button id="live-trading-btn" class="btn btn-outline-danger flex-grow-1">
-                                <i class="fas fa-bolt me-1"></i> Live Trading
-                            </button>
-                        </div>
-                        <div class="mt-2 text-center text-muted small">
-                            <i class="fas fa-info-circle me-1"></i> Paper trading uses simulated capital with real market data
-                        </div>
-                        <div class="mt-2">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="use-testnet-toggle">
-                                <label class="form-check-label" for="use-testnet-toggle">
-                                    Use Binance Testnet API
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Trading Metrics Card -->
-                <div class="card mb-3">
-                    <div class="card-header">Performance Metrics</div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="metric-card">
-                                    <div class="metric-title">Total Return</div>
-                                    <div id="total-return" class="metric-value">0.00%</div>
-                                    <div id="total-return-delta" class="metric-delta">$0.00</div>
+                        </h2>
+                        <div id="collapseMode" class="accordion-collapse collapse show" aria-labelledby="headingMode" data-bs-parent="#settingsAccordion">
+                            <div class="accordion-body">
+                                <div class="d-flex">
+                                    <button id="paper-trading-btn" class="btn btn-outline-warning flex-grow-1 me-2 active">
+                                        <i class="fas fa-flask me-1"></i> Paper Trading
+                                    </button>
+                                    <button id="live-trading-btn" class="btn btn-outline-danger flex-grow-1">
+                                        <i class="fas fa-bolt me-1"></i> Live Trading
+                                    </button>
                                 </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="metric-card">
-                                    <div class="metric-title">Win Rate</div>
-                                    <div id="win-rate" class="metric-value">0.0%</div>
-                                    <div id="win-rate-delta" class="metric-delta">0 trades</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row mt-2">
-                            <div class="col-md-6">
-                                <div class="metric-card">
-                                    <div class="metric-title">Profit Factor</div>
-                                    <div id="profit-factor" class="metric-value">0.00</div>
-                                    <div id="profit-factor-delta" class="metric-delta">Avg: $0.00</div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="metric-card">
-                                    <div class="metric-title">Max Drawdown</div>
-                                    <div id="max-drawdown" class="metric-value">0.00%</div>
-                                    <div id="max-drawdown-delta" class="metric-delta">Sharpe: 0.00</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="row mt-2">
-                            <div class="col-md-4">
-                                <div class="d-flex justify-content-between">
-                                    <div class="text-muted small">Daily Trades:</div>
-                                    <div id="stat-daily-trades" class="small">0</div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="d-flex justify-content-between">
-                                    <div class="text-muted small">Daily P&L:</div>
-                                    <div id="stat-daily-pnl" class="small">$0.00</div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="d-flex justify-content-between">
-                                    <div class="text-muted small">Fee Rate:</div>
-                                    <div id="stat-fee-rate" class="small">0.02% / 0.04%</div>
+                                <div class="mt-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="use-testnet-toggle">
+                                        <label class="form-check-label" for="use-testnet-toggle">
+                                            Use Binance Testnet API
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Paper Trading Settings -->
-                <div id="paper-trading-settings" class="card mb-3">
-                    <div class="card-header">Strategy Parameters</div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label for="symbol" class="form-label">Trading Pair</label>
-                            <select id="symbol" class="form-select">
-                                <option value="BTCUSDT">BTCUSDT</option>
-                                <option value="ETHUSDT">ETHUSDT</option>
-                                <option value="SOLUSDT">SOLUSDT</option>
-                                <option value="BNBUSDT">BNBUSDT</option>
-                                <option value="ADAUSDT">ADAUSDT</option>
-                                <option value="DOGEUSDT">DOGEUSDT</option>
-                                <option value="XRPUSDT">XRPUSDT</option>
-                                <option value="DOTUSDT">DOTUSDT</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="timeframe" class="form-label">Timeframe</label>
-                            <select id="timeframe" class="form-select">
-                                <option value="1m">1 Minute</option>
-                                <option value="5m">5 Minutes</option>
-                                <option value="15m">15 Minutes</option>
-                                <option value="30m">30 Minutes</option>
-                                <option value="1h" selected>1 Hour</option>
-                                <option value="4h">4 Hours</option>
-                                <option value="1d">1 Day</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="initial-capital" class="form-label">Initial Capital (USDT)</label>
-                            <input type="number" id="initial-capital" class="form-control" value="10000" min="100" step="100">
-                        </div>
-                        <div class="mb-3">
-                            <label for="position-size" class="form-label">Position Size: <span id="position-size-value">10%</span></label>
-                            <input type="range" id="position-size" class="form-control" min="1" max="100" value="10">
-                        </div>
-                        <div class="mb-3">
-                            <label for="atr-length" class="form-label">ATR Length: <span id="atr-length-value">5</span></label>
-                            <input type="range" id="atr-length" class="form-control" min="1" max="20" value="5">
-                        </div>
-                        <div class="mb-3">
-                            <label for="atr-mult" class="form-label">ATR Multiplier: <span id="atr-mult-value">0.75</span></label>
-                            <input type="range" id="atr-mult" class="form-control" min="0.1" max="2" step="0.05" value="0.75">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Risk Management</label>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="take-profit-toggle" checked>
-                                        <label class="form-check-label" for="take-profit-toggle">
-                                            Take Profit
-                                        </label>
-                                    </div>
-                                    <div class="input-group">
-                                        <input type="number" id="take-profit-value" class="form-control" value="3.0" min="0.1" step="0.1">
-                                        <span class="input-group-text">%</span>
-                                    </div>
+                    
+                    <!-- Strategy Parameters -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingStrategy">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseStrategy" aria-expanded="false" aria-controls="collapseStrategy">
+                                Strategy Parameters
+                            </button>
+                        </h2>
+                        <div id="collapseStrategy" class="accordion-collapse collapse" aria-labelledby="headingStrategy" data-bs-parent="#settingsAccordion">
+                            <div class="accordion-body">
+                                <div class="mb-2">
+                                    <label for="symbol" class="form-label">Trading Pair</label>
+                                    <select id="symbol" class="form-select form-select-sm">
+                                        <option value="BTCUSDT">BTCUSDT</option>
+                                        <option value="ETHUSDT">ETHUSDT</option>
+                                        <option value="SOLUSDT">SOLUSDT</option>
+                                        <option value="BNBUSDT">BNBUSDT</option>
+                                        <option value="ADAUSDT">ADAUSDT</option>
+                                        <option value="DOGEUSDT">DOGEUSDT</option>
+                                        <option value="XRPUSDT">XRPUSDT</option>
+                                        <option value="DOTUSDT">DOTUSDT</option>
+                                    </select>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="stop-loss-toggle" checked>
-                                        <label class="form-check-label" for="stop-loss-toggle">
-                                            Stop Loss
-                                        </label>
-                                    </div>
-                                    <div class="input-group">
-                                        <input type="number" id="stop-loss-value" class="form-control" value="2.0" min="0.1" step="0.1">
-                                        <span class="input-group-text">%</span>
-                                    </div>
+                                <div class="mb-2">
+                                    <label for="timeframe" class="form-label">Timeframe</label>
+                                    <select id="timeframe" class="form-select form-select-sm">
+                                        <option value="1m">1 Minute</option>
+                                        <option value="5m">5 Minutes</option>
+                                        <option value="15m">15 Minutes</option>
+                                        <option value="30m">30 Minutes</option>
+                                        <option value="1h" selected>1 Hour</option>
+                                        <option value="4h">4 Hours</option>
+                                        <option value="1d">1 Day</option>
+                                    </select>
+                                </div>
+                                <div class="mb-2">
+                                    <label for="initial-capital" class="form-label">Initial Capital (USDT)</label>
+                                    <input type="number" id="initial-capital" class="form-control form-control-sm" value="10000" min="100" step="100">
+                                </div>
+                                <div class="mb-2">
+                                    <label for="position-size" class="form-label">Position Size: <span id="position-size-value">10%</span></label>
+                                    <input type="range" id="position-size" class="form-control" min="1" max="100" value="10">
+                                </div>
+                                <div class="mb-2">
+                                    <label for="atr-length" class="form-label">ATR Length: <span id="atr-length-value">5</span></label>
+                                    <input type="range" id="atr-length" class="form-control" min="1" max="20" value="5">
+                                </div>
+                                <div class="mb-2">
+                                    <label for="atr-mult" class="form-label">ATR Multiplier: <span id="atr-mult-value">0.75</span></label>
+                                    <input type="range" id="atr-mult" class="form-control" min="0.1" max="2" step="0.05" value="0.75">
                                 </div>
                             </div>
-                            <div class="row mt-2">
-                                <div class="col-md-6">
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" id="trailing-stop-toggle">
-                                        <label class="form-check-label" for="trailing-stop-toggle">
-                                            Trailing Stop
-                                        </label>
-                                    </div>
-                                    <div class="input-group">
-                                        <input type="number" id="trailing-stop-value" class="form-control" value="1.5" min="0.1" step="0.1" disabled>
-                                        <span class="input-group-text">%</span>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-check mb-2">
+                        </div>
+                    </div>
+                    
+                    <!-- Risk Management -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingRisk">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRisk" aria-expanded="false" aria-controls="collapseRisk">
+                                Risk Management
+                            </button>
+                        </h2>
+                        <div id="collapseRisk" class="accordion-collapse collapse" aria-labelledby="headingRisk" data-bs-parent="#settingsAccordion">
+                            <div class="accordion-body">
+                                <div class="mb-2">
+                                    <div class="form-check">
                                         <input class="form-check-input" type="checkbox" id="auto-trade-toggle" checked>
                                         <label class="form-check-label" for="auto-trade-toggle">
                                             Auto Trading
                                         </label>
                                     </div>
                                 </div>
+                                <div class="mb-2">
+                                    <div class="form-check d-flex align-items-center">
+                                        <input class="form-check-input" type="checkbox" id="take-profit-toggle" checked>
+                                        <label class="form-check-label me-auto" for="take-profit-toggle">
+                                            Take Profit
+                                        </label>
+                                        <input type="number" id="take-profit-value" class="form-control form-control-sm" style="width: 60px;" value="3" min="0.1" step="0.1">
+                                        <span class="ms-1">%</span>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <div class="form-check d-flex align-items-center">
+                                        <input class="form-check-input" type="checkbox" id="stop-loss-toggle" checked>
+                                        <label class="form-check-label me-auto" for="stop-loss-toggle">
+                                            Stop Loss
+                                        </label>
+                                        <input type="number" id="stop-loss-value" class="form-control form-control-sm" style="width: 60px;" value="2" min="0.1" step="0.1">
+                                        <span class="ms-1">%</span>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <div class="form-check d-flex align-items-center">
+                                        <input class="form-check-input" type="checkbox" id="trailing-stop-toggle">
+                                        <label class="form-check-label me-auto" for="trailing-stop-toggle">
+                                            Trailing Stop
+                                        </label>
+                                        <input type="number" id="trailing-stop-value" class="form-control form-control-sm" style="width: 60px;" value="1.5" min="0.1" step="0.1" disabled>
+                                        <span class="ms-1">%</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Live Trading Settings -->
-                <div id="live-trading-settings" class="card mb-3" style="display: none;">
-                    <div class="card-header">Live Trading Settings</div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label for="live-symbol" class="form-label">Trading Pair</label>
-                            <select id="live-symbol" class="form-select">
-                                <option value="BTCUSDT">BTCUSDT</option>
-                                <option value="ETHUSDT">ETHUSDT</option>
-                                <option value="SOLUSDT">SOLUSDT</option>
-                                <option value="BNBUSDT">BNBUSDT</option>
-                                <option value="ADAUSDT">ADAUSDT</option>
-                                <option value="DOGEUSDT">DOGEUSDT</option>
-                                <option value="XRPUSDT">XRPUSDT</option>
-                                <option value="DOTUSDT">DOTUSDT</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="live-timeframe" class="form-label">Timeframe</label>
-                            <select id="live-timeframe" class="form-select">
-                                <option value="1m">1 Minute</option>
-                                <option value="5m">5 Minutes</option>
-                                <option value="15m">15 Minutes</option>
-                                <option value="30m">30 Minutes</option>
-                                <option value="1h" selected>1 Hour</option>
-                                <option value="4h">4 Hours</option>
-                                <option value="1d">1 Day</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="live-position-size" class="form-label">Position Size: <span id="live-position-size-value">5%</span></label>
-                            <input type="range" id="live-position-size" class="form-control" min="1" max="25" value="5">
-                            <div class="text-muted small mt-1">Percentage of available balance</div>
-                        </div>
-                        <div class="mb-3">
-                            <label for="live-atr-length" class="form-label">ATR Length: <span id="live-atr-length-value">5</span></label>
-                            <input type="range" id="live-atr-length" class="form-control" min="1" max="20" value="5">
-                        </div>
-                        <div class="mb-3">
-                            <label for="live-atr-mult" class="form-label">ATR Multiplier: <span id="live-atr-mult-value">0.75</span></label>
-                            <input type="range" id="live-atr-mult" class="form-control" min="0.1" max="2" step="0.05" value="0.75">
-                        </div>
-                        <div class="mb-3">
-                            <button id="configure-api-btn" class="btn btn-primary w-100">
-                                <i class="fas fa-key me-2"></i> Configure API Keys
+                    
+                    <!-- Log Console -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingLogs">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseLogs" aria-expanded="false" aria-controls="collapseLogs">
+                                System Logs
                             </button>
-                            <div class="text-center text-muted small mt-2">
-                                <i class="fas fa-info-circle me-1"></i> API keys are required for live trading
+                        </h2>
+                        <div id="collapseLogs" class="accordion-collapse collapse" aria-labelledby="headingLogs" data-bs-parent="#settingsAccordion">
+                            <div class="accordion-body">
+                                <div class="log-container">
+                                    <div id="logMessages"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Trade History Card -->
-                <div class="card mb-3">
-                    <div class="card-header">Trade History</div>
-                    <div class="card-body p-0">
-                        <div id="empty-trade-history" class="empty-trade-history">
-                            <i class="fas fa-chart-line fa-2x mb-2"></i>
-                            <p>No trades yet. Start trading to see your history.</p>
-                        </div>
-                        <div id="trade-history-container" class="trade-history-container" style="display: none;">
-                            <table class="table table-dark table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Time</th>
-                                        <th>Type</th>
-                                        <th>Entry</th>
-                                        <th>Exit</th>
-                                        <th>Size</th>
-                                        <th>P&L</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="trade-history-body">
-                                    <!-- Trade history rows will be added here -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- System Logs Card -->
-                <div class="card mb-3">
-                    <div class="card-header">System Logs</div>
-                    <div class="card-body p-0">
-                        <div class="log-container">
-                            <div id="logMessages">
-                                <!-- Log messages will be added here -->
-                            </div>
-                        </div>
+                <!-- TradingView Ticker Tape Widget -->
+                <div class="mt-3 px-2">
+                    <div class="tradingview-widget-container">
+                      <div class="tradingview-widget-container__widget"></div>
+                      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js" async>
+                      {
+                      "symbols": [
+                        {
+                          "proName": "BINANCE:BTCUSDT",
+                          "title": "BTC"
+                        },
+                        {
+                          "proName": "BINANCE:ETHUSDT",
+                          "title": "ETH"
+                        },
+                        {
+                          "proName": "BINANCE:BNBUSDT",
+                          "title": "BNB"
+                        },
+                        {
+                          "proName": "BINANCE:SOLUSDT",
+                          "title": "SOL"
+                        },
+                        {
+                          "proName": "BINANCE:ADAUSDT",
+                          "title": "ADA"
+                        }
+                      ],
+                      "showSymbolLogo": true,
+                      "colorTheme": "dark",
+                      "isTransparent": true,
+                      "displayMode": "compact",
+                      "locale": "en"
+                      }
+                      </script>
                     </div>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- API Configuration Modal -->
-    <div id="apiConfigModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">Configure API Keys</h2>
-                <span class="close-modal">&times;</span>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label for="api-key" class="form-label">Binance API Key</label>
-                    <input type="text" id="api-key" class="form-control" placeholder="Enter your API key">
-                </div>
-                <div class="mb-3">
-                    <label for="api-secret" class="form-label">Binance API Secret</label>
-                    <input type="password" id="api-secret" class="form-control" placeholder="Enter your API secret">
-                    <div class="text-muted small mt-1">
-                        <i class="fas fa-info-circle me-1"></i> Your API secret is stored locally and never sent to our servers
-                    </div>
-                </div>
-                <div class="form-check mb-3">
-                    <input class="form-check-input" type="checkbox" id="testnet-toggle" checked>
-                    <label class="form-check-label" for="testnet-toggle">
-                        Use Binance Testnet (recommended for testing)
-                    </label>
-                </div>
-                <div class="alert alert-warning">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>Important:</strong> Ensure your API keys have the appropriate permissions. 
-                    For spot trading, enable "Enable Spot & Margin Trading" permission.
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button id="cancel-api-config-btn" class="btn btn-secondary">Cancel</button>
-                <button id="save-api-config-btn" class="btn btn-primary">Save Configuration</button>
-            </div>
-        </div>
-    </div>
+    <!-- Bootstrap JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- Live Trading Confirmation Modal -->
-    <div id="liveTradingConfirmModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">⚠️ Live Trading Confirmation</h2>
-                <span class="close-modal">&times;</span>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-danger">
-                    <strong>Warning:</strong> You are about to start LIVE trading with REAL funds.
-                </div>
-                
-                <p>Please confirm you understand the following:</p>
-                
-                <ul>
-                    <li>Live trading will use your actual funds</li>
-                    <li>Trading cryptocurrency carries significant risk</li>
-                    <li>Past performance in paper trading is not indicative of future results</li>
-                    <li>You are responsible for any trades executed by this bot</li>
-                    <li>The Emergency Stop button can be used at any time</li>
-                </ul>
-                
-                <div class="form-check mt-3">
-                    <input class="form-check-input" type="checkbox" id="confirm-live-trading">
-                    <label class="form-check-label" for="confirm-live-trading">
-                        <strong>I understand the risks and wish to proceed with live trading</strong>
-                    </label>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button id="cancel-live-trading-btn" class="btn btn-secondary">Cancel</button>
-                <button id="confirm-live-trading-btn" class="btn btn-danger" disabled>Start Live Trading</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Chart Settings Modal -->
-    <div id="chartSettingsModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">Chart Settings</h2>
-                <span class="close-modal">&times;</span>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label for="visible-candles" class="form-label">Visible Candles: <span id="visible-candles-value">100</span></label>
-                    <input type="range" id="visible-candles" class="form-control" min="50" max="300" step="10" value="100">
-                </div>
-                <div class="mb-3">
-                    <label for="chart-update-frequency" class="form-label">Update Frequency: <span id="chart-update-frequency-value">5</span> seconds</label>
-                    <input type="range" id="chart-update-frequency" class="form-control" min="1" max="30" value="5">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Indicators</label>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="show-signals" checked>
-                        <label class="form-check-label" for="show-signals">
-                            Show Strategy Signals
-                        </label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="show-trades" checked>
-                        <label class="form-check-label" for="show-trades">
-                            Show Trade Markers
-                        </label>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button id="reset-chart-settings-btn" class="btn btn-secondary">Reset to Default</button>
-                <button id="save-chart-settings-btn" class="btn btn-primary">Apply Settings</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main JavaScript file -->
+    <!-- App Scripts -->
     <script src="paper.js"></script>
+    
+    <script>
+        // Additional UI interaction handling for new layout
+        document.addEventListener('DOMContentLoaded', function() {
+            // Sidebar toggle
+            const sidebarToggle = document.getElementById('sidebar-toggle');
+            const sidebar = document.getElementById('sidebar');
+            
+            if (sidebarToggle && sidebar) {
+                sidebarToggle.addEventListener('click', function() {
+                    sidebar.classList.toggle('sidebar-collapsed');
+                    sidebarToggle.classList.toggle('collapsed');
+                    
+                    // Update icon
+                    const icon = sidebarToggle.querySelector('i');
+                    if (icon) {
+                        if (sidebar.classList.contains('sidebar-collapsed')) {
+                            icon.className = 'fas fa-cog';
+                        } else {
+                            icon.className = 'fas fa-times';
+                        }
+                    }
+                });
+            }
+            
+            // Widget panel toggle
+            const widgetPanelToggle = document.getElementById('widget-panel-toggle');
+            const widgetPanel = document.getElementById('widget-panel');
+            
+            if (widgetPanelToggle && widgetPanel) {
+                widgetPanelToggle.addEventListener('click', function() {
+                    widgetPanel.classList.toggle('open');
+                    
+                    // Update icon
+                    const icon = widgetPanelToggle.querySelector('i');
+                    if (icon) {
+                        if (widgetPanel.classList.contains('open')) {
+                            icon.className = 'fas fa-chevron-down';
+                        } else {
+                            icon.className = 'fas fa-chart-line';
+                        }
+                    }
+                });
+            }
+        });
+    </script>
 </body>
 </html>
