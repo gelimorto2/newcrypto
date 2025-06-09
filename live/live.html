@@ -681,7 +681,7 @@
                     <div class="card-body p-2">
                         <div class="row align-items-center">
                             <div class="col-md-4 d-flex align-items-center">
-                                <img src="https://cryptoicons.org/api/icon/btc/32" alt="BTC" class="me-2">
+                                <img id="market-icon" src="https://cryptoicons.org/api/icon/btc/32" alt="BTC" class="me-2">
                                 <div>
                                     <div class="fs-5 fw-bold" id="market-symbol">BTCUSDT</div>
                                     <div id="market-price" class="fw-bold">$0.00</div>
@@ -1022,227 +1022,41 @@
                             <input type="range" id="live-atr-mult" class="form-control" min="0.1" max="2" step="0.05" value="0.75">
                         </div>
                         <div class="mb-3">
-                            <div class="d-flex justify-content-between">
-                                <label class="form-label mb-0">API Configuration:</label>
-                                <button id="configure-api-btn" class="btn btn-sm btn-primary">Configure</button>
-                            </div>
-                            <div class="small text-muted mt-1">Set up your Binance API keys for live trading</div>
+                            <button id="api-config-btn" class="btn btn-primary w-100">
+                                <i class="fas fa-key me-1"></i> Configure API Keys
+                            </button>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Trading Settings Tab -->
-                <div class="card mb-3">
-                    <div class="card-header">
-                        <div class="d-flex">
-                            <button class="tab-button active" data-tab="risk-management-tab">Risk Management</button>
-                            <button class="tab-button" data-tab="general-settings-tab">General</button>
-                            <button class="tab-button" data-tab="alerts-tab">Alerts</button>
-                        </div>
-                    </div>
-                    <div id="risk-management-tab" class="tab-content active">
-                        <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="take-profit-toggle" checked>
-                                <label class="form-check-label" for="take-profit-toggle">
-                                    Take Profit
-                                </label>
-                            </div>
-                            <div class="input-group mt-1">
-                                <input type="number" class="form-control" id="take-profit-value" value="3.0" min="0.1" max="100" step="0.1">
-                                <span class="input-group-text">%</span>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="stop-loss-toggle" checked>
-                                <label class="form-check-label" for="stop-loss-toggle">
-                                    Stop Loss
-                                </label>
-                            </div>
-                            <div class="input-group mt-1">
-                                <input type="number" class="form-control" id="stop-loss-value" value="2.0" min="0.1" max="100" step="0.1">
-                                <span class="input-group-text">%</span>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="trailing-stop-toggle">
-                                <label class="form-check-label" for="trailing-stop-toggle">
-                                    Trailing Stop
-                                </label>
-                            </div>
-                            <div class="input-group mt-1">
-                                <input type="number" class="form-control" id="trailing-stop-value" value="1.5" min="0.1" max="100" step="0.1" disabled>
-                                <span class="input-group-text">%</span>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="risk-management-toggle">
-                                <label class="form-check-label" for="risk-management-toggle">
-                                    Risk Management
-                                </label>
-                            </div>
-                            <div class="row mt-1">
-                                <div class="col-6">
-                                    <div class="input-group">
-                                        <span class="input-group-text small">Max DD</span>
-                                        <input type="number" class="form-control" id="max-drawdown-value" value="10" min="1" max="100" step="1" disabled>
-                                        <span class="input-group-text">%</span>
-                                    </div>
-                                </div>
-                                <div class="col-6">
-                                    <div class="input-group">
-                                        <span class="input-group-text small">Day Loss</span>
-                                        <input type="number" class="form-control" id="max-daily-loss-value" value="5" min="1" max="100" step="1" disabled>
-                                        <span class="input-group-text">%</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="auto-trade-toggle" checked>
-                                <label class="form-check-label" for="auto-trade-toggle">
-                                    Auto-Trading
-                                </label>
-                                <small class="text-muted ms-2">Trade signals automatically</small>
-                            </div>
-                        </div>
-                        <div class="text-end">
-                            <button id="save-settings-btn" class="btn btn-primary">Save Settings</button>
-                        </div>
-                    </div>
-                    <div id="general-settings-tab" class="tab-content">
-                        <div class="mb-3">
-                            <label for="theme-select" class="form-label">Theme</label>
-                            <select id="theme-select" class="form-select">
-                                <option value="dark" selected>Dark</option>
-                                <option value="light">Light</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="chart-update-frequency" class="form-label">Chart Update Frequency</label>
-                            <div class="input-group">
-                                <input type="number" id="chart-update-frequency" class="form-control" value="5" min="1" max="60" step="1">
-                                <span class="input-group-text">seconds</span>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Fee Settings</label>
-                            <div class="row">
-                                <div class="col-6">
-                                    <div class="input-group">
-                                        <span class="input-group-text small">Maker</span>
-                                        <input type="number" class="form-control" id="maker-fee" value="0.02" min="0" max="5" step="0.01">
-                                        <span class="input-group-text">%</span>
-                                    </div>
-                                </div>
-                                <div class="col-6">
-                                    <div class="input-group">
-                                        <span class="input-group-text small">Taker</span>
-                                        <input type="number" class="form-control" id="taker-fee" value="0.04" min="0" max="5" step="0.01">
-                                        <span class="input-group-text">%</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="small text-muted mt-1">Typical spot trading fees are 0.1% maker/taker</div>
-                        </div>
-                        <div class="text-end">
-                            <button id="save-general-settings-btn" class="btn btn-primary">Save Settings</button>
-                        </div>
-                    </div>
-                    <div id="alerts-tab" class="tab-content">
-                        <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="browser-alert-toggle" checked>
-                                <label class="form-check-label" for="browser-alert-toggle">
-                                    Browser Notifications
-                                </label>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="sound-alert-toggle" checked>
-                                <label class="form-check-label" for="sound-alert-toggle">
-                                    Sound Alerts
-                                </label>
-                            </div>
-                            <div class="mt-1">
-                                <label for="sound-volume-input" class="form-label mb-0 small">Volume</label>
-                                <input type="range" class="form-control" id="sound-volume-input" min="0" max="1" step="0.1" value="0.5">
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="discord-alert-toggle">
-                                <label class="form-check-label" for="discord-alert-toggle">
-                                    Discord Alerts
-                                </label>
-                            </div>
-                            <div class="mt-1">
-                                <input type="text" class="form-control" id="discord-webhook-input" placeholder="Discord Webhook URL" disabled>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="telegram-alert-toggle">
-                                <label class="form-check-label" for="telegram-alert-toggle">
-                                    Telegram Alerts
-                                </label>
-                            </div>
-                            <div class="mt-1">
-                                <input type="text" class="form-control mb-1" id="telegram-token-input" placeholder="Telegram Bot Token" disabled>
-                                <input type="text" class="form-control" id="telegram-chatid-input" placeholder="Telegram Chat ID" disabled>
-                            </div>
-                        </div>
-                        <div class="text-end">
-                            <button id="test-alert-btn" class="btn btn-secondary me-2">Test Alert</button>
-                            <button id="save-alerts-btn" class="btn btn-primary">Save Settings</button>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Log Card -->
+                <!-- System Log Card -->
                 <div class="card mb-3">
                     <div class="card-header">System Log</div>
                     <div class="card-body p-0">
                         <div class="log-container">
-                            <div id="logMessages">
-                                <!-- Log messages will be added here -->
-                            </div>
+                            <div id="logMessages"></div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Trading History Card -->
+                <!-- Recent Trades Card -->
                 <div class="card mb-3">
-                    <div class="card-header">Trading History</div>
+                    <div class="card-header">Recent Trades</div>
                     <div class="card-body p-0">
-                        <div id="empty-trade-history" class="p-4 text-center text-muted">
-                            <i class="fas fa-chart-line fa-3x mb-3"></i>
-                            <div>No trading history yet</div>
-                            <div class="small">Completed trades will appear here</div>
-                        </div>
-                        <div id="trade-history-container" style="display: none;">
-                            <div class="table-responsive">
-                                <table class="table table-sm table-dark mb-0">
-                                    <thead>
-                                        <tr>
-                                            <th>Time</th>
-                                            <th>Type</th>
-                                            <th>Entry</th>
-                                            <th>Exit</th>
-                                            <th>Size</th>
-                                            <th>P&L</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="trade-history-body">
-                                        <!-- Trade history rows will be added here -->
-                                    </tbody>
-                                </table>
-                            </div>
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Type</th>
+                                        <th>Entry/Exit</th>
+                                        <th>P&L</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="trade-history">
+                                    <!-- Trade history will be populated here -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -1251,72 +1065,220 @@
     </div>
     
     <!-- API Configuration Modal -->
-    <div id="apiConfigModal" class="modal">
+    <div id="api-config-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">API Configuration</h5>
-                <span class="close-modal">&times;</span>
+                <h2 class="modal-title">API Configuration</h2>
+                <span class="close-modal" id="close-api-modal">&times;</span>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
                     <label for="api-key" class="form-label">API Key</label>
-                    <input type="text" class="form-control" id="api-key" placeholder="Enter your Binance API key">
+                    <input type="text" id="api-key" class="form-control" placeholder="Enter your Binance API key">
                 </div>
                 <div class="mb-3">
                     <label for="api-secret" class="form-label">API Secret</label>
-                    <input type="password" class="form-control" id="api-secret" placeholder="Enter your Binance API secret">
-                    <small class="text-muted">Your API key should have spot trading permissions</small>
+                    <input type="password" id="api-secret" class="form-control" placeholder="Enter your Binance API secret">
                 </div>
-                <div class="mb-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="testnet-toggle" checked>
-                        <label class="form-check-label" for="testnet-toggle">
-                            Use Testnet (for testing only)
-                        </label>
-                    </div>
-                    <small class="text-muted">Recommended for initial testing - no real funds are used</small>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button id="cancel-api-config-btn" class="btn btn-secondary">Cancel</button>
-                <button id="save-api-config-btn" class="btn btn-primary">Save Configuration</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Live Trading Confirmation Modal -->
-    <div id="liveTradingConfirmModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">⚠️ Live Trading Confirmation</h5>
-                <span class="close-modal">&times;</span>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-danger">
-                    <strong>WARNING:</strong> You are about to start live trading with real assets.
-                </div>
-                <p>Please confirm that you understand the following:</p>
-                <ul>
-                    <li>Trading cryptocurrencies involves substantial risk and is not suitable for all investors</li>
-                    <li>You may lose some or all of your invested capital</li>
-                    <li>Past performance is not indicative of future results</li>
-                    <li>This bot is provided as-is with no guarantees</li>
-                </ul>
-                <div class="form-check mt-3">
-                    <input class="form-check-input" type="checkbox" id="confirm-live-trading">
-                    <label class="form-check-label" for="confirm-live-trading">
-                        I understand the risks and wish to proceed with live trading
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="encrypt-keys">
+                    <label class="form-check-label" for="encrypt-keys">
+                        Encrypt API keys in local storage
                     </label>
                 </div>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <span>Make sure your API key has trading permissions but NOT withdrawal permissions.</span>
+                </div>
             </div>
             <div class="modal-footer">
-                <button id="cancel-live-trading-btn" class="btn btn-secondary">Cancel</button>
-                <button id="confirm-live-trading-btn" class="btn btn-danger" disabled>Start Live Trading</button>
+                <button id="save-api-config" class="btn btn-primary">Save Configuration</button>
+                <button id="cancel-api-config" class="btn btn-secondary">Cancel</button>
             </div>
         </div>
     </div>
     
-    <!-- JavaScript -->
-    <script src="paper.js"></script>
+    <!-- Chart Settings Modal -->
+    <div id="chart-settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Chart Settings</h2>
+                <span class="close-modal" id="close-chart-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Indicators</label>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="show-ma" checked>
+                        <label class="form-check-label" for="show-ma">
+                            Moving Averages
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="show-volty" checked>
+                        <label class="form-check-label" for="show-volty">
+                            Volty Bands
+                        </label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="show-volume">
+                        <label class="form-check-label" for="show-volume">
+                            Volume
+                        </label>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Chart Style</label>
+                    <select id="chart-style" class="form-select">
+                        <option value="candles">Candlesticks</option>
+                        <option value="ohlc">OHLC</option>
+                        <option value="line">Line</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="candle-limit" class="form-label">Displayed Candles: <span id="candle-limit-value">100</span></label>
+                    <input type="range" id="candle-limit" class="form-control" min="50" max="500" step="50" value="100">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="apply-chart-settings" class="btn btn-primary">Apply Settings</button>
+                <button id="reset-chart-settings" class="btn btn-secondary">Reset Defaults</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Trading Bot JavaScript -->
+    <script src="live.js"></script>
+    
+    <script>
+        // Initialize the application when the DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Start the live clock
+            startLiveClock();
+            
+            // Initialize the user interface components
+            initUI();
+            
+            // Show loading indicator while initializing
+            showLoading();
+            
+            // Load settings from localStorage
+            loadSettings();
+            
+            // Initialize charts
+            initCharts();
+            
+            // Add initial log message
+            addLogMessage('System initialized. Ready to trade.');
+            
+            // Hide loading indicator
+            hideLoading();
+            
+            // Set current user info
+            document.getElementById('user-info').textContent = `User: ${getCurrentUser()}`;
+            
+            // Update cryptocurrency icon based on selected symbol
+            updateCryptoIcon();
+        });
+        
+        // Get current user from the system
+        function getCurrentUser() {
+            return 'gelimorto2'; // This would typically be dynamic
+        }
+        
+        // Update cryptocurrency icon based on selected symbol
+        function updateCryptoIcon() {
+            const symbol = document.getElementById('symbol').value;
+            const coin = symbol.replace('USDT', '').toLowerCase();
+            document.getElementById('market-icon').src = `https://cryptoicons.org/api/icon/${coin}/32`;
+        }
+        
+        // Event delegation for all UI interactions
+        document.addEventListener('click', function(e) {
+            // Button click handlers
+            if (e.target.id === 'toggle-chart-btn' || e.target.closest('#toggle-chart-btn')) {
+                toggleChartType();
+            } else if (e.target.id === 'chart-settings-btn' || e.target.closest('#chart-settings-btn')) {
+                document.getElementById('chart-settings-modal').style.display = 'block';
+            } else if (e.target.id === 'close-chart-modal') {
+                document.getElementById('chart-settings-modal').style.display = 'none';
+            } else if (e.target.id === 'api-config-btn' || e.target.closest('#api-config-btn')) {
+                document.getElementById('api-config-modal').style.display = 'block';
+            } else if (e.target.id === 'close-api-modal') {
+                document.getElementById('api-config-modal').style.display = 'none';
+            } else if (e.target.id === 'paper-trading-btn' || e.target.closest('#paper-trading-btn')) {
+                switchToTradingMode('paper');
+            } else if (e.target.id === 'live-trading-btn' || e.target.closest('#live-trading-btn')) {
+                switchToTradingMode('live');
+            } else if (e.target.id === 'start-trading-btn' || e.target.closest('#start-trading-btn')) {
+                startTrading();
+            } else if (e.target.id === 'stop-trading-btn' || e.target.closest('#stop-trading-btn')) {
+                stopTrading();
+            } else if (e.target.id === 'reset-trading-btn' || e.target.closest('#reset-trading-btn')) {
+                resetTrading();
+            } else if (e.target.id === 'start-live-trading-btn' || e.target.closest('#start-live-trading-btn')) {
+                startLiveTrading();
+            } else if (e.target.id === 'emergency-stop-btn' || e.target.closest('#emergency-stop-btn')) {
+                emergencyStop();
+            } else if (e.target.id === 'position-close-btn' || e.target.closest('#position-close-btn')) {
+                closeCurrentPosition('Manual close');
+            } else if (e.target.id === 'long-position-btn' || e.target.closest('#long-position-btn')) {
+                openManualPosition('long');
+            } else if (e.target.id === 'short-position-btn' || e.target.closest('#short-position-btn')) {
+                openManualPosition('short');
+            } else if (e.target.id === 'save-api-config' || e.target.closest('#save-api-config')) {
+                saveAPIConfig();
+                document.getElementById('api-config-modal').style.display = 'none';
+            } else if (e.target.id === 'apply-chart-settings' || e.target.closest('#apply-chart-settings')) {
+                applyChartSettings();
+                document.getElementById('chart-settings-modal').style.display = 'none';
+            } else if (e.target.id === 'reset-chart-settings' || e.target.closest('#reset-chart-settings')) {
+                resetChartSettings();
+            }
+        });
+        
+        // Input change event handlers
+        document.addEventListener('input', function(e) {
+            if (e.target.id === 'symbol') {
+                updateCryptoIcon();
+                reloadDataWithSettings();
+            } else if (e.target.id === 'timeframe') {
+                reloadDataWithSettings();
+            } else if (e.target.id === 'position-size') {
+                document.getElementById('position-size-value').textContent = `${e.target.value}%`;
+                saveSettings();
+            } else if (e.target.id === 'atr-length') {
+                document.getElementById('atr-length-value').textContent = e.target.value;
+                saveSettings();
+            } else if (e.target.id === 'atr-mult') {
+                document.getElementById('atr-mult-value').textContent = e.target.value;
+                saveSettings();
+            } else if (e.target.id === 'live-position-size') {
+                document.getElementById('live-position-size-value').textContent = `${e.target.value}%`;
+                saveSettings();
+            } else if (e.target.id === 'live-atr-length') {
+                document.getElementById('live-atr-length-value').textContent = e.target.value;
+                saveSettings();
+            } else if (e.target.id === 'live-atr-mult') {
+                document.getElementById('live-atr-mult-value').textContent = e.target.value;
+                saveSettings();
+            } else if (e.target.id === 'candle-limit') {
+                document.getElementById('candle-limit-value').textContent = e.target.value;
+            } else if (e.target.id === 'use-testnet-toggle') {
+                saveSettings();
+            }
+        });
+        
+        // Handle window resize for responsive charts
+        window.addEventListener('resize', function() {
+            if (typeof Plotly !== 'undefined') {
+                Plotly.Plots.resize('priceChart');
+                Plotly.Plots.resize('equityChart');
+            }
+        });
+    </script>
 </body>
 </html>
