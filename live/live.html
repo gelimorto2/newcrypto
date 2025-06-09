@@ -862,6 +862,14 @@
                         <div class="mt-2 text-center text-muted small">
                             <i class="fas fa-info-circle me-1"></i> Paper trading uses simulated capital with real market data
                         </div>
+                        <div class="mt-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="use-testnet-toggle">
+                                <label class="form-check-label" for="use-testnet-toggle">
+                                    Use Binance Testnet API
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -1002,24 +1010,6 @@
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label for="leverage-select" class="form-label">Leverage</label>
-                            <select id="leverage-select" class="form-select">
-                                <option value="1">1x</option>
-                                <option value="2">2x</option>
-                                <option value="3">3x</option>
-                                <option value="5" selected>5x</option>
-                                <option value="10">10x</option>
-                                <option value="20">20x</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="margin-type-select" class="form-label">Margin Type</label>
-                            <select id="margin-type-select" class="form-select">
-                                <option value="ISOLATED" selected>Isolated</option>
-                                <option value="CROSSED">Cross</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
                             <label for="live-position-size" class="form-label">Position Size: <span id="live-position-size-value">5%</span></label>
                             <input type="range" id="live-position-size" class="form-control" min="1" max="100" value="5">
                         </div>
@@ -1032,362 +1022,263 @@
                             <input type="range" id="live-atr-mult" class="form-control" min="0.1" max="2" step="0.05" value="0.75">
                         </div>
                         <div class="mb-3">
-                            <button id="configure-api-btn" class="btn btn-warning w-100">
-                                <i class="fas fa-key me-1"></i> Configure API Keys
-                            </button>
+                            <div class="d-flex justify-content-between">
+                                <label class="form-label mb-0">API Configuration:</label>
+                                <button id="configure-api-btn" class="btn btn-sm btn-primary">Configure</button>
+                            </div>
+                            <div class="small text-muted mt-1">Set up your Binance API keys for live trading</div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Account Balance Section (for futures trading) -->
-                <div id="account-balance-section" class="card mb-3" style="display: none;">
-                    <div class="card-header">Account Balance</div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="metric-title">Available</div>
-                                <div id="available-balance" class="metric-value">0.00 USDT</div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="metric-title">Position Margin</div>
-                                <div id="position-margin" class="metric-value">0.00 USDT</div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="metric-title">Unrealized P&L</div>
-                                <div id="unrealized-pnl" class="metric-value">0.00 USDT</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Fee Information -->
-                <div id="fee-information" class="card mb-3" style="display: none;">
-                    <div class="card-header">Fee Information</div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="d-flex justify-content-between">
-                                    <div class="text-muted small">Maker Fee:</div>
-                                    <div id="futures-maker-fee" class="small">0.02%</div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="d-flex justify-content-between">
-                                    <div class="text-muted small">Taker Fee:</div>
-                                    <div id="futures-taker-fee" class="small">0.04%</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- System Log -->
+                <!-- Trading Settings Tab -->
                 <div class="card mb-3">
-                    <div class="card-header">System Log</div>
-                    <div class="card-body p-0">
-                        <div class="log-container">
-                            <div id="logMessages"></div>
+                    <div class="card-header">
+                        <div class="d-flex">
+                            <button class="tab-button active" data-tab="risk-management-tab">Risk Management</button>
+                            <button class="tab-button" data-tab="general-settings-tab">General</button>
+                            <button class="tab-button" data-tab="alerts-tab">Alerts</button>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Trade History -->
-                <div id="empty-trade-history" class="card mb-3">
-                    <div class="card-header">Trade History</div>
-                    <div class="card-body text-center p-4">
-                        <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">No trades have been executed yet.</p>
-                        <p class="text-muted small">Start trading to see your trade history here.</p>
-                    </div>
-                </div>
-                
-                <div id="trade-history-container" class="card mb-3" style="display: none;">
-                    <div class="card-header">Trade History</div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Time</th>
-                                        <th>Type</th>
-                                        <th>Entry</th>
-                                        <th>Exit</th>
-                                        <th>Size</th>
-                                        <th>P&L</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="trade-history-body">
-                                    <!-- Trade history rows will be inserted here -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Settings Tabs -->
-        <div class="card mt-3">
-            <div class="card-header p-2">
-                <div class="d-flex">
-                    <button class="tab-button active" data-tab="risk-tab">Risk Management</button>
-                    <button class="tab-button" data-tab="alerts-tab">Alerts</button>
-                    <button class="tab-button" data-tab="general-tab">General Settings</button>
-                </div>
-            </div>
-            
-            <!-- Risk Management Tab -->
-            <div id="risk-tab" class="tab-content active">
-                <div class="row">
-                    <div class="col-md-6">
+                    <div id="risk-management-tab" class="tab-content active">
                         <div class="mb-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <label class="form-label">Take Profit</label>
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="take-profit-toggle" checked>
-                                </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="take-profit-toggle" checked>
+                                <label class="form-check-label" for="take-profit-toggle">
+                                    Take Profit
+                                </label>
                             </div>
-                            <div class="input-group">
-                                <input type="number" id="take-profit-value" class="form-control" value="3" min="0.1" step="0.1">
+                            <div class="input-group mt-1">
+                                <input type="number" class="form-control" id="take-profit-value" value="3.0" min="0.1" max="100" step="0.1">
                                 <span class="input-group-text">%</span>
                             </div>
-                            <div class="text-muted small mt-1">Percentage gain to take profit</div>
                         </div>
-                        
                         <div class="mb-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <label class="form-label">Stop Loss</label>
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="stop-loss-toggle" checked>
-                                </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="stop-loss-toggle" checked>
+                                <label class="form-check-label" for="stop-loss-toggle">
+                                    Stop Loss
+                                </label>
                             </div>
-                            <div class="input-group">
-                                <input type="number" id="stop-loss-value" class="form-control" value="2" min="0.1" step="0.1">
+                            <div class="input-group mt-1">
+                                <input type="number" class="form-control" id="stop-loss-value" value="2.0" min="0.1" max="100" step="0.1">
                                 <span class="input-group-text">%</span>
                             </div>
-                            <div class="text-muted small mt-1">Percentage loss to stop out</div>
                         </div>
-                    </div>
-                    
-                    <div class="col-md-6">
                         <div class="mb-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <label class="form-label">Trailing Stop</label>
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="trailing-stop-toggle">
-                                </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="trailing-stop-toggle">
+                                <label class="form-check-label" for="trailing-stop-toggle">
+                                    Trailing Stop
+                                </label>
                             </div>
-                            <div class="input-group">
-                                <input type="number" id="trailing-stop-value" class="form-control" value="1.5" min="0.1" step="0.1" disabled>
+                            <div class="input-group mt-1">
+                                <input type="number" class="form-control" id="trailing-stop-value" value="1.5" min="0.1" max="100" step="0.1" disabled>
                                 <span class="input-group-text">%</span>
                             </div>
-                            <div class="text-muted small mt-1">Trail by percentage from highest profit</div>
                         </div>
-                        
                         <div class="mb-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <label class="form-label">Risk Management</label>
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="risk-management-toggle">
-                                </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="risk-management-toggle">
+                                <label class="form-check-label" for="risk-management-toggle">
+                                    Risk Management
+                                </label>
                             </div>
-                            <div class="row">
+                            <div class="row mt-1">
                                 <div class="col-6">
                                     <div class="input-group">
-                                        <span class="input-group-text">DD</span>
-                                        <input type="number" id="max-drawdown-value" class="form-control" value="10" min="1" step="1" disabled>
+                                        <span class="input-group-text small">Max DD</span>
+                                        <input type="number" class="form-control" id="max-drawdown-value" value="10" min="1" max="100" step="1" disabled>
                                         <span class="input-group-text">%</span>
                                     </div>
                                 </div>
                                 <div class="col-6">
                                     <div class="input-group">
-                                        <span class="input-group-text">DL</span>
-                                        <input type="number" id="max-daily-loss-value" class="form-control" value="5" min="1" step="1" disabled>
+                                        <span class="input-group-text small">Day Loss</span>
+                                        <input type="number" class="form-control" id="max-daily-loss-value" value="5" min="1" max="100" step="1" disabled>
                                         <span class="input-group-text">%</span>
                                     </div>
                                 </div>
                             </div>
-                            <div class="text-muted small mt-1">Max drawdown and daily loss limits</div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="auto-trade-toggle" checked>
+                                <label class="form-check-label" for="auto-trade-toggle">
+                                    Auto-Trading
+                                </label>
+                                <small class="text-muted ms-2">Trade signals automatically</small>
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <button id="save-settings-btn" class="btn btn-primary">Save Settings</button>
                         </div>
                     </div>
-                </div>
-                
-                <div class="d-flex justify-content-between align-items-center">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="auto-trade-toggle" checked>
-                        <label class="form-check-label" for="auto-trade-toggle">Auto-Trading (Execute signals automatically)</label>
-                    </div>
-                    <button id="save-settings-btn" class="btn btn-primary">Save Settings</button>
-                </div>
-            </div>
-            
-            <!-- Alerts Tab -->
-            <div id="alerts-tab" class="tab-content">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <label class="form-label">Browser Notifications</label>
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="browser-alert-toggle" checked>
-                                </div>
-                            </div>
-                            <div class="text-muted small mt-1">Show browser notifications for important events</div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <label class="form-label">Sound Alerts</label>
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="sound-alert-toggle" checked>
-                                </div>
-                            </div>
-                            <div class="input-group mt-2">
-                                <span class="input-group-text">Volume</span>
-                                <input type="range" id="sound-volume-input" class="form-control" min="0" max="1" step="0.1" value="0.5">
-                            </div>
-                            <div class="text-muted small mt-1">Play sound alerts for signals and trades</div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <button id="test-alert-btn" class="btn btn-outline-secondary btn-sm">
-                                <i class="fas fa-bell me-1"></i> Test Alerts
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <label class="form-label">Discord Webhook</label>
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="discord-alert-toggle">
-                                </div>
-                            </div>
-                            <input type="text" id="discord-webhook-input" class="form-control" placeholder="Discord webhook URL" disabled>
-                            <div class="text-muted small mt-1">Send alerts to Discord channel</div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <label class="form-label">Telegram Alerts</label>
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="telegram-alert-toggle">
-                                </div>
-                            </div>
-                            <div class="input-group mb-2">
-                                <span class="input-group-text">Bot</span>
-                                <input type="text" id="telegram-token-input" class="form-control" placeholder="Bot token" disabled>
-                            </div>
-                            <div class="input-group">
-                                <span class="input-group-text">Chat</span>
-                                <input type="text" id="telegram-chatid-input" class="form-control" placeholder="Chat ID" disabled>
-                            </div>
-                            <div class="text-muted small mt-1">Send alerts to Telegram</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="d-flex justify-content-end">
-                    <button id="save-alerts-btn" class="btn btn-primary">Save Alert Settings</button>
-                </div>
-            </div>
-            
-            <!-- General Settings Tab -->
-            <div id="general-tab" class="tab-content">
-                <div class="row">
-                    <div class="col-md-6">
+                    <div id="general-settings-tab" class="tab-content">
                         <div class="mb-3">
                             <label for="theme-select" class="form-label">Theme</label>
                             <select id="theme-select" class="form-select">
                                 <option value="dark" selected>Dark</option>
                                 <option value="light">Light</option>
                             </select>
-                            <div class="text-muted small mt-1">Application theme</div>
                         </div>
-                        
                         <div class="mb-3">
                             <label for="chart-update-frequency" class="form-label">Chart Update Frequency</label>
-                            <select id="chart-update-frequency" class="form-select">
-                                <option value="1">1 second</option>
-                                <option value="3">3 seconds</option>
-                                <option value="5" selected>5 seconds</option>
-                                <option value="10">10 seconds</option>
-                                <option value="30">30 seconds</option>
-                                <option value="60">1 minute</option>
-                            </select>
-                            <div class="text-muted small mt-1">How often to fetch new data and update charts</div>
+                            <div class="input-group">
+                                <input type="number" id="chart-update-frequency" class="form-control" value="5" min="1" max="60" step="1">
+                                <span class="input-group-text">seconds</span>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="col-md-6">
                         <div class="mb-3">
                             <label class="form-label">Fee Settings</label>
-                            <div class="input-group mb-2">
-                                <span class="input-group-text">Maker</span>
-                                <input type="number" id="maker-fee" class="form-control" value="0.02" min="0" step="0.01">
-                                <span class="input-group-text">%</span>
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="input-group">
+                                        <span class="input-group-text small">Maker</span>
+                                        <input type="number" class="form-control" id="maker-fee" value="0.02" min="0" max="5" step="0.01">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="input-group">
+                                        <span class="input-group-text small">Taker</span>
+                                        <input type="number" class="form-control" id="taker-fee" value="0.04" min="0" max="5" step="0.01">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="input-group">
-                                <span class="input-group-text">Taker</span>
-                                <input type="number" id="taker-fee" class="form-control" value="0.04" min="0" step="0.01">
-                                <span class="input-group-text">%</span>
-                            </div>
-                            <div class="text-muted small mt-1">Exchange fee rates for calculating P&L</div>
+                            <div class="small text-muted mt-1">Typical spot trading fees are 0.1% maker/taker</div>
                         </div>
-                        
+                        <div class="text-end">
+                            <button id="save-general-settings-btn" class="btn btn-primary">Save Settings</button>
+                        </div>
+                    </div>
+                    <div id="alerts-tab" class="tab-content">
                         <div class="mb-3">
-                            <div class="text-muted small">
-                                <a href="#" id="configure-api-link">Configure API Keys</a> |
-                                <a href="#" id="export-data">Export Data</a> |
-                                <a href="#" id="import-data">Import Data</a>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="browser-alert-toggle" checked>
+                                <label class="form-check-label" for="browser-alert-toggle">
+                                    Browser Notifications
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="sound-alert-toggle" checked>
+                                <label class="form-check-label" for="sound-alert-toggle">
+                                    Sound Alerts
+                                </label>
+                            </div>
+                            <div class="mt-1">
+                                <label for="sound-volume-input" class="form-label mb-0 small">Volume</label>
+                                <input type="range" class="form-control" id="sound-volume-input" min="0" max="1" step="0.1" value="0.5">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="discord-alert-toggle">
+                                <label class="form-check-label" for="discord-alert-toggle">
+                                    Discord Alerts
+                                </label>
+                            </div>
+                            <div class="mt-1">
+                                <input type="text" class="form-control" id="discord-webhook-input" placeholder="Discord Webhook URL" disabled>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="telegram-alert-toggle">
+                                <label class="form-check-label" for="telegram-alert-toggle">
+                                    Telegram Alerts
+                                </label>
+                            </div>
+                            <div class="mt-1">
+                                <input type="text" class="form-control mb-1" id="telegram-token-input" placeholder="Telegram Bot Token" disabled>
+                                <input type="text" class="form-control" id="telegram-chatid-input" placeholder="Telegram Chat ID" disabled>
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <button id="test-alert-btn" class="btn btn-secondary me-2">Test Alert</button>
+                            <button id="save-alerts-btn" class="btn btn-primary">Save Settings</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Log Card -->
+                <div class="card mb-3">
+                    <div class="card-header">System Log</div>
+                    <div class="card-body p-0">
+                        <div class="log-container">
+                            <div id="logMessages">
+                                <!-- Log messages will be added here -->
                             </div>
                         </div>
                     </div>
                 </div>
                 
-                <div class="d-flex justify-content-end">
-                    <button id="save-general-settings-btn" class="btn btn-primary">Save General Settings</button>
+                <!-- Trading History Card -->
+                <div class="card mb-3">
+                    <div class="card-header">Trading History</div>
+                    <div class="card-body p-0">
+                        <div id="empty-trade-history" class="p-4 text-center text-muted">
+                            <i class="fas fa-chart-line fa-3x mb-3"></i>
+                            <div>No trading history yet</div>
+                            <div class="small">Completed trades will appear here</div>
+                        </div>
+                        <div id="trade-history-container" style="display: none;">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-dark mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Type</th>
+                                            <th>Entry</th>
+                                            <th>Exit</th>
+                                            <th>Size</th>
+                                            <th>P&L</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="trade-history-body">
+                                        <!-- Trade history rows will be added here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-        
-        <footer class="mt-4 mb-2 text-center text-muted small">
-            <div>Volty Trading Bot v1.0.0 | <span id="mobile-info" style="display: none;">Mobile Version</span></div>
-            <div>© 2025 Volty Trading | <a href="#" class="text-muted">Terms of Service</a> | <a href="#" class="text-muted">Privacy Policy</a></div>
-        </footer>
     </div>
     
     <!-- API Configuration Modal -->
     <div id="apiConfigModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Configure API Keys</h5>
+                <h5 class="modal-title">API Configuration</h5>
                 <span class="close-modal">&times;</span>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
                     <label for="api-key" class="form-label">API Key</label>
-                    <input type="text" id="api-key" class="form-control" placeholder="Enter your API key">
+                    <input type="text" class="form-control" id="api-key" placeholder="Enter your Binance API key">
                 </div>
                 <div class="mb-3">
                     <label for="api-secret" class="form-label">API Secret</label>
-                    <input type="password" id="api-secret" class="form-control" placeholder="Enter your API secret">
+                    <input type="password" class="form-control" id="api-secret" placeholder="Enter your Binance API secret">
+                    <small class="text-muted">Your API key should have spot trading permissions</small>
                 </div>
                 <div class="mb-3">
-                    <div class="form-check form-switch">
+                    <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="testnet-toggle" checked>
-                        <label class="form-check-label" for="testnet-toggle">Use Testnet</label>
+                        <label class="form-check-label" for="testnet-toggle">
+                            Use Testnet (for testing only)
+                        </label>
                     </div>
-                    <div class="text-muted small mt-1">Enable to use testnet for practice with no real funds</div>
-                </div>
-                <div class="alert alert-warning">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>Security Warning:</strong> API keys should have trade-only permissions. Never share your API secret with anyone.
+                    <small class="text-muted">Recommended for initial testing - no real funds are used</small>
                 </div>
             </div>
             <div class="modal-footer">
-                <button id="cancel-api-config-btn" class="btn btn-outline-secondary">Cancel</button>
+                <button id="cancel-api-config-btn" class="btn btn-secondary">Cancel</button>
                 <button id="save-api-config-btn" class="btn btn-primary">Save Configuration</button>
             </div>
         </div>
@@ -1397,40 +1288,35 @@
     <div id="liveTradingConfirmModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-exclamation-triangle text-danger me-2"></i>
-                    Live Trading Confirmation
-                </h5>
+                <h5 class="modal-title">⚠️ Live Trading Confirmation</h5>
                 <span class="close-modal">&times;</span>
             </div>
             <div class="modal-body">
                 <div class="alert alert-danger">
-                    <strong>Warning:</strong> You are about to start LIVE trading with real funds. This will execute real trades on your exchange account.
+                    <strong>WARNING:</strong> You are about to start live trading with real assets.
                 </div>
-                <p>Before proceeding, please confirm that:</p>
+                <p>Please confirm that you understand the following:</p>
                 <ul>
-                    <li>You understand the risks involved in trading cryptocurrencies</li>
-                    <li>You have tested this strategy in paper trading mode</li>
-                    <li>Your API keys are correctly configured</li>
-                    <li>Your position size and risk parameters are appropriate</li>
+                    <li>Trading cryptocurrencies involves substantial risk and is not suitable for all investors</li>
+                    <li>You may lose some or all of your invested capital</li>
+                    <li>Past performance is not indicative of future results</li>
+                    <li>This bot is provided as-is with no guarantees</li>
                 </ul>
-                <div class="mb-3 mt-4">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="confirm-live-trading">
-                        <label class="form-check-label" for="confirm-live-trading">
-                            I understand the risks and wish to proceed with live trading
-                        </label>
-                    </div>
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="confirm-live-trading">
+                    <label class="form-check-label" for="confirm-live-trading">
+                        I understand the risks and wish to proceed with live trading
+                    </label>
                 </div>
             </div>
             <div class="modal-footer">
-                <button id="cancel-live-trading-btn" class="btn btn-outline-secondary">Cancel</button>
+                <button id="cancel-live-trading-btn" class="btn btn-secondary">Cancel</button>
                 <button id="confirm-live-trading-btn" class="btn btn-danger" disabled>Start Live Trading</button>
             </div>
         </div>
     </div>
     
-    <!-- Custom JavaScript -->
+    <!-- JavaScript -->
     <script src="paper.js"></script>
 </body>
 </html>
