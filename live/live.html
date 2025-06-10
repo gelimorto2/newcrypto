@@ -213,38 +213,6 @@
             height: 100%;
         }
         
-        .widget-panel {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background-color: var(--card-dark);
-            border-top: 1px solid var(--border-dark);
-            padding: 10px;
-            transform: translateY(100%);
-            transition: transform 0.3s ease;
-            height: 40%;
-            overflow-y: auto;
-            z-index: 50;
-        }
-        
-        .widget-panel.open {
-            transform: translateY(0);
-        }
-        
-        .widget-panel-toggle {
-            position: absolute;
-            top: -35px;
-            right: 10px;
-            background-color: var(--card-dark);
-            border: 1px solid var(--border-dark);
-            border-bottom: none;
-            border-radius: 4px 4px 0 0;
-            padding: 5px 10px;
-            cursor: pointer;
-            z-index: 51;
-        }
-        
         .bot-controls {
             position: absolute;
             bottom: 10px;
@@ -350,6 +318,7 @@
         #logMessages div {
             margin-bottom: 0.25rem;
             word-wrap: break-word;
+            color: var(--text-light) !important;
         }
         
         .mode-indicator {
@@ -583,6 +552,60 @@
             border-top: 1px solid var(--border-dark);
         }
         
+        /* Floating Position Widget */
+        .floating-widget {
+            position: absolute;
+            min-width: 300px;
+            z-index: 100;
+            background-color: var(--card-dark);
+            border: 1px solid var(--border-dark);
+            border-radius: var(--bs-border-radius);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            cursor: move;
+            user-select: none;
+            resize: both;
+            overflow: auto;
+        }
+        
+        .floating-widget-header {
+            padding: 8px 12px;
+            background-color: var(--card-darker);
+            color: var(--text-light);
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-dark);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .floating-widget-body {
+            padding: 12px;
+            background-color: var(--card-dark);
+        }
+        
+        /* Position Status Badge */
+        .position-badge {
+            position: absolute;
+            top: 60px;
+            right: 10px;
+            background-color: var(--card-dark);
+            border: 1px solid var(--border-dark);
+            border-radius: 4px;
+            padding: 8px 12px;
+            z-index: 90;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .position-badge.long {
+            border-left: 4px solid var(--success-color);
+        }
+        
+        .position-badge.short {
+            border-left: 4px solid var(--danger-color);
+        }
+        
         /* Responsive */
         @media (max-width: 768px) {
             .sidebar {
@@ -598,8 +621,12 @@
                 right: 10px;
             }
             
-            .widget-panel {
-                height: 60%;
+            .floating-widget {
+                position: fixed;
+                top: 65px !important;
+                left: 10px !important;
+                right: 10px !important;
+                width: auto !important;
             }
         }
     </style>
@@ -642,29 +669,37 @@
     <div class="app-container">
         <div class="main-content">
             <!-- Chart Area -->
-            
             <div class="chart-container">
                 <!-- TradingView Chart (Central) -->
                 <div class="tradingview-widget-container" style="height:100%;width:100%">
-                  <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
+                  <div id="tradingview_chart" class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
                   <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span class="blue-text">Track all markets on TradingView</span></a></div>
                   <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
                   {
-                  "autosize": true,
-                  "symbol": "BINANCE:BTCUSDT",
-                  "interval": "1",
-                  "timezone": "Etc/UTC",
-                  "theme": "dark",
-                  "style": "1",
-                  "locale": "en",
-                  "withdateranges": true,
-                  "hide_side_toolbar": false,
-                  "allow_symbol_change": true,
-                  "show_popup_button": true,
-                  "popup_width": "1000",
-                  "popup_height": "650",
-                  "support_host": "https://www.tradingview.com"
-                  }
+"symbol": "BINANCE:BTCUSDT",
+  "interval": "1",
+  "timezone": "Etc/UTC",
+  "theme": "dark",
+  "style": "1",
+  "locale": "en",
+  "withdateranges": true,
+  "hide_side_toolbar": false,
+  "allow_symbol_change": true,
+  "details": true,
+  "hotlist": true,
+  "calendar": false,
+  "studies": [
+    "BB@tv-basicstudies"
+  ],
+  "show_popup_button": true,
+  "popup_width": "1000",
+  "popup_height": "650",
+  "support_host": "https://www.tradingview.com",
+  "enable_publishing": false,
+  "allow_drawing": true,
+  "save_image": true,
+  "container_id": "tradingview_chart"
+  }
                   </script>
                 </div>
                 
@@ -672,22 +707,66 @@
                 <div class="overlay-controls">
                     <div id="bot-activity" class="bot-activity waiting"></div>
                     <div id="bot-status" class="status-indicator idle">⏸️ BOT IDLE</div>
-                    <div id="activity-status" class="text-muted small ms-2">System initializing...</div>
+                    <div id="activity-status" class="text-light small ms-2">System initializing...</div>
                 </div>
-
-                <!-- Add this right after the overlay-controls div in the chart-container div -->
-<div class="tradingview-widget-container" style="position: absolute; top: 100px; left: 100px; z-index: 50; width: auto;">
-  <div class="tradingview-widget-container__widget"></div>
-  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-single-quote.js" async>
-  {
-  "symbol": "BINANCE:BTCUSDT",
-  "width": "350",
-  "colorTheme": "dark",
-  "isTransparent": true,
-  "locale": "en"
-  }
-  </script>
-</div>
+                
+                <!-- Position Status Badge -->
+                <div id="position-status" class="position-badge" style="display:none;">
+                    <div id="position-status-info"></div>
+                </div>
+                
+                <!-- Floating Position Widget -->
+                <div id="position-widget" class="floating-widget" style="top: 80px; right: 20px; width: 340px; display: none;">
+                    <div class="floating-widget-header">
+                        <div>Position & Performance</div>
+                        <div>
+                            <i class="fas fa-times" id="close-position-widget" style="cursor: pointer;"></i>
+                        </div>
+                    </div>
+                    <div class="floating-widget-body">
+                        <!-- Current Position (if any) -->
+                        <div id="position-info" style="display: none;">
+                            <div class="d-flex justify-content-between mb-2">
+                                <div><strong>Position:</strong> <span id="position-type" class="positive">LONG</span></div>
+                                <div><span id="position-pnl">+$0.00 (0.00%)</span></div>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <div>Entry: <span id="position-entry-price">$0.00</span></div>
+                                <div>Current: <span id="position-current-price">$0.00</span></div>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <div>TP: <span id="position-tp">Not Set</span></div>
+                                <div>SL: <span id="position-sl">Not Set</span></div>
+                            </div>
+                            <button id="position-close-btn" class="btn btn-danger btn-sm w-100">Close Position</button>
+                            <hr>
+                        </div>
+                        
+                        <!-- Performance Metrics -->
+                        <div class="metric-mini">
+                            <div class="metric-mini-title">Total Return</div>
+                            <div id="total-return" class="metric-mini-value">0.00%</div>
+                        </div>
+                        <div class="metric-mini">
+                            <div class="metric-mini-title">Win Rate</div>
+                            <div id="win-rate" class="metric-mini-value">0.0%</div>
+                        </div>
+                        <div class="metric-mini">
+                            <div class="metric-mini-title">Profit Factor</div>
+                            <div id="profit-factor" class="metric-mini-value">0.00</div>
+                        </div>
+                        <div class="metric-mini">
+                            <div class="metric-mini-title">Max Drawdown</div>
+                            <div id="max-drawdown" class="metric-mini-value">0.00%</div>
+                        </div>
+                        <div class="metric-mini">
+                            <div class="metric-mini-title">Daily Trades / P&L</div>
+                            <div class="metric-mini-value">
+                                <span id="stat-daily-trades">0</span> / <span id="stat-daily-pnl">$0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Bot Controls -->
                 <div class="bot-controls">
@@ -722,118 +801,6 @@
                 <button class="sidebar-toggle" id="sidebar-toggle">
                     <i class="fas fa-cog"></i>
                 </button>
-                
-                <!-- Bottom Widget Panel -->
-                <div class="widget-panel" id="widget-panel">
-                    <div class="widget-panel-toggle" id="widget-panel-toggle">
-                        <i class="fas fa-chart-line"></i> Market Data
-                    </div>
-                    
-                    <div class="row g-2">
-                        <!-- TradingView Technical Analysis Widget -->
-                        <div class="col-md-4">
-                            <div class="card h-100">
-                                <div class="widget-header">
-                                    <div class="widget-header-title">Technical Analysis</div>
-                                </div>
-                                <div class="widget-content p-0">
-                                    <!-- TradingView Technical Analysis Widget -->
-                                    <div class="tradingview-widget-container">
-                                      <div class="tradingview-widget-container__widget"></div>
-                                      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js" async>
-                                      {
-                                      "interval": "1D",
-                                      "width": "100%",
-                                      "isTransparent": true,
-                                      "height": "100%",
-                                      "symbol": "BINANCE:BTCUSDT",
-                                      "showIntervalTabs": true,
-                                      "locale": "en",
-                                      "colorTheme": "dark"
-                                      }
-                                      </script>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Position & Stats -->
-                        <div class="col-md-4">
-                            <div class="card h-100">
-                                <div class="widget-header">
-                                    <div class="widget-header-title">Position & Performance</div>
-                                </div>
-                                <div class="widget-content">
-                                    <!-- Current Position (if any) -->
-                                    <div id="position-info" style="display: none;">
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <div><strong>Position:</strong> <span id="position-type" class="positive">LONG</span></div>
-                                            <div><span id="position-pnl">+$0.00 (0.00%)</span></div>
-                                        </div>
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <div>Entry: <span id="position-entry-price">$0.00</span></div>
-                                            <div>Current: <span id="position-current-price">$0.00</span></div>
-                                        </div>
-                                        <div class="d-flex justify-content-between mb-2">
-                                            <div>TP: <span id="position-tp">Not Set</span></div>
-                                            <div>SL: <span id="position-sl">Not Set</span></div>
-                                        </div>
-                                        <button id="position-close-btn" class="btn btn-danger btn-sm w-100">Close Position</button>
-                                        <hr>
-                                    </div>
-                                    
-                                    <!-- Performance Metrics -->
-                                    <div class="metric-mini">
-                                        <div class="metric-mini-title">Total Return</div>
-                                        <div id="total-return" class="metric-mini-value">0.00%</div>
-                                    </div>
-                                    <div class="metric-mini">
-                                        <div class="metric-mini-title">Win Rate</div>
-                                        <div id="win-rate" class="metric-mini-value">0.0%</div>
-                                    </div>
-                                    <div class="metric-mini">
-                                        <div class="metric-mini-title">Profit Factor</div>
-                                        <div id="profit-factor" class="metric-mini-value">0.00</div>
-                                    </div>
-                                    <div class="metric-mini">
-                                        <div class="metric-mini-title">Max Drawdown</div>
-                                        <div id="max-drawdown" class="metric-mini-value">0.00%</div>
-                                    </div>
-                                    <div class="metric-mini">
-                                        <div class="metric-mini-title">Daily Trades / P&L</div>
-                                        <div class="metric-mini-value">
-                                            <span id="stat-daily-trades">0</span> / <span id="stat-daily-pnl">$0.00</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- TradingView Symbol Info Widget -->
-                        <div class="col-md-4">
-                            <div class="card h-100">
-                                <div class="widget-header">
-                                    <div class="widget-header-title">Symbol Info</div>
-                                </div>
-                                <div class="widget-content p-0">
-                                    <!-- TradingView Symbol Info Widget -->
-                                    <div class="tradingview-widget-container">
-                                      <div class="tradingview-widget-container__widget"></div>
-                                      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-symbol-info.js" async>
-                                      {
-                                      "symbol": "BINANCE:BTCUSDT",
-                                      "width": "100%",
-                                      "locale": "en",
-                                      "colorTheme": "dark",
-                                      "isTransparent": true
-                                      }
-                                      </script>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
             
             <!-- Settings Sidebar -->
@@ -910,13 +877,15 @@
                                     <label for="position-size" class="form-label">Position Size: <span id="position-size-value">10%</span></label>
                                     <input type="range" id="position-size" class="form-control" min="1" max="100" value="10">
                                 </div>
+                                
+                                <!-- Bollinger Bands Parameters -->
                                 <div class="mb-2">
-                                    <label for="atr-length" class="form-label">ATR Length: <span id="atr-length-value">5</span></label>
-                                    <input type="range" id="atr-length" class="form-control" min="1" max="20" value="5">
+                                    <label for="bb-period" class="form-label">BB Period: <span id="bb-period-value">20</span></label>
+                                    <input type="range" id="bb-period" class="form-control" min="5" max="50" value="20">
                                 </div>
                                 <div class="mb-2">
-                                    <label for="atr-mult" class="form-label">ATR Multiplier: <span id="atr-mult-value">0.75</span></label>
-                                    <input type="range" id="atr-mult" class="form-control" min="0.1" max="2" step="0.05" value="0.75">
+                                    <label for="bb-stddev" class="form-label">BB StdDev: <span id="bb-stddev-value">2</span></label>
+                                    <input type="range" id="bb-stddev" class="form-control" min="0.5" max="4" step="0.1" value="2">
                                 </div>
                             </div>
                         </div>
@@ -969,6 +938,14 @@
                                         <span class="ms-1">%</span>
                                     </div>
                                 </div>
+                                <div class="mb-2">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="show-position-widget-toggle" checked>
+                                        <label class="form-check-label" for="show-position-widget-toggle">
+                                            Show Position Widget
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -998,30 +975,30 @@
                       {
                       "symbols": [
                         {
-                          "proName": "BINANCE:BTCUSDT",
-                          "title": "BTC"
+                          "proName": "BITSTAMP:BTCUSD",
+                          "title": "Bitcoin"
                         },
                         {
-                          "proName": "BINANCE:ETHUSDT",
-                          "title": "ETH"
+                          "proName": "BITSTAMP:ETHUSD",
+                          "title": "Ethereum"
+                        },
+                        {
+                          "proName": "BINANCE:SOLUSDT",
+                          "title": "Solana"
                         },
                         {
                           "proName": "BINANCE:BNBUSDT",
                           "title": "BNB"
                         },
                         {
-                          "proName": "BINANCE:SOLUSDT",
-                          "title": "SOL"
-                        },
-                        {
                           "proName": "BINANCE:ADAUSDT",
-                          "title": "ADA"
+                          "title": "Cardano"
                         }
                       ],
                       "showSymbolLogo": true,
                       "colorTheme": "dark",
                       "isTransparent": true,
-                      "displayMode": "compact",
+                      "displayMode": "adaptive",
                       "locale": "en"
                       }
                       </script>
@@ -1030,55 +1007,110 @@
             </div>
         </div>
     </div>
-    
-    <!-- Bootstrap JS Bundle with Popper -->
+
+    <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- App Scripts -->
+    <!-- Custom JavaScript -->
     <script src="paper.js"></script>
     
     <script>
-        // Additional UI interaction handling for new layout
+        // Initialize widget panel toggle
         document.addEventListener('DOMContentLoaded', function() {
-            // Sidebar toggle
             const sidebarToggle = document.getElementById('sidebar-toggle');
             const sidebar = document.getElementById('sidebar');
+            const positionWidget = document.getElementById('position-widget');
+            const closePositionWidget = document.getElementById('close-position-widget');
+            const showPositionWidgetToggle = document.getElementById('show-position-widget-toggle');
             
-            if (sidebarToggle && sidebar) {
-                sidebarToggle.addEventListener('click', function() {
-                    sidebar.classList.toggle('sidebar-collapsed');
-                    sidebarToggle.classList.toggle('collapsed');
+            // Sidebar toggle
+            sidebarToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('sidebar-collapsed');
+                sidebarToggle.classList.toggle('collapsed');
+            });
+            
+            // Show position widget by default
+            positionWidget.style.display = 'block';
+            
+            // Close position widget
+            if (closePositionWidget) {
+                closePositionWidget.addEventListener('click', function() {
+                    positionWidget.style.display = 'none';
+                    if (showPositionWidgetToggle) showPositionWidgetToggle.checked = false;
+                });
+            }
+            
+            // Toggle position widget
+            if (showPositionWidgetToggle) {
+                showPositionWidgetToggle.addEventListener('change', function() {
+                    positionWidget.style.display = this.checked ? 'block' : 'none';
+                });
+            }
+            
+            // Make position widget draggable
+            if (positionWidget) {
+                let isDragging = false;
+                let offsetX, offsetY;
+                
+                positionWidget.querySelector('.floating-widget-header').addEventListener('mousedown', function(e) {
+                    isDragging = true;
+                    offsetX = e.clientX - positionWidget.getBoundingClientRect().left;
+                    offsetY = e.clientY - positionWidget.getBoundingClientRect().top;
                     
-                    // Update icon
-                    const icon = sidebarToggle.querySelector('i');
-                    if (icon) {
-                        if (sidebar.classList.contains('sidebar-collapsed')) {
-                            icon.className = 'fas fa-cog';
-                        } else {
-                            icon.className = 'fas fa-times';
-                        }
+                    positionWidget.style.cursor = 'grabbing';
+                });
+                
+                document.addEventListener('mousemove', function(e) {
+                    if (!isDragging) return;
+                    
+                    const x = e.clientX - offsetX;
+                    const y = e.clientY - offsetY;
+                    
+                    // Keep widget within viewport
+                    const maxX = window.innerWidth - positionWidget.offsetWidth;
+                    const maxY = window.innerHeight - positionWidget.offsetHeight;
+                    
+                    const newX = Math.max(0, Math.min(x, maxX));
+                    const newY = Math.max(0, Math.min(y, maxY));
+                    
+                    positionWidget.style.left = newX + 'px';
+                    positionWidget.style.top = newY + 'px';
+                });
+                
+                document.addEventListener('mouseup', function() {
+                    if (isDragging) {
+                        isDragging = false;
+                        positionWidget.style.cursor = 'move';
                     }
                 });
             }
             
-            // Widget panel toggle
-            const widgetPanelToggle = document.getElementById('widget-panel-toggle');
-            const widgetPanel = document.getElementById('widget-panel');
-            
-            if (widgetPanelToggle && widgetPanel) {
-                widgetPanelToggle.addEventListener('click', function() {
-                    widgetPanel.classList.toggle('open');
-                    
-                    // Update icon
-                    const icon = widgetPanelToggle.querySelector('i');
-                    if (icon) {
-                        if (widgetPanel.classList.contains('open')) {
-                            icon.className = 'fas fa-chevron-down';
-                        } else {
-                            icon.className = 'fas fa-chart-line';
-                        }
+            // Style log messages to ensure they're always white
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'childList') {
+                        const logMessages = document.querySelectorAll('#logMessages div');
+                        logMessages.forEach(msg => {
+                            // Ensure log text is white except for elements with specific color classes
+                            const spans = msg.querySelectorAll('span');
+                            spans.forEach(span => {
+                                if (!span.style.color) {
+                                    span.style.color = 'var(--text-light)';
+                                }
+                            });
+                            
+                            // Set default color for the message
+                            if (!msg.style.color) {
+                                msg.style.color = 'var(--text-light)';
+                            }
+                        });
                     }
                 });
+            });
+            
+            const logContainer = document.getElementById('logMessages');
+            if (logContainer) {
+                observer.observe(logContainer, { childList: true, subtree: true });
             }
         });
     </script>
