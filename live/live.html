@@ -670,13 +670,14 @@
         <div class="main-content">
             <!-- Chart Area -->
             <div class="chart-container">
-                <!-- TradingView Chart (Central) -->
-                <div class="tradingview-widget-container" style="height:100%;width:100%">
-                  <div id="tradingview_chart" class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
-                  <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span class="blue-text">Track all markets on TradingView</span></a></div>
-                  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
-                  {
-"symbol": "BINANCE:BTCUSDT",
+<!-- TradingView Chart (Central) -->
+<div class="tradingview-widget-container" style="height:100%;width:100%">
+  <div id="tradingview_chart" class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
+  <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span class="blue-text">Track all markets on TradingView</span></a></div>
+  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+  {
+  "autosize": true,
+  "symbol": "BINANCE:BTCUSDT",
   "interval": "1",
   "timezone": "Etc/UTC",
   "theme": "dark",
@@ -684,24 +685,14 @@
   "locale": "en",
   "withdateranges": true,
   "hide_side_toolbar": false,
-  "allow_symbol_change": true,
   "details": true,
-  "hotlist": true,
-  "calendar": false,
+  "allow_symbol_change": true,
   "studies": [
     "BB@tv-basicstudies"
   ],
-  "show_popup_button": true,
-  "popup_width": "1000",
-  "popup_height": "650",
-  "support_host": "https://www.tradingview.com",
-  "enable_publishing": false,
-  "allow_drawing": true,
-  "save_image": true,
-  "container_id": "tradingview_chart"
   }
-                  </script>
-                </div>
+  </script>
+</div>
                 
                 <!-- Overlay Controls -->
                 <div class="overlay-controls">
