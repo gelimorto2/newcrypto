@@ -15,7 +15,7 @@ const UI_COLORS = {
 
 // Trade class for tracking positions
 class Trade {
-    constructor(entryTime, type, entryPrice, size) {
+    constructor(entryTime, type, entryPrice, size, reason = 'Signal') {
         this.entryTime = new Date(entryTime);
         this.type = type; // 'LONG' or 'SHORT'
         this.entryPrice = entryPrice;
@@ -26,7 +26,8 @@ class Trade {
         this.pnlPct = 0;
         this.fees = 0;
         this.status = 'OPEN';
-        this.exitReason = null;
+        this.reason = reason; // Entry reason
+        this.exitReason = ''; // Exit reason
     }
     
     close(exitTime, exitPrice, reason = 'Manual Close') {
@@ -106,131 +107,151 @@ class Trade {
     }
 }
 
-// Volty Strategy with Volume and Bollinger Bands implementation
-class VoltyStrategy {
-    constructor(volumeCandleCount = 3, volumeIncreasePercent = 20, bbLength = 20, bbDeviation = 2) {
-        this.volumeCandleCount = volumeCandleCount;
-        this.volumeIncreasePercent = volumeIncreasePercent;
+// Custom VolumeAndBBStrategy class
+class VolumeAndBBStrategy {
+    constructor(volumeCandles = 3, volumeIncreasePercentage = 20, bbLength = 20, bbDeviation = 2.0) {
+        this.volumeCandles = volumeCandles;
+        this.volumeIncreasePercentage = volumeIncreasePercentage;
         this.bbLength = bbLength;
         this.bbDeviation = bbDeviation;
+        this.signalHistory = [];
     }
     
     generateSignals(priceData) {
-        // Calculate volume trends
-        const volumeIncreasing = [];
-        for (let i = 0; i < priceData.length; i++) {
-            if (i < this.volumeCandleCount) {
-                volumeIncreasing.push(false);
-                continue;
-            }
-            
-            // Get average volume for previous X candles
-            let prevVolumeSum = 0;
-            for (let j = 1; j <= this.volumeCandleCount; j++) {
-                prevVolumeSum += priceData[i - j].volume;
-            }
-            const avgPrevVolume = prevVolumeSum / this.volumeCandleCount;
-            
-            // Check if current volume is higher by Y percent
-            const currentVolume = priceData[i].volume;
-            const volumeIncreasePct = ((currentVolume - avgPrevVolume) / avgPrevVolume) * 100;
-            
-            volumeIncreasing.push(volumeIncreasePct >= this.volumeIncreasePercent);
-        }
+        // Reset signal history
+        this.signalHistory = [];
         
         // Calculate Bollinger Bands
-        const bb = [];
+        const bbData = this.calculateBollingerBands(priceData);
+        
+        // Buy signals based on volume increase
+        const buySignals = this.generateBuySignals(priceData);
+        
+        // Sell signals based on Bollinger Bands
+        const sellSignals = this.generateSellSignals(priceData, bbData);
+        
+        // Combine results
+        return {
+            bbData,
+            buySignals,
+            sellSignals
+        };
+    }
+    
+    calculateBollingerBands(priceData) {
+        const bbData = {
+            upperBand: [],
+            middleBand: [],
+            lowerBand: []
+        };
+        
+        // Calculate SMA and Bollinger Bands
         for (let i = 0; i < priceData.length; i++) {
             if (i < this.bbLength - 1) {
-                bb.push({
-                    middle: null,
-                    upper: null,
-                    lower: null
-                });
+                bbData.upperBand.push(null);
+                bbData.middleBand.push(null);
+                bbData.lowerBand.push(null);
                 continue;
             }
             
-            // Calculate middle band (SMA)
+            // Calculate SMA (middle band)
             let sum = 0;
             for (let j = 0; j < this.bbLength; j++) {
                 sum += priceData[i - j].close;
             }
-            const middle = sum / this.bbLength;
+            const sma = sum / this.bbLength;
             
             // Calculate standard deviation
-            let squaredDiffSum = 0;
+            let sumSquaredDiff = 0;
             for (let j = 0; j < this.bbLength; j++) {
-                const diff = priceData[i - j].close - middle;
-                squaredDiffSum += diff * diff;
+                const diff = priceData[i - j].close - sma;
+                sumSquaredDiff += diff * diff;
             }
-            const stdDev = Math.sqrt(squaredDiffSum / this.bbLength);
+            const stdDev = Math.sqrt(sumSquaredDiff / this.bbLength);
             
-            // Calculate upper and lower bands
-            const upper = middle + (this.bbDeviation * stdDev);
-            const lower = middle - (this.bbDeviation * stdDev);
-            
-            bb.push({
-                middle,
-                upper,
-                lower
-            });
+            // Calculate bands
+            bbData.middleBand.push(sma);
+            bbData.upperBand.push(sma + this.bbDeviation * stdDev);
+            bbData.lowerBand.push(sma - this.bbDeviation * stdDev);
         }
         
-        // Generate signals based on volume and Bollinger Bands
-        const longSignal = [];
-        const shortSignal = [];
+        return bbData;
+    }
+    
+    generateBuySignals(priceData) {
+        const buySignals = [];
         
-        // Track the previous signal state
-        let prevSignalState = null; // 'LONG', 'SHORT', or null
-        
+        // Need enough candles for volume comparison
         for (let i = 0; i < priceData.length; i++) {
-            if (i < Math.max(this.bbLength, this.volumeCandleCount)) {
-                // Not enough data yet for signals
-                longSignal.push(null);
-                shortSignal.push(null);
+            if (i < this.volumeCandles) {
+                buySignals.push(null);
                 continue;
             }
             
-            // Buy conditions: Volume increasing and price moving up
-            const buyCondition = volumeIncreasing[i] && 
-                                priceData[i].close > priceData[i-1].close;
-            
-            // Sell conditions: Price near upper Bollinger Band
-            const sellCondition = bb[i].upper && 
-                                  priceData[i].close >= bb[i].upper * 0.98; // Within 2% of upper band
-            
-            // Determine current signal
-            let currentSignal = null;
-            if (buyCondition && prevSignalState !== 'LONG') {
-                currentSignal = 'LONG';
-            } else if (sellCondition && prevSignalState === 'LONG') {
-                currentSignal = 'SHORT';
+            // Calculate average volume over the specified number of previous candles
+            let avgVolume = 0;
+            for (let j = 1; j <= this.volumeCandles; j++) {
+                avgVolume += priceData[i - j].volume;
             }
+            avgVolume /= this.volumeCandles;
             
-            // Set signal values only when direction changes
-            if (currentSignal !== null && currentSignal !== prevSignalState) {
-                if (currentSignal === 'LONG') {
-                    longSignal.push(priceData[i].low - (priceData[i].high - priceData[i].low) * 0.3);
-                    shortSignal.push(null);
-                } else {
-                    longSignal.push(null);
-                    shortSignal.push(priceData[i].high + (priceData[i].high - priceData[i].low) * 0.3);
-                }
+            // Current volume exceeds average by the specified percentage
+            const currentVolume = priceData[i].volume;
+            const volumeIncreasePct = ((currentVolume - avgVolume) / avgVolume) * 100;
+            
+            if (volumeIncreasePct >= this.volumeIncreasePercentage) {
+                // Signal a buy at the low of the candle for better visualization
+                buySignals.push(priceData[i].low * 0.999);
                 
-                // Update previous state
-                prevSignalState = currentSignal;
+                // Add to signal history for chart markers
+                this.signalHistory.push({
+                    time: priceData[i].datetime.getTime() / 1000, // Convert to UNIX timestamp
+                    position: 'belowBar',
+                    color: '#22c55e',
+                    shape: 'arrowUp',
+                    text: `Vol +${volumeIncreasePct.toFixed(0)}%`,
+                    type: 'LONG',
+                    price: priceData[i].close
+                });
             } else {
-                // No direction change
-                longSignal.push(null);
-                shortSignal.push(null);
+                buySignals.push(null);
             }
         }
         
-        return {
-            atr,
-            longSignal,
-            shortSignal
-        };
+        return buySignals;
+    }
+    
+    generateSellSignals(priceData, bbData) {
+        const sellSignals = [];
+        
+        // Need enough candles for BB calculation
+        for (let i = 0; i < priceData.length; i++) {
+            if (i < this.bbLength) {
+                sellSignals.push(null);
+                continue;
+            }
+            
+            // Price touches or exceeds upper band = potential sell signal
+            if (bbData.upperBand[i] && priceData[i].high >= bbData.upperBand[i]) {
+                // Signal a sell at the high of the candle for better visualization
+                sellSignals.push(priceData[i].high * 1.001);
+                
+                // Add to signal history for chart markers
+                this.signalHistory.push({
+                    time: priceData[i].datetime.getTime() / 1000, // Convert to UNIX timestamp
+                    position: 'aboveBar',
+                    color: '#ef4444',
+                    shape: 'arrowDown',
+                    text: 'Upper BB',
+                    type: 'SHORT',
+                    price: priceData[i].close
+                });
+            } else {
+                sellSignals.push(null);
+            }
+        }
+        
+        return sellSignals;
     }
     
     getLatestSignal(priceData, indicators) {
@@ -238,10 +259,16 @@ class VoltyStrategy {
         
         const lastIndex = priceData.length - 1;
         
-        if (indicators.longSignal[lastIndex] !== null) {
-            return 'LONG';
-        } else if (indicators.shortSignal[lastIndex] !== null) {
-            return 'SHORT';
+        if (indicators.buySignals[lastIndex] !== null) {
+            return {
+                type: 'LONG',
+                reason: 'Volume Surge'
+            };
+        } else if (indicators.sellSignals[lastIndex] !== null) {
+            return {
+                type: 'SHORT',
+                reason: 'Upper Bollinger Band'
+            };
         } else {
             return null;
         }
@@ -249,31 +276,101 @@ class VoltyStrategy {
 }
 
 // Application state
+// State Definition
 const state = {
+    // Market settings
+    symbol: 'BTCUSDT',
+    timeframe: '60', // Default to 1h
     priceData: [],
     currentPrice: 0,
-    symbol: 'BTCUSDT',
-    timeframe: '1h',
+    
+    // Strategy parameters
+    volumeCandles: 3,
+    volumeIncreasePercentage: 20,
+    bbLength: 20,
+    bbDeviation: 2,
+    
+    // Trading parameters
     initialCapital: 10000,
     currentCapital: 10000,
-    positionSize: 10, // percentage of capital
-    atrLength: 5,
-    atrMultiplier: 0.75,
+    positionSize: 10, // Percentage of capital to use per trade
     
+    // Trading state
     isTrading: false,
-    interval: null,
-    clockInterval: null,
-    
     currentPosition: null,
     trades: [],
-    equityCurve: [{ time: new Date(), value: 10000 }],
+    equityCurve: [{time: new Date(), value: 10000}],
     
-    indicators: {
-        atr: [],
-        longSignal: [],
-        shortSignal: []
+    // Indicator data
+    indicators: {},
+    signalHistory: [],
+    
+    // Interval reference for polling
+    interval: null,
+    
+    // Settings
+    settings: {
+        takeProfit: {
+            enabled: true,
+            percentage: 3
+        },
+        stopLoss: {
+            enabled: true,
+            percentage: 2
+        },
+        trailingStop: {
+            enabled: false,
+            percentage: 1.5
+        },
+        autoTrade: true,
+        showPositionLines: true,
+        chartUpdateFrequency: 5000 // 5 seconds
     },
     
+    // Live trading settings
+    liveTrading: {
+        enabled: false,
+        apiKey: '',
+        apiSecret: '',
+        useTestnet: true,
+        accountInfo: null
+    },
+    
+    // Notification settings
+    alerts: {
+        browser: {
+            enabled: true
+        },
+        sound: {
+            enabled: true
+        },
+        discord: {
+            enabled: false,
+            webhook: ''
+        }
+    },
+    
+    // Bot statistics
+    botStats: {
+        startTime: new Date(),
+        lastCheck: null,
+        executionTime: 0,
+        dailyTrades: 0,
+        dailyPnL: 0,
+        dailyStartCapital: 10000,
+        positionDetails: {
+            takeProfitPrice: 0,
+            stopLossPrice: 0,
+            trailingStopPrice: 0
+        },
+        marketData: {
+            price: 0,
+            change24h: 0,
+            volume: 0
+        }
+    },
+    
+    // Trading metrics
     metrics: {
         totalReturn: 0,
         winRate: 0,
@@ -286,109 +383,9 @@ const state = {
         maxLoss: 0
     },
     
-    feeSettings: {
-        makerFee: 0.1, // default 0.1% for spot trading
-        takerFee: 0.1  // default 0.1% for spot trading
-    },
-    
-    settings: {
-        theme: 'dark',
-        chartUpdateFrequency: 5000, // ms
-        autoTrade: true,
-        
-        trailingStop: {
-            enabled: false,
-            percentage: 1.5
-        },
-        
-        takeProfit: {
-            enabled: true,
-            percentage: 3.0
-        },
-        
-        stopLoss: {
-            enabled: true,
-            percentage: 2.0
-        },
-        
-        riskManagement: {
-            enabled: false,
-            maxDrawdown: 10,
-            maxDailyLoss: 5
-        },
-        
-        showPositionLines: true // New setting for showing position lines on TradingView
-    },
-    
-    alerts: {
-        discord: {
-            enabled: false,
-            webhook: ''
-        },
-        telegram: {
-            enabled: false,
-            botToken: '',
-            chatId: ''
-        },
-        email: {
-            enabled: false,
-            address: ''
-        },
-        browser: {
-            enabled: true
-        },
-        sound: {
-            enabled: true,
-            volume: 0.5
-        }
-    },
-    
-    liveTrading: {
-        enabled: false,
-        useTestnet: true,
-        apiKey: '',
-        apiSecret: '',
-        positionSize: 5, // percentage of available balance
-        limits: {
-            maxPositionSize: 25,
-            maxDailyLoss: 5,
-            maxDrawdown: 15,
-            maxDailyOrders: 10
-        }
-    },
-    
-    botStats: {
-        lastCheck: null,
-        executionTime: 0,
-        dailyTrades: 0,
-        dailyPnL: 0,
-        dailyStartCapital: 10000,
-        
-        marketData: {
-            price: 0,
-            change24h: 0,
-            volume: 0
-        },
-        
-        positionDetails: {
-            entryTime: null,
-            takeProfitPrice: 0,
-            stopLossPrice: 0,
-            trailingStopPrice: 0
-        }
-    },
-    
-    usingTradingView: true, // Always use TradingView now
-    
-    // New property for position lines
-    positionLines: {
-        entry: null,
-        takeProfit: null,
-        stopLoss: null
-    },
-    
-    // New property for signal history to show on chart
-    signalHistory: []
+    // Other UI state
+    priceChangePercent: 0,
+    isMobileDevice: false
 };
 
 // Safely get element - returns null if element doesn't exist
@@ -539,7 +536,7 @@ async function reloadDataWithSettings() {
         state.indicators = strategy.generateSignals(state.priceData);
         state.signalHistory = strategy.signalHistory; // Store signal markers for the chart
         
-        // Update TradingView symbol
+        // Update TradingView symbol by refreshing the widget
         updateTradingViewSymbol();
         
         // Update market information
@@ -558,8 +555,10 @@ async function reloadDataWithSettings() {
 }
 
 // Update market information
+// Update market information in top bar and widgets
 function updateMarketInfo() {
     try {
+        // Update the market info widget in the side panel
         const marketSymbol = safeGetElement('market-symbol');
         const marketPrice = safeGetElement('market-price');
         const marketChange = safeGetElement('market-change');
@@ -583,43 +582,79 @@ function updateMarketInfo() {
             const volume = state.botStats.marketData.volume;
             marketVolume.textContent = `$${(volume / 1000000).toFixed(2)}M`;
         }
+        
+        // Update the live status display in the top bar
+        const marketSymbolBadge = safeGetElement('market-symbol-badge');
+        const marketPriceBadge = safeGetElement('market-price-badge');
+        const marketChangeBadge = safeGetElement('market-change-badge');
+        
+        if (marketSymbolBadge) {
+            marketSymbolBadge.textContent = state.symbol.replace('USDT', '/USDT');
+        }
+        
+        if (marketPriceBadge) {
+            marketPriceBadge.textContent = `$${state.currentPrice.toFixed(2)}`;
+        }
+        
+        if (marketChangeBadge) {
+            const change = state.botStats.marketData.change24h;
+            marketChangeBadge.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
+            marketChangeBadge.style.color = change >= 0 ? UI_COLORS.positive : UI_COLORS.negative;
+        }
     } catch (error) {
         console.error('Error updating market info:', error);
     }
 }
 
+
+// Update TradingView symbol and add position indicators
 // Update TradingView symbol and add position indicators
 function updateTradingViewSymbol() {
     try {
-        // Get TradingView container
-        const tradingViewContainer = safeGetElement('tradingview-chart');
-        if (!tradingViewContainer) {
+        // For TradingView's Advanced Chart Widget, we need to update the symbol directly in the HTML
+        // Since the Advanced Chart is embedded directly via script tag in the HTML, we'll need to reload it
+        
+        // Find the TradingView container div
+        const tvContainer = document.querySelector('.tradingview-widget-container');
+        if (!tvContainer) {
             console.error('TradingView container not found');
+            addLogMessage('TradingView container not found', true);
             return;
         }
         
-        // Clear any existing content
-        tradingViewContainer.innerHTML = '';
+        // Get the widget div
+        const widgetDiv = tvContainer.querySelector('.tradingview-widget-container__widget');
+        if (!widgetDiv) {
+            console.error('TradingView widget div not found');
+            addLogMessage('TradingView widget div not found', true);
+            return;
+        }
         
-        // Create a new TradingView widget with custom markers for signals
-        const widget = new TradingView.widget({
-            "width": "100%",
-            "height": "100%",
+        // Clear existing widget content
+        widgetDiv.innerHTML = '';
+        
+        // Create new script element for the Advanced Chart
+        const script = document.createElement('script');
+        script.type = 'text/javascript';
+        script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+        script.async = true;
+        
+        // Create the config object for the widget with custom Bollinger Bands
+        const config = {
+            "autosize": true,
             "symbol": `BINANCE:${state.symbol}`,
             "interval": state.timeframe,
             "timezone": "Etc/UTC",
             "theme": "dark",
-            "style": "1", // Candles
+            "style": "1",
             "locale": "en",
-            "toolbar_bg": "#f1f3f6",
-            "enable_publishing": false,
-            "allow_symbol_change": true,
-            "container_id": "tradingview-chart",
-            "hide_side_toolbar": false,
-            "hide_top_toolbar": false,
             "withdateranges": true,
-            "save_image": false,
-            "hideideas": true,
+            "hide_side_toolbar": false,
+            "allow_symbol_change": true,
+            "details": true,
+            "show_popup_button": true,
+            "popup_width": "1000",
+            "popup_height": "650",
             "studies": [
                 {
                     "id": "BB@tv-basicstudies",
@@ -629,198 +664,84 @@ function updateTradingViewSymbol() {
                     }
                 }
             ],
-            "supported_resolutions": ["1", "5", "15", "30", "60", "240", "1D"],
-            "show_popup_button": false,
-            "popup_width": "1000",
-            "popup_height": "650",
-            "autosize": true,
-            // This callback runs when the chart is ready
-            "loaded": function() {
-                if (state.currentPosition && state.settings.showPositionLines) {
-                    updatePositionIndicators();
-                }
-                
-                // Add signal markers to the chart using the TradingView drawing API
-                if (state.signalHistory && state.signalHistory.length > 0) {
-                    setTimeout(() => {
-                        addSignalMarkersToChart(widget);
-                    }, 2000); // Delay to ensure chart is fully loaded
-                }
-            }
-        });
+            "support_host": "https://www.tradingview.com"
+        };
         
-        // Store the widget for future reference
-        state.tradingViewWidget = widget;
+        // Set the script text content to the stringified config
+        script.text = JSON.stringify(config);
         
-        addLogMessage(`Updated TradingView chart to ${state.symbol}`);
+        // Append the script to the widget div
+        widgetDiv.appendChild(script);
+        
+        // Update signal display separately
+
+        // Update position indicators if needed
+        if (state.currentPosition && state.settings.showPositionLines) {
+            updatePositionInfo();
+            updateFloatingPositionIndicator();
+        }
+        
+        addLogMessage(`Updated chart to ${state.symbol} with BB(${state.bbLength}, ${state.bbDeviation})`);
     } catch (error) {
         console.error('Error updating TradingView symbol:', error);
-        addLogMessage('Error updating TradingView chart: ' + error.message, true);
+        addLogMessage('Error updating chart: ' + error.message, true);
     }
 }
 
-// Add signal markers to TradingView chart
-function addSignalMarkersToChart(widget) {
-    try {
-        const iframe = document.querySelector('#tradingview-chart iframe');
-        if (!iframe) return;
+// Update chart when Bollinger Bands settings change
+function setupBollingerBandsEventListeners() {
+    const bbLength = safeGetElement('bb-length');
+    const bbLengthValue = safeGetElement('bb-length-value');
+    if (bbLength && bbLengthValue) {
+        bbLength.value = state.bbLength;
+        bbLengthValue.textContent = state.bbLength;
         
-        // Add custom event listener to add markers when chart is ready
-        iframe.onload = function() {
-            setTimeout(() => {
-                // Create markers using active_chart().createMultipointShape
-                const iframeWindow = iframe.contentWindow;
-                if (!iframeWindow || !iframeWindow.TradingView) return;
-                
-                // Try to access the chart API
-                try {
-                    // For safety, we'll add a maximum of 20 most recent markers
-                    const recentSignals = state.signalHistory.slice(-20);
-                    
-                    addLogMessage(`Adding ${recentSignals.length} signal markers to chart`);
-                    
-                    // Loop through signal history and create markers
-                    recentSignals.forEach(signal => {
-                        try {
-                            widget.chart().createShape(
-                                { time: signal.time, price: 0 },
-                                {
-                                    shape: signal.shape,
-                                    text: signal.text,
-                                    overrides: {
-                                        color: signal.color,
-                                        size: 2,
-                                        position: signal.position
-                                    }
-                                }
-                            );
-                        } catch (markerError) {
-                            console.error('Error adding marker:', markerError);
-                        }
-                    });
-                } catch (apiError) {
-                    console.error('Error accessing chart API:', apiError);
-                }
-            }, 3000); // Delay to ensure chart is fully loaded
-        };
-    } catch (error) {
-        console.error('Error adding signal markers to chart:', error);
-    }
-}
-
-// Add position indicators to TradingView chart
-function updatePositionIndicators() {
-    try {
-        // Check if we have a position and the widget is available
-        if (!state.currentPosition || !state.tradingViewWidget || !state.settings.showPositionLines) {
-            return;
-        }
+        bbLength.addEventListener('input', function() {
+            state.bbLength = parseInt(this.value);
+            bbLengthValue.textContent = state.bbLength;
+        });
         
-        // Get the TradingView iframe document
-        const iframe = document.querySelector('#tradingview-chart iframe');
-        if (!iframe) {
-            console.error('TradingView iframe not found');
-            return;
-        }
-        
-        // Use TradingView's chart API to draw position lines when iframe is loaded
-        iframe.onload = function() {
-            try {
-                const iframeDocument = iframe.contentDocument || iframe.contentWindow.document;
-                
-                // Create a custom container for our position indicators
-                let positionContainer = iframeDocument.getElementById('position-indicators');
-                if (!positionContainer) {
-                    positionContainer = iframeDocument.createElement('div');
-                    positionContainer.id = 'position-indicators';
-                    positionContainer.style.position = 'absolute';
-                    positionContainer.style.top = '0';
-                    positionContainer.style.left = '0';
-                    positionContainer.style.width = '100%';
-                    positionContainer.style.height = '100%';
-                    positionContainer.style.pointerEvents = 'none';
-                    positionContainer.style.zIndex = '1000';
-                    
-                    // Append to chart container
-                    const chartContainer = iframeDocument.querySelector('.chart-container');
-                    if (chartContainer) {
-                        chartContainer.appendChild(positionContainer);
-                    }
-                }
-                
-                // Clear existing position indicators
-                positionContainer.innerHTML = '';
-                
-                // Add position information
-                const positionInfo = iframeDocument.createElement('div');
-                positionInfo.style.position = 'absolute';
-                positionInfo.style.top = '10px';
-                positionInfo.style.right = '10px';
-                positionInfo.style.padding = '5px 10px';
-                positionInfo.style.backgroundColor = state.currentPosition.type === 'LONG' ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)';
-                positionInfo.style.color = 'white';
-                positionInfo.style.borderRadius = '4px';
-                positionInfo.style.fontWeight = 'bold';
-                positionInfo.style.fontSize = '12px';
-                positionInfo.style.zIndex = '1001';
-                
-                positionInfo.textContent = `${state.currentPosition.type} @ $${state.currentPosition.entryPrice.toFixed(2)}`;
-                
-                positionContainer.appendChild(positionInfo);
-                
-                // Add TP/SL information if enabled
-                if (state.settings.takeProfit.enabled || state.settings.stopLoss.enabled) {
-                    const riskInfo = iframeDocument.createElement('div');
-                    riskInfo.style.position = 'absolute';
-                    riskInfo.style.top = '40px';
-                    riskInfo.style.right = '10px';
-                    riskInfo.style.padding = '5px 10px';
-                    riskInfo.style.backgroundColor = 'rgba(31, 41, 55, 0.8)';
-                    riskInfo.style.color = 'white';
-                    riskInfo.style.borderRadius = '4px';
-                    riskInfo.style.fontWeight = 'normal';
-                    riskInfo.style.fontSize = '11px';
-                    riskInfo.style.zIndex = '1001';
-                    
-                    let riskText = '';
-                    
-                    if (state.settings.takeProfit.enabled) {
-                        riskText += `TP: $${state.botStats.positionDetails.takeProfitPrice.toFixed(2)} `;
-                    }
-                    
-                    if (state.settings.stopLoss.enabled) {
-                        riskText += `SL: $${state.botStats.positionDetails.stopLossPrice.toFixed(2)}`;
-                    }
-                    
-                    riskInfo.textContent = riskText;
-                    
-                    positionContainer.appendChild(riskInfo);
-                }
-                
-                addLogMessage('Position indicators updated on TradingView chart');
-            } catch (iframeError) {
-                console.error('Error modifying TradingView iframe:', iframeError);
+        bbLength.addEventListener('change', function() {
+            // Only update chart when user stops dragging slider
+            if (!state.isTrading) {
+                updateTradingViewSymbol();
             }
-        };
-    } catch (error) {
-        console.error('Error updating position indicators:', error);
+        });
+    }
+    
+    const bbDev = safeGetElement('bb-dev');
+    const bbDevValue = safeGetElement('bb-dev-value');
+    if (bbDev && bbDevValue) {
+        bbDev.value = state.bbDeviation;
+        bbDevValue.textContent = state.bbDeviation;
+        
+        bbDev.addEventListener('input', function() {
+            state.bbDeviation = parseFloat(this.value);
+            bbDevValue.textContent = state.bbDeviation;
+        });
+        
+        bbDev.addEventListener('change', function() {
+            // Only update chart when user stops dragging slider
+            if (!state.isTrading) {
+                updateTradingViewSymbol();
+            }
+        });
+    }
+    
+    // Add save settings button to update chart with new BB settings
+    const saveSettingsBtn = safeGetElement('save-settings-btn');
+    if (saveSettingsBtn) {
+        saveSettingsBtn.addEventListener('click', function() {
+            saveSettings();
+            if (!state.isTrading) {
+                updateTradingViewSymbol();
+            }
+        });
     }
 }
 
-// Get timeframe in milliseconds
-function getTimeframeInMs(timeframe) {
-    const timeframeMap = {
-        '1m': 60 * 1000,
-        '5m': 5 * 60 * 1000,
-        '15m': 15 * 60 * 1000,
-        '30m': 30 * 60 * 1000,
-        '1h': 60 * 60 * 1000,
-        '4h': 4 * 60 * 60 * 1000,
-        '1d': 24 * 60 * 60 * 1000
-    };
-    
-    return timeframeMap[timeframe] || 60 * 60 * 1000;
-}
+
+// Update signal display with visual representation of past signals
 
 // Update position info in the widget panel
 function updatePositionInfo() {
@@ -890,12 +811,72 @@ function updatePositionInfo() {
             }
         }
         
-        // Update position indicators on TradingView if enabled
-        if (state.settings.showPositionLines) {
-            updatePositionIndicators();
-        }
+        // Add floating position indicator on chart
+        updateFloatingPositionIndicator();
     } catch (error) {
         console.error('Error updating position info:', error);
+    }
+}
+
+// Update floating position indicator on chart
+// Update floating position indicator on chart (left side)
+function updateFloatingPositionIndicator() {
+    try {
+        // Get the existing indicator
+        const indicator = safeGetElement('floating-position-indicator');
+        
+        if (!state.currentPosition) {
+            if (indicator) indicator.style.display = 'none';
+            return;
+        }
+        
+        // Calculate profit/loss
+        const pnl = state.currentPosition.getUnrealizedPnl(state.currentPrice);
+        const pnlPct = state.currentPosition.getUnrealizedPnlPct(state.currentPrice) * 100;
+        
+        // Create content
+        const content = `
+            <div style="margin-bottom: 5px; font-size: 16px;">
+                ${state.currentPosition.type} Position @ $${state.currentPosition.entryPrice.toFixed(2)}
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span>PnL:</span>
+                <span>${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)</span>
+            </div>
+            ${state.settings.takeProfit.enabled ? `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 3px;">
+                    <span>TP:</span>
+                    <span>$${state.botStats.positionDetails.takeProfitPrice.toFixed(2)}</span>
+                </div>
+            ` : ''}
+            ${state.settings.stopLoss.enabled ? `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 3px;">
+                    <span>SL:</span>
+                    <span>$${state.botStats.positionDetails.stopLossPrice.toFixed(2)}</span>
+                </div>
+            ` : ''}
+        `;
+        
+        if (indicator) {
+            // Update existing indicator
+            indicator.innerHTML = content;
+            indicator.className = `floating-position-indicator ${state.currentPosition.type.toLowerCase()}`;
+            indicator.style.display = 'block';
+        } else {
+            // Create new indicator if it doesn't exist
+            const newIndicator = document.createElement('div');
+            newIndicator.id = 'floating-position-indicator';
+            newIndicator.className = `floating-position-indicator ${state.currentPosition.type.toLowerCase()}`;
+            newIndicator.innerHTML = content;
+            
+            // Add to chart container
+            const chartContainer = document.querySelector('.chart-container');
+            if (chartContainer) {
+                chartContainer.appendChild(newIndicator);
+            }
+        }
+    } catch (error) {
+        console.error('Error updating floating position indicator:', error);
     }
 }
 
@@ -1082,6 +1063,132 @@ function updateTradingStats() {
     }
 }
 
+// Send Discord notification
+async function sendDiscordNotification(title, message, color = 0x4f46e5, isError = false) {
+    try {
+        if (!state.alerts.discord.enabled || !state.alerts.discord.webhook) {
+            return false;
+        }
+        
+        // Create Discord embed
+        const embed = {
+            title: title,
+            description: message,
+            color: isError ? 0xef4444 : color, // Red for errors, passed color otherwise
+            timestamp: new Date().toISOString(),
+            footer: {
+                text: `Volty Trading Bot | ${state.symbol}`
+            },
+            fields: []
+        };
+        
+        // Add additional fields if we have a position
+        if (state.currentPosition) {
+            const pnl = state.currentPosition.getUnrealizedPnl(state.currentPrice);
+            const pnlPct = state.currentPosition.getUnrealizedPnlPct(state.currentPrice) * 100;
+            
+            embed.fields.push(
+                {
+                    name: 'Position',
+                    value: `${state.currentPosition.type} @ $${state.currentPosition.entryPrice.toFixed(2)}`,
+                    inline: true
+                },
+                {
+                    name: 'Current P&L',
+                    value: `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)`,
+                    inline: true
+                }
+            );
+        }
+        
+        // Add current price
+        embed.fields.push({
+            name: 'Current Price',
+            value: `$${state.currentPrice.toFixed(2)}`,
+            inline: true
+        });
+        
+        // Send the webhook
+        const response = await fetch(state.alerts.discord.webhook, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username: 'Volty Trading Bot',
+                avatar_url: 'https://i.imgur.com/fKL31aD.png',
+                embeds: [embed]
+            })
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Discord webhook error (${response.status}): ${errorText}`);
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Error sending Discord notification:', error);
+        addLogMessage(`Discord notification failed: ${error.message}`, true);
+        return false;
+    }
+}
+
+// Send alert through configured channels
+function sendAlert(title, message, type = 'info') {
+    // Log message
+    addLogMessage(`ALERT: ${title} - ${message}`, type === 'error');
+    
+    // Browser notification
+    if (state.alerts.browser.enabled) {
+        if ('Notification' in window) {
+            if (Notification.permission === 'granted') {
+                new Notification(title, {
+                    body: message,
+                    icon: type === 'error' ? 'https://img.icons8.com/color/48/000000/high-priority.png' : 
+                           type === 'success' ? 'https://img.icons8.com/color/48/000000/ok.png' : 
+                           'https://img.icons8.com/color/48/000000/info.png'
+                });
+            } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        new Notification(title, {
+                            body: message,
+                            icon: type === 'error' ? 'https://img.icons8.com/color/48/000000/high-priority.png' : 
+                                   type === 'success' ? 'https://img.icons8.com/color/48/000000/ok.png' : 
+                                   'https://img.icons8.com/color/48/000000/info.png'
+                        });
+                    }
+                });
+            }
+        }
+    }
+    
+    // Sound alert
+    if (state.alerts.sound.enabled) {
+        notificationSound.volume = state.alerts.sound.volume;
+        notificationSound.play().catch(e => console.error('Error playing notification sound:', e));
+    }
+    
+    // Discord notification
+    if (state.alerts.discord.enabled && state.alerts.discord.webhook) {
+        // Map alert types to Discord colors
+        const colorMap = {
+            info: 0x4f46e5,    // Purple/Blue
+            success: 0x22c55e,  // Green
+            warning: 0xf59e0b,  // Yellow/Orange
+            error: 0xef4444    // Red
+        };
+        
+        sendDiscordNotification(
+            title,
+            message,
+            colorMap[type] || 0x4f46e5,
+            type === 'error'
+        );
+    }
+}
+
 // Save settings to localStorage
 function saveSettings() {
     try {
@@ -1211,260 +1318,7 @@ function saveApiCredentials() {
     }
 }
 
-// Test API connection
-async function testApiConnection() {
-    try {
-        showLoading();
-        showStatusIndicator('Testing API connection...', 'info');
-        
-        const apiKey = state.liveTrading.apiKey || safeGetElement('api-key').value;
-        const apiSecret = state.liveTrading.apiSecret || safeGetElement('api-secret').value;
-        const useTestnet = state.liveTrading.useTestnet;
-        
-        if (!apiKey || !apiSecret) {
-            hideLoading();
-            showStatusIndicator('API key and secret are required', 'error');
-            return false;
-        }
-        
-        // Test API by getting account info
-        const baseUrl = useTestnet ? BINANCE_TESTNET_API_URL : BINANCE_API_URL;
-        const endpoint = '/api/v3/account';
-        
-        // Create timestamp and signature for Binance API auth
-        const timestamp = Date.now();
-        const queryString = `timestamp=${timestamp}`;
-        
-        // Create HMAC SHA256 signature
-        const signature = await createSignature(queryString, apiSecret);
-        
-        // Create request URL
-        const url = `${baseUrl}${endpoint}?${queryString}&signature=${signature}`;
-        
-        // Make the request
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'X-MBX-APIKEY': apiKey
-            }
-        });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`API error (${response.status}): ${errorText}`);
-        }
-        
-        const data = await response.json();
-        
-        hideLoading();
-        showStatusIndicator('API connection successful', 'success');
-        addLogMessage('API connection test successful');
-        
-        return true;
-    } catch (error) {
-        hideLoading();
-        console.error('API test error:', error);
-        showStatusIndicator(`API test failed: ${error.message}`, 'error');
-        addLogMessage(`API connection test failed: ${error.message}`, true);
-        return false;
-    }
-}
-
-// Create HMAC SHA256 signature for Binance API
-async function createSignature(queryString, apiSecret) {
-    const encoder = new TextEncoder();
-    const key = encoder.encode(apiSecret);
-    const message = encoder.encode(queryString);
-    
-    const cryptoKey = await crypto.subtle.importKey(
-        'raw',
-        key,
-        { name: 'HMAC', hash: 'SHA-256' },
-        false,
-        ['sign']
-    );
-    
-    const signature = await crypto.subtle.sign('HMAC', cryptoKey, message);
-    
-    // Convert to hex string
-    return Array.from(new Uint8Array(signature))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-}
-
-// Send Discord notification
-async function sendDiscordNotification(title, message, color = 0x4f46e5, isError = false) {
-    try {
-        if (!state.alerts.discord.enabled || !state.alerts.discord.webhook) {
-            return false;
-        }
-        
-        // Create Discord embed
-        const embed = {
-            title: title,
-            description: message,
-            color: isError ? 0xef4444 : color, // Red for errors, passed color otherwise
-            timestamp: new Date().toISOString(),
-            footer: {
-                text: `Volty Trading Bot | ${state.symbol}`
-            },
-            fields: []
-        };
-        
-        // Add additional fields if we have a position
-        if (state.currentPosition) {
-            const pnl = state.currentPosition.getUnrealizedPnl(state.currentPrice);
-            const pnlPct = state.currentPosition.getUnrealizedPnlPct(state.currentPrice) * 100;
-            
-            embed.fields.push(
-                {
-                    name: 'Position',
-                    value: `${state.currentPosition.type} @ $${state.currentPosition.entryPrice.toFixed(2)}`,
-                    inline: true
-                },
-                {
-                    name: 'Current P&L',
-                    value: `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)`,
-                    inline: true
-                }
-            );
-        }
-        
-        // Add current price
-        embed.fields.push({
-            name: 'Current Price',
-            value: `$${state.currentPrice.toFixed(2)}`,
-            inline: true
-        });
-        
-        // Send the webhook
-        const response = await fetch(state.alerts.discord.webhook, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                username: 'Volty Trading Bot',
-                avatar_url: 'https://i.imgur.com/fKL31aD.png',
-                embeds: [embed]
-            })
-        });
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Discord webhook error (${response.status}): ${errorText}`);
-        }
-        
-        return true;
-    } catch (error) {
-        console.error('Error sending Discord notification:', error);
-        addLogMessage(`Discord notification failed: ${error.message}`, true);
-        return false;
-    }
-}
-
-// Test Discord webhook
-async function testDiscordWebhook() {
-    try {
-        showLoading();
-        showStatusIndicator('Testing Discord webhook...', 'info');
-        
-        const webhook = safeGetElement('discord-webhook').value;
-        
-        if (!webhook) {
-            hideLoading();
-            showStatusIndicator('Discord webhook URL is required', 'error');
-            return false;
-        }
-        
-        // Save the webhook URL temporarily
-        const savedWebhook = state.alerts.discord.webhook;
-        state.alerts.discord.webhook = webhook;
-        
-        // Send a test notification
-        const success = await sendDiscordNotification(
-            'Discord Webhook Test',
-            `This is a test notification from Volty Trading Bot.\nCurrent time: ${new Date().toISOString()}\nSymbol: ${state.symbol}`,
-            0x38bdf8 // Light blue color
-        );
-        
-        // Restore saved webhook
-        state.alerts.discord.webhook = savedWebhook;
-        
-        hideLoading();
-        
-        if (success) {
-            showStatusIndicator('Discord webhook test successful', 'success');
-            addLogMessage('Discord webhook test successful');
-            return true;
-        } else {
-            showStatusIndicator('Discord webhook test failed', 'error');
-            addLogMessage('Discord webhook test failed', true);
-            return false;
-        }
-    } catch (error) {
-        hideLoading();
-        console.error('Discord webhook test error:', error);
-        showStatusIndicator(`Discord webhook test failed: ${error.message}`, 'error');
-        addLogMessage(`Discord webhook test failed: ${error.message}`, true);
-        return false;
-    }
-}
-
-// Send alert through configured channels
-function sendAlert(title, message, type = 'info') {
-    // Log message
-    addLogMessage(`ALERT: ${title} - ${message}`, type === 'error');
-    
-    // Browser notification
-    if (state.alerts.browser.enabled) {
-        if ('Notification' in window) {
-            if (Notification.permission === 'granted') {
-                new Notification(title, {
-                    body: message,
-                    icon: type === 'error' ? 'https://img.icons8.com/color/48/000000/high-priority.png' : 
-                           type === 'success' ? 'https://img.icons8.com/color/48/000000/ok.png' : 
-                           'https://img.icons8.com/color/48/000000/info.png'
-                });
-            } else if (Notification.permission !== 'denied') {
-                Notification.requestPermission().then(permission => {
-                    if (permission === 'granted') {
-                        new Notification(title, {
-                            body: message,
-                            icon: type === 'error' ? 'https://img.icons8.com/color/48/000000/high-priority.png' : 
-                                   type === 'success' ? 'https://img.icons8.com/color/48/000000/ok.png' : 
-                                   'https://img.icons8.com/color/48/000000/info.png'
-                        });
-                    }
-                });
-            }
-        }
-    }
-    
-    // Sound alert
-    if (state.alerts.sound.enabled) {
-        notificationSound.volume = state.alerts.sound.volume;
-        notificationSound.play().catch(e => console.error('Error playing notification sound:', e));
-    }
-    
-    // Discord notification
-    if (state.alerts.discord.enabled && state.alerts.discord.webhook) {
-        // Map alert types to Discord colors
-        const colorMap = {
-            info: 0x4f46e5,    // Purple/Blue
-            success: 0x22c55e,  // Green
-            warning: 0xf59e0b,  // Yellow/Orange
-            error: 0xef4444    // Red
-        };
-        
-        sendDiscordNotification(
-            title,
-            message,
-            colorMap[type] || 0x4f46e5,
-            type === 'error'
-        );
-    }
-}
+// Update signal display with visual representation of past signals
 
 // Load settings from localStorage
 function loadSettingsFromLocalStorage() {
@@ -1668,7 +1522,9 @@ function disableFormInputs(disabled) {
             'take-profit-toggle', 'take-profit-value',
             'stop-loss-toggle', 'stop-loss-value',
             'auto-trade-toggle', 'show-position-lines-toggle',
-            'use-testnet-toggle'
+            'use-testnet-toggle',
+            'browser-notifications-toggle', 'sound-notifications-toggle',
+            'discord-notifications-toggle', 'discord-webhook'
         ];
         
         formInputs.forEach(id => {
@@ -1678,6 +1534,21 @@ function disableFormInputs(disabled) {
     } catch (error) {
         console.error('Error disabling form inputs:', error);
     }
+}
+
+// Get timeframe in milliseconds
+function getTimeframeInMs(timeframe) {
+    const timeframeMap = {
+        '1m': 60 * 1000,
+        '5m': 5 * 60 * 1000,
+        '15m': 15 * 60 * 1000,
+        '30m': 30 * 60 * 1000,
+        '1h': 60 * 60 * 1000,
+        '4h': 4 * 60 * 60 * 1000,
+        '1d': 24 * 60 * 60 * 1000
+    };
+    
+    return timeframeMap[timeframe] || 60 * 60 * 1000;
 }
 
 // Fetch historical data from Binance API
@@ -1767,64 +1638,6 @@ function startTrading() {
     
     addLogMessage('Started paper trading for ' + state.symbol);
     sendAlert('Trading Started', `Paper trading started for ${state.symbol} on ${state.timeframe} timeframe`, 'success');
-}
-
-// Start live trading
-async function startLiveTrading() {
-    if (state.isTrading) return;
-    
-    // Check for API credentials
-    if (!state.liveTrading.apiKey || !state.liveTrading.apiSecret) {
-        showApiConfigModal();
-        return;
-    }
-    
-    // Test API connection
-    const apiConnected = await testApiConnection();
-    if (!apiConnected) {
-        addLogMessage('Cannot start live trading: API connection failed', true);
-        return;
-    }
-    
-    // Check that we have price data
-    if (state.priceData.length === 0) {
-        addLogMessage('Cannot start trading: No price data available', true);
-        return;
-    }
-    
-    // Double confirmation for live trading
-    const confirmed = confirm(`⚠️ WARNING: You are about to start LIVE trading on ${state.liveTrading.useTestnet ? 'TESTNET' : 'REAL MONEY'}!\n\nThis will use real API calls ${state.liveTrading.useTestnet ? 'on testnet' : 'and can result in financial loss'}.\n\nDo you want to continue?`);
-    if (!confirmed) {
-        addLogMessage('Live trading canceled by user', true);
-        return;
-    }
-    
-    // Disable form inputs
-    disableFormInputs(true);
-    
-    // Update buttons
-    // Update buttons
-    const startLiveTradingBtn = safeGetElement('start-live-trading-btn');
-    const stopLiveTradingBtn = safeGetElement('stop-live-trading-btn');
-    const emergencyStopBtn = safeGetElement('emergency-stop-btn');
-    
-    if (startLiveTradingBtn) startLiveTradingBtn.disabled = true;
-    if (stopLiveTradingBtn) stopLiveTradingBtn.disabled = false;
-    if (emergencyStopBtn) emergencyStopBtn.disabled = false;
-    
-    // Start polling for new data
-    state.interval = setInterval(pollForNewData, state.settings.chartUpdateFrequency);
-    
-    // Update state
-    state.isTrading = true;
-    state.liveTrading.enabled = true;
-    
-    // Update bot status
-    updateBotStatus('live', 'LIVE trading active - Monitoring market');
-    updateBotActivity('scanning');
-    
-    addLogMessage('Started LIVE trading for ' + state.symbol);
-    sendAlert('LIVE Trading Started', `LIVE trading started for ${state.symbol} on ${state.timeframe} timeframe ${state.liveTrading.useTestnet ? 'using TESTNET' : ''}`, 'warning');
 }
 
 // Stop trading (both paper and live)
@@ -1933,7 +1746,12 @@ function resetTrading() {
             updatePositionInfo();
             updateTradingStats();
             updateMarketInfo();
-            updateTradingViewSymbol();
+            
+            // Remove any position indicators
+            const floatingIndicator = safeGetElement('floating-position-indicator');
+            if (floatingIndicator) {
+                floatingIndicator.remove();
+            }
             
             // Hide position info
             const positionInfo = safeGetElement('position-info');
@@ -1985,6 +1803,8 @@ async function pollForNewData() {
         // Log the price for comparison with TradingView (with colors)
         const priceChange = latestPrice - previousPrice;
         const priceChangeColor = priceChange >= 0 ? UI_COLORS.positive : UI_COLORS.negative;
+        
+        const logMessage = `Current price: $${latestPrice.toFixed(2)} (${priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)})`;
         
         // Create a div for the log message with styled content
         const logElement = safeGetElement('logMessages');
@@ -2044,7 +1864,7 @@ async function pollForNewData() {
             tempPriceData.push(newCandle);
         }
         
-        // Generate signals on the temporary data using the volume and BB strategy
+        // Generate signals on the temporary data using our custom strategy
         const strategy = new VolumeAndBBStrategy(
             state.volumeCandles,
             state.volumeIncreasePercentage,
@@ -2143,11 +1963,9 @@ function openPosition(type, candle, reason = 'Strategy Signal') {
         candle.datetime,
         type,
         entryPrice,
-        positionSize / entryPrice
+        positionSize / entryPrice,
+        reason
     );
-    
-    // Set entry reason
-    state.currentPosition.reason = reason;
     
     // Calculate risk levels
     updatePositionRiskLevels();
@@ -2180,9 +1998,6 @@ function closeCurrentPosition(reason) {
     
     // Get current price
     const exitPrice = state.currentPrice;
-    
-    // Store exit reason
-    state.currentPosition.exitReason = reason;
     
     // Close the position and calculate P&L
     const pnl = state.currentPosition.close(new Date(), exitPrice, reason);
@@ -2222,6 +2037,12 @@ function closeCurrentPosition(reason) {
     updatePositionInfo();
     const positionInfo = safeGetElement('position-info');
     if (positionInfo) positionInfo.style.display = 'none';
+    
+    // Remove floating position indicator
+    const floatingIndicator = safeGetElement('floating-position-indicator');
+    if (floatingIndicator) {
+        floatingIndicator.remove();
+    }
     
     // Update metrics
     updateMetrics();
@@ -2333,150 +2154,11 @@ function switchToTradingMode(mode) {
     }
 }
 
-// Show API Configuration Modal
-function showApiConfigModal() {
-    const modal = safeGetElement('apiConfigModal');
-    if (!modal) return;
-    
-    // Set modal values from state if available
-    const modalApiKey = safeGetElement('modal-api-key');
-    const modalApiSecret = safeGetElement('modal-api-secret');
-    const modalUseTestnet = safeGetElement('modal-use-testnet');
-    
-    if (modalApiKey) modalApiKey.value = state.liveTrading.apiKey || '';
-    if (modalApiSecret) modalApiSecret.value = state.liveTrading.apiSecret || '';
-    if (modalUseTestnet) modalUseTestnet.checked = state.liveTrading.useTestnet;
-    
-    // Show modal
-    modal.style.display = 'block';
-}
-
-// Hide API Configuration Modal
-function hideApiConfigModal() {
-    const modal = safeGetElement('apiConfigModal');
-    if (modal) modal.style.display = 'none';
-}
-
-// Save API Configuration from Modal
-function saveApiConfigFromModal() {
-    const modalApiKey = safeGetElement('modal-api-key').value;
-    const modalApiSecret = safeGetElement('modal-api-secret').value;
-    const modalUseTestnet = safeGetElement('modal-use-testnet').checked;
-    
-    if (!modalApiKey || !modalApiSecret) {
-        alert('API key and secret are required');
-        return;
-    }
-    
-    // Save to state
-    state.liveTrading.apiKey = modalApiKey;
-    state.liveTrading.apiSecret = modalApiSecret;
-    state.liveTrading.useTestnet = modalUseTestnet;
-    
-    // Simple encryption (not secure, but better than plaintext)
-    const encryptedKey = btoa(modalApiKey);
-    const encryptedSecret = btoa(modalApiSecret);
-    
-    // Save to localStorage
-    const apiConfig = {
-        apiKey: encryptedKey,
-        apiSecret: encryptedSecret,
-        useTestnet: modalUseTestnet
-    };
-    
-    localStorage.setItem('voltyBotAPIConfig', JSON.stringify(apiConfig));
-    
-    // Update UI elements
-    const useTestnetToggle = safeGetElement('use-testnet-toggle');
-    if (useTestnetToggle) useTestnetToggle.checked = modalUseTestnet;
-    
-    addLogMessage('API credentials saved successfully');
-    showStatusIndicator('API credentials saved', 'success');
-    
-    // Hide modal
-    hideApiConfigModal();
-    
-    // Fully switch to live mode now that we have credentials
-    switchToTradingMode('live');
-}
-
-// Emergency stop function
-function emergencyStop() {
-    // Display confirmation modal
-    const confirmed = confirm("⚠️ EMERGENCY STOP: This will immediately cancel all orders and close all open positions. Continue?");
-    
-    if (!confirmed) return;
-    
-    // Show loading indicator
-    showLoading();
-    showStatusIndicator('EMERGENCY STOP - Closing all positions...', 'error');
-    
-    // Update bot status
-    updateBotStatus('idle', 'EMERGENCY STOP ACTIVATED');
-    updateBotActivity('scanning');
-    
-    // Play alert sound at higher volume (emergency notification)
-    const originalVolume = state.alerts.sound.volume;
-    state.alerts.sound.volume = 0.8;
-    notificationSound.play().catch(e => console.error('Error playing emergency sound:', e));
-    state.alerts.sound.volume = originalVolume;
-    
-    // Log the emergency stop
-    addLogMessage('🚨 EMERGENCY STOP ACTIVATED 🚨', true);
-    
-    try {
-        // Clear all intervals
-        if (state.interval) {
-            clearInterval(state.interval);
-            state.interval = null;
-        }
-        
-        // Set trading state to stopped
-        state.isTrading = false;
-
-        // Close any open positions
-        if (state.currentPosition) {
-            closeCurrentPosition('Emergency Stop');
-        }
-
-        // Update UI buttons
-        const startTradingBtn = safeGetElement('start-trading-btn');
-        const stopTradingBtn = safeGetElement('stop-trading-btn');
-        const resetTradingBtn = safeGetElement('reset-trading-btn');
-        const startLiveTradingBtn = safeGetElement('start-live-trading-btn');
-        const stopLiveTradingBtn = safeGetElement('stop-live-trading-btn');
-        const emergencyStopBtn = safeGetElement('emergency-stop-btn');
-
-        if (startTradingBtn) startTradingBtn.disabled = false;
-        if (stopTradingBtn) stopTradingBtn.disabled = true;
-        if (resetTradingBtn) resetTradingBtn.disabled = false;
-        if (startLiveTradingBtn) startLiveTradingBtn.disabled = false;
-        if (stopLiveTradingBtn) stopLiveTradingBtn.disabled = true;
-        if (emergencyStopBtn) emergencyStopBtn.disabled = false;
-
-        // Enable form inputs
-        disableFormInputs(false);
-
-        sendAlert('Emergency Stop Executed', 'All positions have been closed and trading has been halted.', 'error');
-        updateBotStatus('idle', 'Emergency stop completed - System halted');
-        updateBotActivity('waiting');
-        
-        hideLoading();
-        hideStatusIndicator();
-    } catch (error) {
-        console.error('Error in emergency stop:', error);
-        addLogMessage('Critical error in emergency stop: ' + error.message, true);
-        updateBotStatus('idle', 'Critical error during emergency stop');
-        hideLoading();
-        hideStatusIndicator();
-    }
-}
-
 // Initialize application
 function initApp() {
     try {
         // Set current timestamp
-        const currentTime = new Date("2025-06-11 21:05:14");
+        const currentTime = new Date("2025-06-11 21:28:13");
         
         // Load settings from localStorage
         loadSettingsFromLocalStorage();
@@ -2555,7 +2237,7 @@ function initApp() {
                     updateMarketInfo();
                 }
                 
-                // Generate signals
+                // Generate signals using the volume and BB strategy
                 const strategy = new VolumeAndBBStrategy(
                     state.volumeCandles,
                     state.volumeIncreasePercentage,
@@ -2565,12 +2247,8 @@ function initApp() {
                 state.indicators = strategy.generateSignals(state.priceData);
                 state.signalHistory = strategy.signalHistory;
                 
-                // Initialize TradingView if available
-                if (typeof TradingView !== 'undefined') {
-                    updateTradingViewSymbol();
-                } else {
-                    addLogMessage('TradingView is not available', true);
-                }
+                // Update signal display
+
                 
                 // Update bot status
                 updateBotStatus('idle', 'Ready to start trading');
@@ -2589,13 +2267,13 @@ function initApp() {
                 addLogMessage(`System initialized by user: gelimorto2 at ${currentTime.toISOString().replace('T', ' ').substr(0, 19)} UTC`);
                 
                 // Log current price
-                const priceMsg = `Current price for ${state.symbol}: $${state.currentPrice.toFixed(2)} (compare with TradingView)`;
+                const priceMsg = `Current price for ${state.symbol}: $${state.currentPrice.toFixed(2)}`;
                 const logElement = safeGetElement('logMessages');
                 if (logElement) {
                     const timestamp = new Date().toLocaleTimeString();
                     const logItem = document.createElement('div');
                     logItem.className = 'log-message';
-                    logItem.innerHTML = `<strong>${timestamp}</strong>: Current price: <span style="color:${UI_COLORS.highlight};font-weight:bold;">$${state.currentPrice.toFixed(2)}</span> - Compare with TradingView`;
+                    logItem.innerHTML = `<strong>${timestamp}</strong>: Current price: <span style="color:${UI_COLORS.highlight};font-weight:bold;">$${state.currentPrice.toFixed(2)}</span>`;
                     
                     // Add to the top of the log
                     logElement.prepend(logItem);
@@ -2624,7 +2302,6 @@ function setupEventListeners() {
             
             if (!state.isTrading) {
                 reloadDataWithSettings();
-                updateTradingViewSymbol();
             } else {
                 addLogMessage('Cannot change symbol while trading is active', true);
                 this.value = state.symbol; // Reset to current value
@@ -2640,7 +2317,6 @@ function setupEventListeners() {
             
             if (!state.isTrading) {
                 reloadDataWithSettings();
-                updateTradingViewSymbol();
             } else {
                 addLogMessage('Cannot change timeframe while trading is active', true);
                 this.value = state.timeframe; // Reset to current value
@@ -2831,45 +2507,6 @@ function setupEventListeners() {
         saveApiBtn.addEventListener('click', saveApiCredentials);
     }
     
-    if (testApiBtn) {
-        testApiBtn.addEventListener('click', testApiConnection);
-    }
-    
-    // Modal API Configuration
-    const closeApiConfigModal = safeGetElement('closeApiConfigModal');
-    const modalTestApiBtn = safeGetElement('modal-test-api-btn');
-    const modalSaveApiBtn = safeGetElement('modal-save-api-btn');
-    
-    if (closeApiConfigModal) {
-        closeApiConfigModal.addEventListener('click', hideApiConfigModal);
-    }
-    
-    if (modalTestApiBtn) {
-        modalTestApiBtn.addEventListener('click', async function() {
-            // Temporarily set values for testing
-            const origKey = state.liveTrading.apiKey;
-            const origSecret = state.liveTrading.apiSecret;
-            const origTestnet = state.liveTrading.useTestnet;
-            
-            state.liveTrading.apiKey = safeGetElement('modal-api-key').value;
-            state.liveTrading.apiSecret = safeGetElement('modal-api-secret').value;
-            state.liveTrading.useTestnet = safeGetElement('modal-use-testnet').checked;
-            
-            const success = await testApiConnection();
-            
-            // Restore original values if test failed
-            if (!success) {
-                state.liveTrading.apiKey = origKey;
-                state.liveTrading.apiSecret = origSecret;
-                state.liveTrading.useTestnet = origTestnet;
-            }
-        });
-    }
-    
-    if (modalSaveApiBtn) {
-        modalSaveApiBtn.addEventListener('click', saveApiConfigFromModal);
-    }
-    
     // Notification Settings
     const browserNotificationsToggle = safeGetElement('browser-notifications-toggle');
     const soundNotificationsToggle = safeGetElement('sound-notifications-toggle');
@@ -2915,7 +2552,32 @@ function setupEventListeners() {
     }
     
     if (testDiscordBtn) {
-        testDiscordBtn.addEventListener('click', testDiscordWebhook);
+        testDiscordBtn.addEventListener('click', function() {
+            const webhook = safeGetElement('discord-webhook').value;
+            if (!webhook) {
+                showStatusIndicator('Discord webhook URL is required', 'error');
+                return;
+            }
+            
+            // Save webhook temporarily
+            const originalWebhook = state.alerts.discord.webhook;
+            state.alerts.discord.webhook = webhook;
+            
+            // Send test notification
+            sendDiscordNotification(
+                'Discord Webhook Test',
+                `This is a test notification from Volty Trading Bot.\nTimestamp: ${new Date().toISOString()}\nSymbol: ${state.symbol}`
+            ).then(success => {
+                if (success) {
+                    showStatusIndicator('Discord webhook test successful', 'success');
+                } else {
+                    showStatusIndicator('Discord webhook test failed', 'error');
+                }
+                
+                // Restore original webhook
+                state.alerts.discord.webhook = originalWebhook;
+            });
+        });
     }
     
     // Trading Mode
@@ -2936,10 +2598,6 @@ function setupEventListeners() {
     const stopTradingBtn = safeGetElement('stop-trading-btn');
     const resetTradingBtn = safeGetElement('reset-trading-btn');
     
-    const startLiveTradingBtn = safeGetElement('start-live-trading-btn');
-    const stopLiveTradingBtn = safeGetElement('stop-live-trading-btn');
-    const emergencyStopBtn = safeGetElement('emergency-stop-btn');
-    
     if (startTradingBtn) {
         startTradingBtn.addEventListener('click', startTrading);
     }
@@ -2950,18 +2608,6 @@ function setupEventListeners() {
     
     if (resetTradingBtn) {
         resetTradingBtn.addEventListener('click', resetTrading);
-    }
-    
-    if (startLiveTradingBtn) {
-        startLiveTradingBtn.addEventListener('click', startLiveTrading);
-    }
-    
-    if (stopLiveTradingBtn) {
-        stopLiveTradingBtn.addEventListener('click', stopTrading);
-    }
-    
-    if (emergencyStopBtn) {
-        emergencyStopBtn.addEventListener('click', emergencyStop);
     }
     
     // Position Close Button
@@ -2997,4 +2643,4 @@ function setupEventListeners() {
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', initApp);
 
-// Last modification: 2025-06-11 21:05:14 UTC by gelimorto2
+// Last modification: 2025-06-11 21:28:13 UTC by gelimorto2
