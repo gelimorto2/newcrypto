@@ -145,10 +145,165 @@ class Position {
     }
 }
 
+// API Client for exchange interactions
+class ExchangeAPIClient {
+    constructor() {
+        this.baseUrl = state.settings.useTestnet ? 
+            'https://testnet.binance.vision/api' : 
+            'https://api.binance.com/api';
+        this.apiKey = state.settings.apiKey;
+        this.apiSecret = state.settings.apiSecret;
+    }
+    
+    // Generate signature for authenticated requests
+    generateSignature(queryString) {
+        const crypto = window.crypto.subtle;
+        const encoder = new TextEncoder();
+        
+        return new Promise((resolve, reject) => {
+            const key = encoder.encode(this.apiSecret);
+            const message = encoder.encode(queryString);
+            
+            crypto.importKey(
+                'raw',
+                key,
+                { name: 'HMAC', hash: { name: 'SHA-256' } },
+                false,
+                ['sign']
+            ).then(key => {
+                return crypto.sign('HMAC', key, message);
+            }).then(signature => {
+                const hashArray = Array.from(new Uint8Array(signature));
+                const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                resolve(hashHex);
+            }).catch(error => {
+                reject(error);
+            });
+        });
+    }
+    
+    // Make authenticated request to the exchange
+    async makeAuthenticatedRequest(endpoint, method = 'GET', params = {}) {
+        try {
+            // Add timestamp for signature
+            const timestamp = Date.now();
+            params.timestamp = timestamp;
+            
+            // Convert params to query string
+            const queryString = Object.entries(params)
+                .map(([key, value]) => `${key}=${value}`)
+                .join('&');
+            
+            // Generate signature
+            const signature = await this.generateSignature(queryString);
+            
+            // Prepare request options
+            const url = `${this.baseUrl}${endpoint}?${queryString}&signature=${signature}`;
+            const options = {
+                method: method,
+                headers: {
+                    'X-MBX-APIKEY': this.apiKey
+                }
+            };
+            
+            // Make request
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`API Error: ${errorData.msg || response.statusText}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            addLogMessage(`API Request Error: ${error.message}`, false, true);
+            throw error;
+        }
+    }
+    
+    // Make public request to the exchange
+    async makePublicRequest(endpoint, params = {}) {
+        try {
+            // Convert params to query string
+            const queryString = Object.entries(params)
+                .map(([key, value]) => `${key}=${value}`)
+                .join('&');
+            
+            // Prepare request URL
+            const url = `${this.baseUrl}${endpoint}${queryString ? '?' + queryString : ''}`;
+            
+            // Make request
+            const response = await fetch(url);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`API Error: ${errorData.msg || response.statusText}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            addLogMessage(`API Request Error: ${error.message}`, false, true);
+            throw error;
+        }
+    }
+    
+    // Get account information
+    async getAccountInfo() {
+        return this.makeAuthenticatedRequest('/v3/account', 'GET');
+    }
+    
+    // Get candlestick data
+    async getKlines(symbol, interval, limit = 500) {
+        return this.makePublicRequest('/v3/klines', {
+            symbol: symbol,
+            interval: interval,
+            limit: limit
+        });
+    }
+    
+    // Place a new order
+    async placeOrder(symbol, side, type, quantity, price = null, timeInForce = 'GTC') {
+        const params = {
+            symbol: symbol,
+            side: side, // 'BUY' or 'SELL'
+            type: type, // 'LIMIT', 'MARKET', etc.
+            quantity: quantity
+        };
+        
+        // Add price and timeInForce for limit orders
+        if (type === 'LIMIT') {
+            params.price = price;
+            params.timeInForce = timeInForce;
+        }
+        
+        return this.makeAuthenticatedRequest('/v3/order', 'POST', params);
+    }
+    
+    // Cancel an order
+    async cancelOrder(symbol, orderId) {
+        return this.makeAuthenticatedRequest('/v3/order', 'DELETE', {
+            symbol: symbol,
+            orderId: orderId
+        });
+    }
+    
+    // Get open orders
+    async getOpenOrders(symbol) {
+        return this.makeAuthenticatedRequest('/v3/openOrders', 'GET', {
+            symbol: symbol
+        });
+    }
+    
+    // Test connectivity to the API
+    async ping() {
+        return this.makePublicRequest('/v3/ping');
+    }
+}
+
+// Create API client instance
+const apiClient = new ExchangeAPIClient();
+
 // Initialize application
-function initialize() {
-    console.log('Volty Trading Bot v2.0.0 | Build Date: 2025-06-12');
-    addLogMessage('System initializing...', false);
+async function initialize() {
+    addLogMessage('Volty Trading Bot v2.0.0 initializing...', false);
     
     // Load saved settings
     loadSettings();
@@ -167,16 +322,21 @@ function initialize() {
     checkApiConfiguration();
     
     // Initialize TradingView chart
-    setTimeout(() => {
-        initializeTradingViewChart();
+    try {
+        await initializeTradingViewChart();
         
         // Hide loading indicator after chart is loaded
-        setTimeout(() => {
-            document.getElementById('loadingIndicator').style.display = 'none';
-            addLogMessage('System initialized and ready', false);
-            document.getElementById('activity-status').textContent = 'Ready to start trading';
-        }, 2000);
-    }, 1000);
+        document.getElementById('loadingIndicator').style.display = 'none';
+        addLogMessage('System initialized and ready', false);
+        document.getElementById('activity-status').textContent = 'Ready to start trading';
+        
+        // Fetch initial market data
+        await fetchMarketData();
+    } catch (error) {
+        document.getElementById('loadingIndicator').style.display = 'none';
+        addLogMessage(`Initialization error: ${error.message}`, false, true);
+        showStatusBar(`Initialization error: ${error.message}`, 'error');
+    }
 }
 
 // Load settings from localStorage
@@ -201,8 +361,7 @@ function loadSettings() {
             
             addLogMessage('Settings loaded from local storage');
         } catch (error) {
-            console.error('Error loading settings:', error);
-            addLogMessage('Error loading settings: ' + error.message, true);
+            addLogMessage('Error loading settings: ' + error.message, false, true);
         }
     }
 }
@@ -226,8 +385,7 @@ function saveSettings() {
         addLogMessage('Settings saved to local storage');
         showStatusBar('Settings saved successfully', 'success');
     } catch (error) {
-        console.error('Error saving settings:', error);
-        addLogMessage('Error saving settings: ' + error.message, true);
+        addLogMessage('Error saving settings: ' + error.message, false, true);
         showStatusBar('Error saving settings', 'error');
     }
 }
@@ -611,67 +769,9 @@ function setupEventListeners() {
         }
     });
 
-    // Account Settings Modal handlers
-    document.getElementById('account-settings-btn').addEventListener('click', function() {
-        document.getElementById('accountSettingsModal').style.display = 'flex';
-    });
-
-    document.getElementById('closeAccountSettingsModal').addEventListener('click', function() {
-        document.getElementById('accountSettingsModal').style.display = 'none';
-    });
-
-    document.getElementById('cancelAccountSettings').addEventListener('click', function() {
-        document.getElementById('accountSettingsModal').style.display = 'none';
-    });
-
-    document.getElementById('saveAccountSettings').addEventListener('click', function() {
-        // In a real app, save the account settings
-        showStatusBar('Account settings saved', 'success');
-        document.getElementById('accountSettingsModal').style.display = 'none';
-    });
-
-    // Account Settings Tabs
-    const tabItems = document.querySelectorAll('.tab-item');
-    tabItems.forEach(tab => {
-        tab.addEventListener('click', function() {
-            // Remove active class from all tabs
-            tabItems.forEach(t => t.classList.remove('active'));
-            // Add active class to clicked tab
-            this.classList.add('active');
-            
-            // Hide all tab contents
-            const tabContents = document.querySelectorAll('.tab-content');
-            tabContents.forEach(content => content.classList.remove('active'));
-            
-            // Show the corresponding tab content
-            const tabName = this.getAttribute('data-tab');
-            document.getElementById(`${tabName}-tab`).classList.add('active');
-        });
-    });
-
-    // Copy referral code
-    document.querySelector('.referral-code-copy').addEventListener('click', function() {
-        const referralCode = document.querySelector('.referral-code-value').textContent;
-        navigator.clipboard.writeText(referralCode).then(() => {
-            showStatusBar('Referral code copied to clipboard', 'success');
-        });
-    });
-
-    // Two-factor authentication toggle
-    document.getElementById('2fa-toggle').addEventListener('change', function() {
-        if (this.checked) {
-            // Simulate 2FA setup - in a real app, this would open a setup flow
-            setTimeout(() => {
-                this.checked = false;
-                showStatusBar('2FA setup requires additional steps', 'info');
-            }, 500);
-        }
-    });
-
-    // Profile picture upload
-    document.querySelector('.profile-picture-upload').addEventListener('click', function() {
-        // Simulate file upload - in a real app, this would open a file picker
-        showStatusBar('Profile picture upload is not available in demo', 'info');
+    // Log toggle
+    document.getElementById('log-toggle-btn').addEventListener('click', function() {
+        document.getElementById('log-container').classList.toggle('open');
     });
 }
 
@@ -691,7 +791,7 @@ function checkApiConfiguration(showAlert = false) {
 }
 
 // Test API connection
-function testApiConnection() {
+async function testApiConnection() {
     if (!checkApiConfiguration(true)) {
         return;
     }
@@ -699,20 +799,18 @@ function testApiConnection() {
     addLogMessage('Testing API connection...');
     showStatusBar('Testing API connection...', 'info');
     
-    // Simulate API test - in a real app, you would make an actual API call
-    setTimeout(() => {
-        if (state.settings.apiKey && state.settings.apiSecret) {
-            addLogMessage('API connection successful', true);
-            showStatusBar('API connection successful', 'success');
-        } else {
-            addLogMessage('API connection failed: Missing credentials', true);
-            showStatusBar('API connection failed', 'error');
-        }
-    }, 1500);
+    try {
+        await apiClient.ping();
+        addLogMessage('API connection successful', true);
+        showStatusBar('API connection successful', 'success');
+    } catch (error) {
+        addLogMessage(`API connection failed: ${error.message}`, false, true);
+        showStatusBar('API connection failed', 'error');
+    }
 }
 
 // Test Discord webhook
-function testDiscordWebhook() {
+async function testDiscordWebhook() {
     if (!state.settings.discordNotifications) {
         showStatusBar('Discord notifications are disabled', 'warning');
         return;
@@ -726,17 +824,38 @@ function testDiscordWebhook() {
     addLogMessage('Testing Discord webhook...');
     showStatusBar('Sending test message to Discord...', 'info');
     
-    // Simulate webhook test - in a real app, you would make an actual webhook call
-    setTimeout(() => {
-        addLogMessage('Discord webhook test message sent', true);
-        showStatusBar('Discord test message sent', 'success');
-    }, 1500);
+    try {
+        const response = await fetch(state.settings.discordWebhook, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                content: 'Volty Trading Bot - Test Message',
+                embeds: [{
+                    title: 'Connection Test',
+                    description: 'This is a test message from Volty Trading Bot.',
+                    color: 0x4f46e5
+                }]
+            })
+        });
+        
+        if (response.ok) {
+            addLogMessage('Discord webhook test message sent', true);
+            showStatusBar('Discord test message sent', 'success');
+        } else {
+            throw new Error('Failed to send message to Discord');
+        }
+    } catch (error) {
+        addLogMessage(`Discord webhook test failed: ${error.message}`, false, true);
+        showStatusBar('Discord webhook test failed', 'error');
+    }
 }
 
 // Request notification permission
 function requestNotificationPermission() {
     if (!('Notification' in window)) {
-        addLogMessage('Browser does not support notifications', true);
+        addLogMessage('Browser does not support notifications', false, true);
         return;
     }
     
@@ -778,20 +897,42 @@ function sendNotification(title, message) {
 function playNotificationSound(type = 'alert') {
     if (!state.settings.soundNotifications) return;
     
-    // In a real app, you would play actual sounds here
-    console.log(`Playing ${type} sound`);
+    const sounds = {
+        alert: new Audio('assets/sounds/alert.mp3'),
+        open: new Audio('assets/sounds/open.mp3'),
+        profit: new Audio('assets/sounds/profit.mp3'),
+        loss: new Audio('assets/sounds/loss.mp3'),
+        start: new Audio('assets/sounds/start.mp3')
+    };
+    
+    if (sounds[type]) {
+        sounds[type].play().catch(error => {
+            // Silently handle autoplay restrictions
+        });
+    }
 }
 
 // Send Discord notification
-function sendDiscordNotification(message) {
+async function sendDiscordNotification(message) {
     if (!state.settings.discordNotifications || !state.settings.discordWebhook) return;
     
-    // In a real app, you would make an actual webhook call here
-    console.log(`Sending Discord notification: ${message}`);
+    try {
+        await fetch(state.settings.discordWebhook, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                content: message
+            })
+        });
+    } catch (error) {
+        addLogMessage(`Failed to send Discord notification: ${error.message}`, false, true);
+    }
 }
 
 // Start the trading bot
-function startTrading(isLive = false) {
+async function startTrading(isLive = false) {
     if (state.isRunning) {
         showStatusBar('Trading is already running', 'info');
         return;
@@ -829,11 +970,17 @@ function startTrading(isLive = false) {
         addLogMessage(`Paper trading started on ${state.symbol} (${state.timeframe})`);
     }
     
-    // Simulate fetching initial data
-    fetchMarketData();
-    
-    // Start the trading loop
-    runTradingLoop();
+    // Fetch initial data
+    try {
+        await fetchMarketData();
+        
+        // Start the trading loop
+        runTradingLoop();
+    } catch (error) {
+        addLogMessage(`Error starting trading: ${error.message}`, false, true);
+        stopTrading();
+        showStatusBar(`Error starting trading: ${error.message}`, 'error');
+    }
 }
 
 // Stop the trading bot
@@ -895,90 +1042,141 @@ function resetTrading() {
 }
 
 // Close current position
-function closePosition(reason) {
+async function closePosition(reason) {
     if (!state.currentPosition) return;
     
-    const pnl = state.currentPosition.close(state.currentPrice, new Date(), reason);
-    state.balance += pnl;
-    
-    // Add to trade history
-    state.trades.push(state.currentPosition);
-    
-    // Log the close
-    const pnlPct = state.currentPosition.pnlPct * 100;
-    const pnlStr = pnl >= 0 ? `+$${pnl.toFixed(2)} (+${pnlPct.toFixed(2)}%)` : `-$${Math.abs(pnl).toFixed(2)} (${pnlPct.toFixed(2)}%)`;
-    
-    if (pnl >= 0) {
-        addLogMessage(`${state.currentPosition.type} position closed with profit: ${pnlStr}. Reason: ${reason}`, true);
+    try {
+        // If in live trading mode, place an actual order
         if (state.isLiveTrading) {
-            sendNotification('Position Closed', `${state.currentPosition.type} closed with profit: ${pnlStr}`);
-            playNotificationSound('profit');
-            sendDiscordNotification(`🟢 CLOSED ${state.currentPosition.type} with PROFIT: ${pnlStr} | ${state.symbol}`);
+            const side = state.currentPosition.type === 'LONG' ? 'SELL' : 'BUY';
+            const order = await apiClient.placeOrder(
+                state.symbol,
+                side,
+                'MARKET',
+                state.currentPosition.size
+            );
+            
+            // Use the actual execution price from the order
+            state.currentPrice = parseFloat(order.price) || state.currentPrice;
         }
-    } else {
-        addLogMessage(`${state.currentPosition.type} position closed with loss: ${pnlStr}. Reason: ${reason}`, false, true);
-        if (state.isLiveTrading) {
-            sendNotification('Position Closed', `${state.currentPosition.type} closed with loss: ${pnlStr}`);
-            playNotificationSound('loss');
-            sendDiscordNotification(`🔴 CLOSED ${state.currentPosition.type} with LOSS: ${pnlStr} | ${state.symbol}`);
+        
+        const pnl = state.currentPosition.close(state.currentPrice, new Date(), reason);
+        state.balance += pnl;
+        
+        // Add to trade history
+        state.trades.push(state.currentPosition);
+        
+        // Log the close
+        const pnlPct = state.currentPosition.pnlPct * 100;
+        const pnlStr = pnl >= 0 ? `+$${pnl.toFixed(2)} (+${pnlPct.toFixed(2)}%)` : `-$${Math.abs(pnl).toFixed(2)} (${pnlPct.toFixed(2)}%)`;
+        
+        if (pnl >= 0) {
+            addLogMessage(`${state.currentPosition.type} position closed with profit: ${pnlStr}. Reason: ${reason}`, true);
+            if (state.isLiveTrading) {
+                sendNotification('Position Closed', `${state.currentPosition.type} closed with profit: ${pnlStr}`);
+                playNotificationSound('profit');
+                sendDiscordNotification(`🟢 CLOSED ${state.currentPosition.type} with PROFIT: ${pnlStr} | ${state.symbol}`);
+            }
+        } else {
+            addLogMessage(`${state.currentPosition.type} position closed with loss: ${pnlStr}. Reason: ${reason}`, false, true);
+            if (state.isLiveTrading) {
+                sendNotification('Position Closed', `${state.currentPosition.type} closed with loss: ${pnlStr}`);
+                playNotificationSound('loss');
+                sendDiscordNotification(`🔴 CLOSED ${state.currentPosition.type} with LOSS: ${pnlStr} | ${state.symbol}`);
+            }
         }
+        
+        // Clear position and update UI
+        state.currentPosition = null;
+        updatePositionInfo();
+        updatePerformanceMetrics();
+    } catch (error) {
+        addLogMessage(`Error closing position: ${error.message}`, false, true);
+        showStatusBar(`Error closing position: ${error.message}`, 'error');
     }
-    
-    // Clear position and update UI
-    state.currentPosition = null;
-    updatePositionInfo();
-    updatePerformanceMetrics();
 }
 
 // Open a new position
-function openPosition(type) {
-    if (state.currentPosition) {
-        closePosition('New signal');
+async function openPosition(type) {
+    try {
+        if (state.currentPosition) {
+            await closePosition('New signal');
+        }
+        
+        // Calculate position size
+        const positionSize = (state.balance * state.settings.positionSize / 100) / state.currentPrice;
+        
+        // If in live trading mode, place an actual order
+        if (state.isLiveTrading) {
+            const side = type === 'LONG' ? 'BUY' : 'SELL';
+            const order = await apiClient.placeOrder(
+                state.symbol,
+                side,
+                'MARKET',
+                positionSize
+            );
+            
+            // Use the actual execution price from the order
+            state.currentPrice = parseFloat(order.price) || state.currentPrice;
+        }
+        
+        // Create position object
+        state.currentPosition = new Position(type, state.currentPrice, positionSize, new Date());
+        
+        // Log the open
+        addLogMessage(`${type} position opened at $${state.currentPrice.toFixed(2)} with size: ${positionSize.toFixed(6)}`, true);
+        
+        if (state.isLiveTrading) {
+            sendNotification('Position Opened', `${type} opened at $${state.currentPrice.toFixed(2)}`);
+            playNotificationSound('open');
+            sendDiscordNotification(`📊 OPENED ${type} position at $${state.currentPrice.toFixed(2)} | ${state.symbol}`);
+        }
+        
+        // Update UI
+        updatePositionInfo();
+    } catch (error) {
+        addLogMessage(`Error opening position: ${error.message}`, false, true);
+        showStatusBar(`Error opening position: ${error.message}`, 'error');
     }
-    
-    const positionSize = (state.balance * state.settings.positionSize / 100) / state.currentPrice;
-    state.currentPosition = new Position(type, state.currentPrice, positionSize, new Date());
-    
-    // Log the open
-    addLogMessage(`${type} position opened at $${state.currentPrice.toFixed(2)} with size: ${positionSize.toFixed(6)}`, true);
-    
-    if (state.isLiveTrading) {
-        sendNotification('Position Opened', `${type} opened at $${state.currentPrice.toFixed(2)}`);
-        playNotificationSound('open');
-        sendDiscordNotification(`📊 OPENED ${type} position at $${state.currentPrice.toFixed(2)} | ${state.symbol}`);
-    }
-    
-    // Update UI
-    updatePositionInfo();
 }
 
-// Fetch market data
-function fetchMarketData() {
-    // In a real app, you would fetch actual market data from an exchange API
-    // Here we'll simulate it with random data
-    
-    document.getElementById('activity-status').textContent = 'Fetching market data...';
-    
-    // Generate some sample price data if none exists
-    if (state.priceData.length === 0) {
-        const basePrice = 50000; // For BTC simulation
-        state.priceData = Array(100).fill(0).map((_, i) => {
-            const random = Math.random() * 1000 - 500;
-            return basePrice + random + (i * 50);
+// Fetch market data from the exchange
+async function fetchMarketData() {
+    try {
+        document.getElementById('activity-status').textContent = 'Fetching market data...';
+        
+        // Get klines data from the exchange
+        const klines = await apiClient.getKlines(state.symbol, state.timeframe);
+        
+        // Process klines data
+        state.priceData = [];
+        state.volumeData = [];
+        
+        klines.forEach(candle => {
+            // Klines data format: [open time, open, high, low, close, volume, ...]
+            const closePrice = parseFloat(candle[4]);
+            const volume = parseFloat(candle[5]);
+            
+            state.priceData.push(closePrice);
+            state.volumeData.push(volume);
         });
         
-        state.volumeData = Array(100).fill(0).map(() => {
-            return Math.random() * 1000 + 100;
-        });
+        // Update current price (last candle)
+        if (state.priceData.length > 0) {
+            state.currentPrice = state.priceData[state.priceData.length - 1];
+        }
+        
+        // Update market info
+        updateMarketInfo();
+        
+        document.getElementById('activity-status').textContent = 'Market data updated';
+        
+        return true;
+    } catch (error) {
+        addLogMessage(`Error fetching market data: ${error.message}`, false, true);
+        document.getElementById('activity-status').textContent = 'Error fetching market data';
+        throw error;
     }
-    
-    // Update current price (last candle)
-    state.currentPrice = state.priceData[state.priceData.length - 1];
-    
-    // Update market info
-    updateMarketInfo();
-    
-    document.getElementById('activity-status').textContent = 'Market data updated';
 }
 
 // Update market info display
@@ -1005,66 +1203,58 @@ function updateMarketInfo() {
 }
 
 // Main trading loop
-function runTradingLoop() {
+async function runTradingLoop() {
     if (!state.isRunning) return;
     
-    // Update the last check time
-    state.lastUpdate = new Date();
-    document.getElementById('last-tick-info').textContent = state.lastUpdate.toLocaleTimeString();
-    
-    // Simulate market data update (in a real app, you would fetch fresh data)
-    simulateMarketTick();
-    
-    // Update current position if exists
-    if (state.currentPosition) {
-        checkPositionStatus();
+    try {
+        // Update the last check time
+        state.lastUpdate = new Date();
+        document.getElementById('last-tick-info').textContent = state.lastUpdate.toLocaleTimeString();
+        
+        // Fetch fresh market data
+        await fetchMarketData();
+        
+        // Update current position if exists
+        if (state.currentPosition) {
+            checkPositionStatus();
+        }
+        
+        // Generate trading signals
+        if (state.settings.autoTrade) {
+            generateTradingSignals();
+        }
+        
+        // Update UI
+        updatePositionInfo();
+        updatePerformanceMetrics();
+        
+        // Continue the loop
+        const timeframe = state.timeframe;
+        let interval = 5000; // Default 5 seconds
+        
+        if (timeframe === '1m') interval = 5000;
+        else if (timeframe === '5m') interval = 10000;
+        else if (timeframe === '15m') interval = 15000;
+        else if (timeframe === '30m') interval = 20000;
+        else if (timeframe === '1h') interval = 25000;
+        else if (timeframe === '4h') interval = 30000;
+        else if (timeframe === '1d') interval = 35000;
+        
+        // Schedule next update
+        document.getElementById('activity-status').textContent = `Analyzing market data... Next update in ${interval/1000}s`;
+        setTimeout(runTradingLoop, interval);
+    } catch (error) {
+        addLogMessage(`Error in trading loop: ${error.message}`, false, true);
+        document.getElementById('activity-status').textContent = 'Trading error occurred';
+        
+        // Try to continue after a delay
+        setTimeout(() => {
+            if (state.isRunning) {
+                addLogMessage('Attempting to resume trading loop...', false, true);
+                runTradingLoop();
+            }
+        }, 30000); // Wait 30 seconds before retry
     }
-    
-    // Generate trading signals
-    if (state.settings.autoTrade) {
-        generateTradingSignals();
-    }
-    
-    // Update UI
-    updatePositionInfo();
-    updatePerformanceMetrics();
-    
-    // Continue the loop
-    const timeframe = state.timeframe;
-    let interval = 5000; // Default 5 seconds for simulation
-    
-    if (timeframe === '1m') interval = 5000;
-    else if (timeframe === '5m') interval = 10000;
-    else if (timeframe === '15m') interval = 15000;
-    else if (timeframe === '30m') interval = 20000;
-    else if (timeframe === '1h') interval = 25000;
-    else if (timeframe === '4h') interval = 30000;
-    else if (timeframe === '1d') interval = 35000;
-    
-    // Schedule next update
-    document.getElementById('activity-status').textContent = `Analyzing market data... Next update in ${interval/1000}s`;
-    setTimeout(runTradingLoop, interval);
-}
-
-// Simulate market price movement
-function simulateMarketTick() {
-    const lastPrice = state.currentPrice;
-    const change = (Math.random() - 0.5) * 200; // Random price movement
-    const newPrice = Math.max(lastPrice + change, 1); // Ensure price doesn't go below 1
-    
-    state.priceData.push(newPrice);
-    if (state.priceData.length > 300) {
-        state.priceData.shift(); // Keep last 300 data points
-    }
-    
-    const volume = Math.random() * 1000 + 100;
-    state.volumeData.push(volume);
-    if (state.volumeData.length > 300) {
-        state.volumeData.shift();
-    }
-    
-    state.currentPrice = newPrice;
-    updateMarketInfo();
 }
 
 // Check if current position needs to be closed
@@ -1109,7 +1299,7 @@ function checkPositionStatus() {
 
 // Generate trading signals based on strategy
 function generateTradingSignals() {
-    // Simple strategy using Bollinger Bands and volume for demonstration
+    // Strategy using Bollinger Bands and volume
     const prices = state.priceData;
     const volumes = state.volumeData;
     
@@ -1429,27 +1619,25 @@ function fixUIOverlays() {
 }
 
 // Initialize TradingView widget
-function initializeTradingViewChart() {
+async function initializeTradingViewChart() {
     try {
         // Find container
         const container = document.querySelector('.tradingview-widget-container__widget');
         if (!container) {
-            console.error('Chart container not found');
-            addLogMessage('Chart container not found', true);
-            return;
+            throw new Error('Chart container not found');
         }
         
         // Reset the container to ensure no residual elements
         container.innerHTML = '';
         
-        // Set up TradingView chart with iframe approach
+                // Set up TradingView chart with iframe approach
         const symbol = state.symbol || 'BTCUSDT';
-        const interval = state.timeframe || '1h';
+        const interval = state.timeframe || '1';
         
         // Create iframe element
         const iframe = document.createElement('iframe');
         iframe.id = 'tradingview_chart_frame';
-        iframe.src = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart_frame&symbol=BINANCE:${symbol}&interval=${interval}&hidesidetoolbar=0&symboledit=1&saveimage=0&toolbarbg=f1f3f6&studies=BB%40tv-basicstudies&theme=dark&style=1&timezone=Etc%2FUTC&withdateranges=1&studies_overrides=%7B%7D&overrides=%7B%22mainSeriesProperties.candleStyle.upColor%22%3A%22%2322c55e%22%2C%22mainSeriesProperties.candleStyle.downColor%22%3A%22%23ef4444%22%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en`;
+        iframe.src = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart_frame&symbol=BINANCE:${symbol}&interval=${interval}&hidesidetoolbar=0&symboledit=1&saveimage=0&toolbarbg=f1f3f6&studies=%5B%5D&theme=dark&style=1&timezone=exchange&withdateranges=1&showpopupbutton=1&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&utm_source=voltybot&utm_medium=widget`;
         iframe.style.width = '100%';
         iframe.style.height = '100%';
         iframe.style.margin = '0';
@@ -1462,15 +1650,30 @@ function initializeTradingViewChart() {
         // Append iframe to container
         container.appendChild(iframe);
         
-        // Log success
-        addLogMessage(`Chart initialized for ${symbol} (${interval})`);
-        
-        // Fix UI overlays after chart loads
-        setTimeout(fixUIOverlays, 2000);
-        
+        // Set up event listener to detect when chart is loaded
+        return new Promise((resolve, reject) => {
+            iframe.onload = () => {
+                addLogMessage(`Chart initialized for ${symbol} (${interval})`);
+                
+                // Fix UI overlays after chart loads
+                setTimeout(fixUIOverlays, 500);
+                resolve();
+            };
+            
+            iframe.onerror = () => {
+                reject(new Error('Failed to load TradingView chart'));
+            };
+            
+            // Set a timeout in case the iframe never loads
+            setTimeout(() => {
+                if (!iframe.contentWindow || !iframe.contentWindow.document.body) {
+                    reject(new Error('TradingView chart loading timeout'));
+                }
+            }, 10000);
+        });
     } catch (error) {
-        console.error('Error initializing TradingView chart:', error);
-        addLogMessage('Error initializing chart: ' + error.message, true);
+        addLogMessage('Error initializing chart: ' + error.message, false, true);
+        throw error;
     }
 }
 
