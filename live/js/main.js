@@ -4,6 +4,8 @@
  * 
  * Copyright (c) 2025 Volty Trading
  * All rights reserved.
+ * 
+ * Last updated: 2025-06-15
  */
 
 import { ExchangeAPIClient } from './api-client.js';
@@ -58,36 +60,55 @@ const positionManager = new PositionManager();
 const activeStrategy = strategies.bollingerBandsVolume;
 
 /**
+ * Helper function to safely add event listeners to DOM elements
+ * @param {string} id - Element ID
+ * @param {string} event - Event name
+ * @param {Function} handler - Event handler
+ * @returns {boolean} - Whether the event listener was added successfully
+ */
+function safeAddEventListener(id, event, handler) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.addEventListener(event, handler);
+    return true;
+  }
+  console.warn(`Element with ID "${id}" not found for event "${event}"`);
+  return false;
+}
+
+/**
  * Initialize application
  */
 async function initialize() {
-  uiManager.addLogMessage('Volty Trading Bot v2.0.0 initializing...', false);
-  
-  // Initialize UI
-  uiManager.initialize();
-  
-  // Load saved settings
-  loadSettings();
-  
-  // Setup UI event listeners
-  setupEventListeners();
-  
-  // Update UI with loaded settings
-  updateUIFromSettings();
-  
-  // Initialize clock
-  updateClock();
-  setInterval(updateClock, 1000);
-  
-  // Check if API keys are set for live trading
-  checkApiConfiguration();
-  
-  // Initialize TradingView chart
   try {
+    uiManager.addLogMessage('Volty Trading Bot v2.0.0 initializing...', false);
+    
+    // Initialize UI
+    uiManager.initialize();
+    
+    // Load saved settings
+    loadSettings();
+    
+    // Setup UI event listeners
+    setupEventListeners();
+    
+    // Update UI with loaded settings
+    updateUIFromSettings();
+    
+    // Initialize clock
+    updateClock();
+    setInterval(updateClock, 1000);
+    
+    // Check if API keys are set for live trading
+    checkApiConfiguration();
+    
+    // Initialize TradingView chart
     await initializeTradingViewChart();
     
     // Hide loading indicator after chart is loaded
-    document.getElementById('loadingIndicator').style.display = 'none';
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    if (loadingIndicator) loadingIndicator.style.display = 'none';
+    
     uiManager.addLogMessage('System initialized and ready', false);
     uiManager.updateStatus({
       isRunning: false,
@@ -99,9 +120,12 @@ async function initialize() {
     // Fetch initial market data
     await fetchMarketData();
   } catch (error) {
-    document.getElementById('loadingIndicator').style.display = 'none';
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    if (loadingIndicator) loadingIndicator.style.display = 'none';
+    
     uiManager.addLogMessage(`Initialization error: ${error.message}`, false, true);
     uiManager.showStatusBar(`Initialization error: ${error.message}`, 'error');
+    console.error('Initialization error:', error);
   }
 }
 
@@ -138,6 +162,7 @@ function loadSettings() {
       uiManager.addLogMessage('Settings loaded from local storage');
     } catch (error) {
       uiManager.addLogMessage('Error loading settings: ' + error.message, false, true);
+      console.error('Error loading settings:', error);
     }
   }
 }
@@ -162,6 +187,7 @@ function saveSettings() {
   } catch (error) {
     uiManager.addLogMessage('Error saving settings: ' + error.message, false, true);
     uiManager.showStatusBar('Error saving settings', 'error');
+    console.error('Error saving settings:', error);
   }
 }
 
@@ -169,470 +195,646 @@ function saveSettings() {
  * Update UI elements from current settings
  */
 function updateUIFromSettings() {
-  // Update strategy parameters
-  document.getElementById('bb-length').value = activeStrategy.parameters.bbLength;
-  document.getElementById('bb-length-value').textContent = activeStrategy.parameters.bbLength;
-  
-  document.getElementById('bb-dev').value = activeStrategy.parameters.bbDeviation;
-  document.getElementById('bb-dev-value').textContent = activeStrategy.parameters.bbDeviation;
-  
-  document.getElementById('volume-candles').value = activeStrategy.parameters.volumeCandles;
-  document.getElementById('volume-candles-value').textContent = activeStrategy.parameters.volumeCandles;
-  
-  document.getElementById('volume-increase').value = activeStrategy.parameters.volumeIncrease;
-  document.getElementById('volume-increase-value').textContent = activeStrategy.parameters.volumeIncrease;
-  
-  // Update position manager settings
-  positionManager.setSettings({
-    useTakeProfit: state.settings.useTakeProfit,
-    useStopLoss: state.settings.useStopLoss,
-    useTrailingStop: state.settings.useTrailingStop,
-    takeProfitPct: state.settings.takeProfitPct,
-    stopLossPct: state.settings.stopLossPct,
-    trailingStopPct: state.settings.trailingStopPct,
-    positionSize: state.settings.positionSize
-  });
-  
-  // Update UI Manager settings
-  uiManager.setNotificationSettings({
-    browserNotifications: state.settings.browserNotifications,
-    soundNotifications: state.settings.soundNotifications,
-    discordNotifications: state.settings.discordNotifications,
-    discordWebhook: state.settings.discordWebhook
-  });
-  
-  // Update account settings
-  document.getElementById('initial-capital').value = state.initialCapital;
-  
-  document.getElementById('position-size').value = state.settings.positionSize;
-  document.getElementById('position-size-value').textContent = state.settings.positionSize + '%';
-  
-  // Update risk management settings
-  document.getElementById('take-profit-toggle').checked = state.settings.useTakeProfit;
-  document.getElementById('take-profit-value').value = state.settings.takeProfitPct;
-  document.getElementById('take-profit-value').disabled = !state.settings.useTakeProfit;
-  
-  document.getElementById('stop-loss-toggle').checked = state.settings.useStopLoss;
-  document.getElementById('stop-loss-value').value = state.settings.stopLossPct;
-  document.getElementById('stop-loss-value').disabled = !state.settings.useStopLoss;
-  
-  document.getElementById('trailing-stop-toggle').checked = state.settings.useTrailingStop;
-  document.getElementById('trailing-stop-value').value = state.settings.trailingStopPct;
-  document.getElementById('trailing-stop-value').disabled = !state.settings.useTrailingStop;
-  
-  document.getElementById('auto-trade-toggle').checked = state.settings.autoTrade;
-  document.getElementById('show-position-lines-toggle').checked = state.settings.showPositionLines;
-  
-  // Update API settings
-  document.getElementById('api-key').value = state.settings.apiKey ? '********' : '';
-  document.getElementById('api-secret').value = state.settings.apiSecret ? '********' : '';
-  document.getElementById('use-testnet-toggle').checked = state.settings.useTestnet;
-  
-  // Update notification settings
-  document.getElementById('browser-notifications-toggle').checked = state.settings.browserNotifications;
-  document.getElementById('sound-notifications-toggle').checked = state.settings.soundNotifications;
-  document.getElementById('discord-notifications-toggle').checked = state.settings.discordNotifications;
-  document.getElementById('discord-webhook').value = state.settings.discordWebhook;
-  document.getElementById('discord-webhook').disabled = !state.settings.discordNotifications;
-  
-  // Update market info
-  document.getElementById('market-symbol-badge').textContent = state.symbol.replace('USDT', '/USDT');
-  document.getElementById('market-symbol').textContent = state.symbol.replace('USDT', '/USDT');
-  
-  // Update symbol selection
-  const symbolSelect = document.getElementById('symbol');
-  if (symbolSelect) {
-    for (let i = 0; i < symbolSelect.options.length; i++) {
-      if (symbolSelect.options[i].value === state.symbol) {
-        symbolSelect.selectedIndex = i;
-        break;
+  try {
+    // Update strategy parameters
+    const bbLength = document.getElementById('bb-length');
+    const bbLengthValue = document.getElementById('bb-length-value');
+    const bbDev = document.getElementById('bb-dev');
+    const bbDevValue = document.getElementById('bb-dev-value');
+    const volumeCandles = document.getElementById('volume-candles');
+    const volumeCandlesValue = document.getElementById('volume-candles-value');
+    const volumeIncrease = document.getElementById('volume-increase');
+    const volumeIncreaseValue = document.getElementById('volume-increase-value');
+    
+    if (bbLength) bbLength.value = activeStrategy.parameters.bbLength;
+    if (bbLengthValue) bbLengthValue.textContent = activeStrategy.parameters.bbLength;
+    if (bbDev) bbDev.value = activeStrategy.parameters.bbDeviation;
+    if (bbDevValue) bbDevValue.textContent = activeStrategy.parameters.bbDeviation;
+    if (volumeCandles) volumeCandles.value = activeStrategy.parameters.volumeCandles;
+    if (volumeCandlesValue) volumeCandlesValue.textContent = activeStrategy.parameters.volumeCandles;
+    if (volumeIncrease) volumeIncrease.value = activeStrategy.parameters.volumeIncrease;
+    if (volumeIncreaseValue) volumeIncreaseValue.textContent = activeStrategy.parameters.volumeIncrease;
+    
+    // Update position manager settings
+    positionManager.setSettings({
+      useTakeProfit: state.settings.useTakeProfit,
+      useStopLoss: state.settings.useStopLoss,
+      useTrailingStop: state.settings.useTrailingStop,
+      takeProfitPct: state.settings.takeProfitPct,
+      stopLossPct: state.settings.stopLossPct,
+      trailingStopPct: state.settings.trailingStopPct,
+      positionSize: state.settings.positionSize
+    });
+    
+    // Update UI Manager settings
+    uiManager.setNotificationSettings({
+      browserNotifications: state.settings.browserNotifications,
+      soundNotifications: state.settings.soundNotifications,
+      discordNotifications: state.settings.discordNotifications,
+      discordWebhook: state.settings.discordWebhook
+    });
+    
+    // Update account settings
+    const initialCapital = document.getElementById('initial-capital');
+    const positionSize = document.getElementById('position-size');
+    const positionSizeValue = document.getElementById('position-size-value');
+    
+    if (initialCapital) initialCapital.value = state.initialCapital;
+    if (positionSize) positionSize.value = state.settings.positionSize;
+    if (positionSizeValue) positionSizeValue.textContent = state.settings.positionSize + '%';
+    
+    // Update risk management settings
+    const takeProfitToggle = document.getElementById('take-profit-toggle');
+    const takeProfitValue = document.getElementById('take-profit-value');
+    const stopLossToggle = document.getElementById('stop-loss-toggle');
+    const stopLossValue = document.getElementById('stop-loss-value');
+    const trailingStopToggle = document.getElementById('trailing-stop-toggle');
+    const trailingStopValue = document.getElementById('trailing-stop-value');
+    const autoTradeToggle = document.getElementById('auto-trade-toggle');
+    const showPositionLinesToggle = document.getElementById('show-position-lines-toggle');
+    
+    if (takeProfitToggle) takeProfitToggle.checked = state.settings.useTakeProfit;
+    if (takeProfitValue) {
+      takeProfitValue.value = state.settings.takeProfitPct;
+      takeProfitValue.disabled = !state.settings.useTakeProfit;
+    }
+    
+    if (stopLossToggle) stopLossToggle.checked = state.settings.useStopLoss;
+    if (stopLossValue) {
+      stopLossValue.value = state.settings.stopLossPct;
+      stopLossValue.disabled = !state.settings.useStopLoss;
+    }
+    
+    if (trailingStopToggle) trailingStopToggle.checked = state.settings.useTrailingStop;
+    if (trailingStopValue) {
+      trailingStopValue.value = state.settings.trailingStopPct;
+      trailingStopValue.disabled = !state.settings.useTrailingStop;
+    }
+    
+    if (autoTradeToggle) autoTradeToggle.checked = state.settings.autoTrade;
+    if (showPositionLinesToggle) showPositionLinesToggle.checked = state.settings.showPositionLines;
+    
+    // Update API settings
+    const apiKey = document.getElementById('api-key');
+    const apiSecret = document.getElementById('api-secret');
+    const useTestnetToggle = document.getElementById('use-testnet-toggle');
+    
+    if (apiKey) apiKey.value = state.settings.apiKey ? '********' : '';
+    if (apiSecret) apiSecret.value = state.settings.apiSecret ? '********' : '';
+    if (useTestnetToggle) useTestnetToggle.checked = state.settings.useTestnet;
+    
+    // Update notification settings
+    const browserNotificationsToggle = document.getElementById('browser-notifications-toggle');
+    const soundNotificationsToggle = document.getElementById('sound-notifications-toggle');
+    const discordNotificationsToggle = document.getElementById('discord-notifications-toggle');
+    const discordWebhook = document.getElementById('discord-webhook');
+    
+    if (browserNotificationsToggle) browserNotificationsToggle.checked = state.settings.browserNotifications;
+    if (soundNotificationsToggle) soundNotificationsToggle.checked = state.settings.soundNotifications;
+    if (discordNotificationsToggle) discordNotificationsToggle.checked = state.settings.discordNotifications;
+    if (discordWebhook) {
+      discordWebhook.value = state.settings.discordWebhook;
+      discordWebhook.disabled = !state.settings.discordNotifications;
+    }
+    
+    // Update market info
+    const marketSymbolBadge = document.getElementById('market-symbol-badge');
+    const marketSymbol = document.getElementById('market-symbol');
+    
+    if (marketSymbolBadge) marketSymbolBadge.textContent = state.symbol.replace('USDT', '/USDT');
+    if (marketSymbol) marketSymbol.textContent = state.symbol.replace('USDT', '/USDT');
+    
+    // Update symbol selection
+    const symbolSelect = document.getElementById('symbol');
+    if (symbolSelect) {
+      for (let i = 0; i < symbolSelect.options.length; i++) {
+        if (symbolSelect.options[i].value === state.symbol) {
+          symbolSelect.selectedIndex = i;
+          break;
+        }
       }
     }
-  }
-  
-  // Update timeframe selection
-  const timeframeSelect = document.getElementById('timeframe');
-  if (timeframeSelect) {
-    for (let i = 0; i < timeframeSelect.options.length; i++) {
-      if (timeframeSelect.options[i].value === state.timeframe) {
-        timeframeSelect.selectedIndex = i;
-        break;
+    
+    // Update timeframe selection
+    const timeframeSelect = document.getElementById('timeframe');
+    if (timeframeSelect) {
+      for (let i = 0; i < timeframeSelect.options.length; i++) {
+        if (timeframeSelect.options[i].value === state.timeframe) {
+          timeframeSelect.selectedIndex = i;
+          break;
+        }
       }
     }
+  } catch (error) {
+    console.error('Error updating UI from settings:', error);
+    uiManager.addLogMessage('Error updating UI: ' + error.message, false, true);
   }
 }
 
 /**
- * Setup event listeners for UI elements
+ * Set up event listeners for UI elements
  */
 function setupEventListeners() {
-  // Add position manager event listeners
-  positionManager.addEventListener('onOpen', position => {
-    uiManager.updatePositionInfo(position);
-    uiManager.addLogMessage(
-      `${position.type} position opened at $${position.entryPrice.toFixed(2)} with size: ${position.size.toFixed(6)}`,
-      true
-    );
-  });
-  
-  positionManager.addEventListener('onClose', position => {
-    uiManager.updatePositionInfo(null);
-    
-    const pnl = position.pnl.realized;
-    const pnlPct = position.pnl.realizedPct * 100;
-    const pnlStr = pnl >= 0 
-      ? `+$${pnl.toFixed(2)} (+${pnlPct.toFixed(2)}%)` 
-      : `-$${Math.abs(pnl).toFixed(2)} (${pnlPct.toFixed(2)}%)`;
-    
-    if (pnl >= 0) {
+  try {
+    // Add position manager event listeners
+    positionManager.addEventListener('onOpen', position => {
+      uiManager.updatePositionInfo(position);
       uiManager.addLogMessage(
-        `${position.type} position closed with profit: ${pnlStr}. Reason: ${position.exitReason}`,
+        `${position.type} position opened at $${position.entryPrice.toFixed(2)} with size: ${position.size.toFixed(6)}`,
         true
       );
-    } else {
-      uiManager.addLogMessage(
-        `${position.type} position closed with loss: ${pnlStr}. Reason: ${position.exitReason}`,
-        false,
-        true
-      );
-    }
+    });
     
-    // Update performance metrics
-    updatePerformanceMetrics();
-  });
-  
-  positionManager.addEventListener('onUpdate', position => {
-    uiManager.updatePositionInfo(position);
-  });
-  
-  // Symbol change
-  document.getElementById('symbol').addEventListener('change', function() {
-    state.symbol = this.value;
-    document.getElementById('market-symbol-badge').textContent = state.symbol.replace('USDT', '/USDT');
-    document.getElementById('market-symbol').textContent = state.symbol.replace('USDT', '/USDT');
-    
-    if (state.isRunning) {
-      resetTrading();
-      startTrading();
-    } else {
-      initializeTradingViewChart();
-    }
-  });
-  
-  // Timeframe change
-  document.getElementById('timeframe').addEventListener('change', function() {
-    state.timeframe = this.value;
-    
-    if (state.isRunning) {
-      resetTrading();
-      startTrading();
-    } else {
-      initializeTradingViewChart();
-    }
-  });
-  
-  // Strategy parameter changes
-  document.getElementById('bb-length').addEventListener('input', function() {
-    const value = parseInt(this.value);
-    activeStrategy.setParameters({ bbLength: value });
-    document.getElementById('bb-length-value').textContent = value;
-  });
-  
-  document.getElementById('bb-dev').addEventListener('input', function() {
-    const value = parseFloat(this.value);
-    activeStrategy.setParameters({ bbDeviation: value });
-    document.getElementById('bb-dev-value').textContent = value;
-  });
-  
-  document.getElementById('volume-candles').addEventListener('input', function() {
-    const value = parseInt(this.value);
-    activeStrategy.setParameters({ volumeCandles: value });
-    document.getElementById('volume-candles-value').textContent = value;
-  });
-  
-  document.getElementById('volume-increase').addEventListener('input', function() {
-    const value = parseInt(this.value);
-    activeStrategy.setParameters({ volumeIncrease: value });
-    document.getElementById('volume-increase-value').textContent = value;
-  });
-  
-  // Account settings changes
-  document.getElementById('initial-capital').addEventListener('change', function() {
-    state.initialCapital = parseFloat(this.value);
-    if (!state.isRunning) {
-      state.balance = state.initialCapital;
+    positionManager.addEventListener('onClose', position => {
+      uiManager.updatePositionInfo(null);
+      
+      const pnl = position.pnl.realized;
+      const pnlPct = position.pnl.realizedPct * 100;
+      const pnlStr = pnl >= 0 
+        ? `+$${pnl.toFixed(2)} (+${pnlPct.toFixed(2)}%)` 
+        : `-$${Math.abs(pnl).toFixed(2)} (${pnlPct.toFixed(2)}%)`;
+      
+      if (pnl >= 0) {
+        uiManager.addLogMessage(
+          `${position.type} position closed with profit: ${pnlStr}. Reason: ${position.exitReason}`,
+          true
+        );
+      } else {
+        uiManager.addLogMessage(
+          `${position.type} position closed with loss: ${pnlStr}. Reason: ${position.exitReason}`,
+          false,
+          true
+        );
+      }
+      
+      // Update performance metrics
       updatePerformanceMetrics();
-    }
-  });
-  
-  document.getElementById('position-size').addEventListener('input', function() {
-    const value = parseInt(this.value);
-    state.settings.positionSize = value;
-    positionManager.setSettings({ positionSize: value });
-    document.getElementById('position-size-value').textContent = value + '%';
-  });
-  
-  // Risk management toggles
-  document.getElementById('take-profit-toggle').addEventListener('change', function() {
-    state.settings.useTakeProfit = this.checked;
-    document.getElementById('take-profit-value').disabled = !this.checked;
-    positionManager.setSettings({ useTakeProfit: this.checked });
-  });
-  
-  document.getElementById('take-profit-value').addEventListener('change', function() {
-    const value = parseFloat(this.value);
-    state.settings.takeProfitPct = value;
-    positionManager.setSettings({ takeProfitPct: value });
-  });
-  
-  document.getElementById('stop-loss-toggle').addEventListener('change', function() {
-    state.settings.useStopLoss = this.checked;
-    document.getElementById('stop-loss-value').disabled = !this.checked;
-    positionManager.setSettings({ useStopLoss: this.checked });
-  });
-  
-  document.getElementById('stop-loss-value').addEventListener('change', function() {
-    const value = parseFloat(this.value);
-    state.settings.stopLossPct = value;
-    positionManager.setSettings({ stopLossPct: value });
-  });
-  
-  document.getElementById('trailing-stop-toggle').addEventListener('change', function() {
-    state.settings.useTrailingStop = this.checked;
-    document.getElementById('trailing-stop-value').disabled = !this.checked;
-    positionManager.setSettings({ useTrailingStop: this.checked });
-  });
-  
-  document.getElementById('trailing-stop-value').addEventListener('change', function() {
-    const value = parseFloat(this.value);
-    state.settings.trailingStopPct = value;
-    positionManager.setSettings({ trailingStopPct: value });
-  });
-  
-  document.getElementById('auto-trade-toggle').addEventListener('change', function() {
-    state.settings.autoTrade = this.checked;
-  });
-  
-  document.getElementById('show-position-lines-toggle').addEventListener('change', function() {
-    state.settings.showPositionLines = this.checked;
+    });
     
-    if (!this.checked && document.getElementById('floating-position-indicator')) {
-      document.getElementById('floating-position-indicator').style.display = 'none';
-    } else if (this.checked && positionManager.currentPosition) {
-      uiManager.updatePositionInfo(positionManager.currentPosition);
-    }
-  });
-  
-  // API settings
-  document.getElementById('save-api-btn').addEventListener('click', function() {
-    const apiKey = document.getElementById('api-key').value;
-    const apiSecret = document.getElementById('api-secret').value;
+    positionManager.addEventListener('onUpdate', position => {
+      uiManager.updatePositionInfo(position);
+    });
     
-    if (apiKey && apiKey !== '********') {
-      state.settings.apiKey = apiKey;
-    }
-    
-    if (apiSecret && apiSecret !== '********') {
-      state.settings.apiSecret = apiSecret;
-    }
-    
-    state.settings.useTestnet = document.getElementById('use-testnet-toggle').checked;
-    apiClient.setEnvironment(state.settings.useTestnet);
-    
-    // Store credentials in secure storage
-    if (state.settings.apiKey && state.settings.apiSecret) {
-      secureStorage.storeCredentials(state.settings.apiKey, state.settings.apiSecret)
-        .then(() => {
-          uiManager.addLogMessage('API credentials stored securely');
-        })
-        .catch(error => {
-          uiManager.addLogMessage(`Error storing API credentials: ${error.message}`, false, true);
-        });
-    }
-    
-    saveSettings();
-    checkApiConfiguration();
-  });
-  
-  document.getElementById('test-api-btn').addEventListener('click', function() {
-    testApiConnection();
-  });
-  
-  // Notification settings
-  document.getElementById('browser-notifications-toggle').addEventListener('change', function() {
-    state.settings.browserNotifications = this.checked;
-    uiManager.setNotificationSettings({ browserNotifications: this.checked });
-  });
-  
-  document.getElementById('sound-notifications-toggle').addEventListener('change', function() {
-    state.settings.soundNotifications = this.checked;
-    uiManager.setNotificationSettings({ soundNotifications: this.checked });
-  });
-  
-  document.getElementById('discord-notifications-toggle').addEventListener('change', function() {
-    state.settings.discordNotifications = this.checked;
-    document.getElementById('discord-webhook').disabled = !this.checked;
-    uiManager.setNotificationSettings({ discordNotifications: this.checked });
-  });
-  
-  document.getElementById('discord-webhook').addEventListener('change', function() {
-    state.settings.discordWebhook = this.value;
-    uiManager.setNotificationSettings({ discordWebhook: this.value });
-  });
-  
-  document.getElementById('test-discord-btn').addEventListener('click', function() {
-    testDiscordWebhook();
-  });
-  
-  // Save all settings
-  document.getElementById('save-settings-btn').addEventListener('click', function() {
-    saveSettings();
-  });
-  
-  // Trading mode buttons
-  document.getElementById('paper-trading-btn').addEventListener('click', function() {
-    if (state.isLiveTrading) {
-      uiManager.showStatusBar('Please stop live trading first', 'warning');
-      return;
-    }
-    
-    this.classList.add('active');
-    document.getElementById('live-trading-btn').classList.remove('active');
-    state.isLiveTrading = false;
-    
-    document.getElementById('practice-mode-indicator').style.display = 'flex';
-    document.getElementById('live-mode-indicator').style.display = 'none';
-    
-    document.getElementById('paper-trading-buttons').style.display = 'flex';
-    document.getElementById('live-trading-buttons').style.display = 'none';
-    
-    uiManager.addLogMessage('Switched to paper trading mode');
-  });
-  
-  document.getElementById('live-trading-btn').addEventListener('click', function() {
-    if (!checkApiConfiguration(true)) {
-      return;
-    }
-    
-    this.classList.add('active');
-    document.getElementById('paper-trading-btn').classList.remove('active');
-    state.isLiveTrading = true;
-    
-    document.getElementById('practice-mode-indicator').style.display = 'none';
-    document.getElementById('live-mode-indicator').style.display = 'flex';
-    
-    document.getElementById('paper-trading-buttons').style.display = 'none';
-    document.getElementById('live-trading-buttons').style.display = 'flex';
-    
-    uiManager.addLogMessage('Switched to live trading mode', false, true);
-  });
-  
-  // Trading buttons
-  document.getElementById('start-trading-btn').addEventListener('click', function() {
-    startTrading();
-  });
-  
-  document.getElementById('stop-trading-btn').addEventListener('click', function() {
-    stopTrading();
-  });
-  
-  document.getElementById('reset-trading-btn').addEventListener('click', function() {
-    resetTrading();
-  });
-  
-  document.getElementById('start-live-trading-btn').addEventListener('click', function() {
-    if (!checkApiConfiguration(true)) {
-      return;
-    }
-    
-    startTrading(true);
-  });
-  
-  document.getElementById('stop-live-trading-btn').addEventListener('click', function() {
-    stopTrading();
-  });
-  
-  // Position close button
-  document.getElementById('position-close-btn').addEventListener('click', function() {
-    if (positionManager.currentPosition) {
-      closePosition('Manual close');
-      uiManager.addLogMessage(`Position manually closed at $${state.currentPrice.toFixed(2)}`);
-    }
-  });
-  
-  // Widget panel toggle
-  document.getElementById('widget-panel-toggle').addEventListener('click', function() {
-    document.getElementById('widget-panel').classList.toggle('open');
-  });
-  
-  // Sidebar toggle
-  document.getElementById('sidebar-toggle').addEventListener('click', function() {
-    const sidebar = document.getElementById('sidebar');
-    sidebar.classList.toggle('sidebar-collapsed');
-    this.classList.toggle('collapsed');
-    
-    if (sidebar.classList.contains('sidebar-collapsed')) {
-      this.innerHTML = '<i class="fas fa-chevron-right"></i>';
-    } else {
-      this.innerHTML = '<i class="fas fa-chevron-left"></i>';
-    }
-  });
-  
-  // Refresh widgets button
-  document.getElementById('refresh-widgets-btn').addEventListener('click', function() {
-    updateMarketInfo();
-    updatePerformanceMetrics();
-  });
-  
-  // API Configuration Modal handlers
-  document.getElementById('closeApiConfigModal').addEventListener('click', function() {
-    document.getElementById('apiConfigModal').style.display = 'none';
-  });
-
-  document.getElementById('cancelApiConfig').addEventListener('click', function() {
-    document.getElementById('apiConfigModal').style.display = 'none';
-  });
-
-  document.getElementById('saveApiConfig').addEventListener('click', function() {
-    const apiKey = document.getElementById('modal-api-key').value;
-    const apiSecret = document.getElementById('modal-api-secret').value;
-    const useTestnet = document.getElementById('modal-use-testnet-toggle').checked;
-    
-    if (apiKey && apiSecret) {
-      state.settings.apiKey = apiKey;
-      state.settings.apiSecret = apiSecret;
-      state.settings.useTestnet = useTestnet;
+    // Symbol change
+    safeAddEventListener('symbol', 'change', function() {
+      state.symbol = this.value;
       
-      // Update API client
-      apiClient.setEnvironment(useTestnet);
+      const symbolBadge = document.getElementById('market-symbol-badge');
+      const marketSymbol = document.getElementById('market-symbol');
       
-      // Store credentials securely
-      secureStorage.storeCredentials(apiKey, apiSecret);
+      if (symbolBadge) symbolBadge.textContent = state.symbol.replace('USDT', '/USDT');
+      if (marketSymbol) marketSymbol.textContent = state.symbol.replace('USDT', '/USDT');
       
-      // Update sidebar inputs
-      document.getElementById('api-key').value = '********';
-      document.getElementById('api-secret').value = '********';
-      document.getElementById('use-testnet-toggle').checked = useTestnet;
+      if (state.isRunning) {
+        resetTrading();
+        startTrading();
+      } else {
+        initializeTradingViewChart();
+      }
+    });
+    
+    // Timeframe change
+    safeAddEventListener('timeframe', 'change', function() {
+      state.timeframe = this.value;
       
+      if (state.isRunning) {
+        resetTrading();
+        startTrading();
+      } else {
+        initializeTradingViewChart();
+      }
+    });
+    
+    // Strategy parameter changes
+    safeAddEventListener('bb-length', 'input', function() {
+      const value = parseInt(this.value);
+      activeStrategy.setParameters({ bbLength: value });
+      
+      const valueDisplay = document.getElementById('bb-length-value');
+      if (valueDisplay) valueDisplay.textContent = value;
+    });
+    
+    safeAddEventListener('bb-dev', 'input', function() {
+      const value = parseFloat(this.value);
+      activeStrategy.setParameters({ bbDeviation: value });
+      
+      const valueDisplay = document.getElementById('bb-dev-value');
+      if (valueDisplay) valueDisplay.textContent = value;
+    });
+    
+    safeAddEventListener('volume-candles', 'input', function() {
+      const value = parseInt(this.value);
+      activeStrategy.setParameters({ volumeCandles: value });
+      
+      const valueDisplay = document.getElementById('volume-candles-value');
+      if (valueDisplay) valueDisplay.textContent = value;
+    });
+    
+    safeAddEventListener('volume-increase', 'input', function() {
+      const value = parseInt(this.value);
+      activeStrategy.setParameters({ volumeIncrease: value });
+      
+      const valueDisplay = document.getElementById('volume-increase-value');
+      if (valueDisplay) valueDisplay.textContent = value;
+    });
+    
+    // Account settings changes
+    safeAddEventListener('initial-capital', 'change', function() {
+      state.initialCapital = parseFloat(this.value);
+      if (!state.isRunning) {
+        state.balance = state.initialCapital;
+        updatePerformanceMetrics();
+      }
+    });
+    
+    safeAddEventListener('position-size', 'input', function() {
+      const value = parseInt(this.value);
+      state.settings.positionSize = value;
+      positionManager.setSettings({ positionSize: value });
+      
+      const valueDisplay = document.getElementById('position-size-value');
+      if (valueDisplay) valueDisplay.textContent = value + '%';
+    });
+    
+    // Risk management toggles
+    safeAddEventListener('take-profit-toggle', 'change', function() {
+      state.settings.useTakeProfit = this.checked;
+      
+      const takeProfitValue = document.getElementById('take-profit-value');
+      if (takeProfitValue) takeProfitValue.disabled = !this.checked;
+      
+      positionManager.setSettings({ useTakeProfit: this.checked });
+    });
+    
+    safeAddEventListener('take-profit-value', 'change', function() {
+      const value = parseFloat(this.value);
+      state.settings.takeProfitPct = value;
+      positionManager.setSettings({ takeProfitPct: value });
+    });
+    
+    safeAddEventListener('stop-loss-toggle', 'change', function() {
+      state.settings.useStopLoss = this.checked;
+      
+      const stopLossValue = document.getElementById('stop-loss-value');
+      if (stopLossValue) stopLossValue.disabled = !this.checked;
+      
+      positionManager.setSettings({ useStopLoss: this.checked });
+    });
+    
+    safeAddEventListener('stop-loss-value', 'change', function() {
+      const value = parseFloat(this.value);
+      state.settings.stopLossPct = value;
+      positionManager.setSettings({ stopLossPct: value });
+    });
+    
+    safeAddEventListener('trailing-stop-toggle', 'change', function() {
+      state.settings.useTrailingStop = this.checked;
+      
+      const trailingStopValue = document.getElementById('trailing-stop-value');
+      if (trailingStopValue) trailingStopValue.disabled = !this.checked;
+      
+      positionManager.setSettings({ useTrailingStop: this.checked });
+    });
+    
+    safeAddEventListener('trailing-stop-value', 'change', function() {
+      const value = parseFloat(this.value);
+      state.settings.trailingStopPct = value;
+      positionManager.setSettings({ trailingStopPct: value });
+    });
+    
+    safeAddEventListener('auto-trade-toggle', 'change', function() {
+      state.settings.autoTrade = this.checked;
+    });
+    
+    safeAddEventListener('show-position-lines-toggle', 'change', function() {
+      state.settings.showPositionLines = this.checked;
+      
+      const floatingPositionIndicator = document.getElementById('floating-position-indicator');
+      if (!this.checked && floatingPositionIndicator) {
+        floatingPositionIndicator.style.display = 'none';
+      } else if (this.checked && positionManager.currentPosition) {
+        uiManager.updatePositionInfo(positionManager.currentPosition);
+      }
+    });
+    
+    // API settings
+    safeAddEventListener('save-api-btn', 'click', function() {
+      const apiKeyInput = document.getElementById('api-key');
+      const apiSecretInput = document.getElementById('api-secret');
+      const useTestnetToggle = document.getElementById('use-testnet-toggle');
+      
+      if (apiKeyInput && apiSecretInput) {
+        const apiKey = apiKeyInput.value;
+        const apiSecret = apiSecretInput.value;
+        
+        if (apiKey && apiKey !== '********') {
+          state.settings.apiKey = apiKey;
+        }
+        
+        if (apiSecret && apiSecret !== '********') {
+          state.settings.apiSecret = apiSecret;
+        }
+        
+        if (useTestnetToggle) {
+          state.settings.useTestnet = useTestnetToggle.checked;
+          apiClient.setEnvironment(state.settings.useTestnet);
+        }
+        
+        // Store credentials in secure storage
+        if (state.settings.apiKey && state.settings.apiSecret) {
+          secureStorage.storeCredentials(state.settings.apiKey, state.settings.apiSecret)
+            .then(() => {
+              uiManager.addLogMessage('API credentials stored securely');
+            })
+            .catch(error => {
+              uiManager.addLogMessage(`Error storing API credentials: ${error.message}`, false, true);
+            });
+        }
+        
+        saveSettings();
+        checkApiConfiguration();
+      }
+    });
+    
+    safeAddEventListener('test-api-btn', 'click', function() {
+      testApiConnection();
+    });
+    
+    // Notification settings
+    safeAddEventListener('browser-notifications-toggle', 'change', function() {
+      state.settings.browserNotifications = this.checked;
+      uiManager.setNotificationSettings({ browserNotifications: this.checked });
+    });
+    
+    safeAddEventListener('sound-notifications-toggle', 'change', function() {
+      state.settings.soundNotifications = this.checked;
+      uiManager.setNotificationSettings({ soundNotifications: this.checked });
+    });
+    
+    safeAddEventListener('discord-notifications-toggle', 'change', function() {
+      state.settings.discordNotifications = this.checked;
+      
+      const discordWebhook = document.getElementById('discord-webhook');
+      if (discordWebhook) discordWebhook.disabled = !this.checked;
+      
+      uiManager.setNotificationSettings({ discordNotifications: this.checked });
+    });
+    
+    safeAddEventListener('discord-webhook', 'change', function() {
+      state.settings.discordWebhook = this.value;
+      uiManager.setNotificationSettings({ discordWebhook: this.value });
+    });
+    
+    safeAddEventListener('test-discord-btn', 'click', function() {
+      testDiscordWebhook();
+    });
+    
+    // Save all settings
+    safeAddEventListener('save-settings-btn', 'click', function() {
       saveSettings();
-      document.getElementById('apiConfigModal').style.display = 'none';
-      uiManager.showStatusBar('API configuration saved', 'success');
-    } else {
-      uiManager.showStatusBar('Please enter API Key and Secret', 'error');
-    }
-  });
+    });
+    
+    // Trading mode buttons
+    safeAddEventListener('paper-trading-btn', 'click', function() {
+      if (state.isLiveTrading) {
+        uiManager.showStatusBar('Please stop live trading first', 'warning');
+        return;
+      }
+      
+      this.classList.add('active');
+      
+      const liveTrading = document.getElementById('live-trading-btn');
+      if (liveTrading) liveTrading.classList.remove('active');
+      
+      state.isLiveTrading = false;
+      
+      const practiceMode = document.getElementById('practice-mode-indicator');
+      const liveMode = document.getElementById('live-mode-indicator');
+      const paperButtons = document.getElementById('paper-trading-buttons');
+      const liveButtons = document.getElementById('live-trading-buttons');
+      
+      if (practiceMode) practiceMode.style.display = 'flex';
+      if (liveMode) liveMode.style.display = 'none';
+      if (paperButtons) paperButtons.style.display = 'flex';
+      if (liveButtons) liveButtons.style.display = 'none';
+      
+      uiManager.addLogMessage('Switched to paper trading mode');
+    });
+    
+    safeAddEventListener('live-trading-btn', 'click', function() {
+      if (!checkApiConfiguration(true)) {
+        return;
+      }
+      
+      this.classList.add('active');
+      
+      const paperTrading = document.getElementById('paper-trading-btn');
+      if (paperTrading) paperTrading.classList.remove('active');
+      
+      state.isLiveTrading = true;
+      
+      const practiceMode = document.getElementById('practice-mode-indicator');
+      const liveMode = document.getElementById('live-mode-indicator');
+      const paperButtons = document.getElementById('paper-trading-buttons');
+      const liveButtons = document.getElementById('live-trading-buttons');
+      
+      if (practiceMode) practiceMode.style.display = 'none';
+      if (liveMode) liveMode.style.display = 'flex';
+      if (paperButtons) paperButtons.style.display = 'none';
+      if (liveButtons) liveButtons.style.display = 'flex';
+      
+      uiManager.addLogMessage('Switched to live trading mode', false, true);
+    });
+    
+    // Trading buttons
+    safeAddEventListener('start-trading-btn', 'click', function() {
+      startTrading();
+    });
+    
+    safeAddEventListener('stop-trading-btn', 'click', function() {
+      stopTrading();
+    });
+    
+    safeAddEventListener('reset-trading-btn', 'click', function() {
+      resetTrading();
+    });
+    
+    safeAddEventListener('start-live-trading-btn', 'click', function() {
+      if (!checkApiConfiguration(true)) {
+        return;
+      }
+      
+      startTrading(true);
+    });
+    
+    safeAddEventListener('stop-live-trading-btn', 'click', function() {
+      stopTrading();
+    });
+    
+    // Position close button
+    safeAddEventListener('position-close-btn', 'click', function() {
+      if (positionManager.currentPosition) {
+        closePosition('Manual close');
+        uiManager.addLogMessage(`Position manually closed at $${state.currentPrice.toFixed(2)}`);
+      }
+    });
+    
+    // Widget panel toggle
+    safeAddEventListener('widget-panel-toggle', 'click', function() {
+      const widgetPanel = document.getElementById('widget-panel');
+      if (widgetPanel) widgetPanel.classList.toggle('open');
+    });
+    
+    // Sidebar toggle
+    safeAddEventListener('sidebar-toggle', 'click', function() {
+      const sidebar = document.getElementById('sidebar');
+      if (sidebar) {
+        sidebar.classList.toggle('sidebar-collapsed');
+        this.classList.toggle('collapsed');
+        
+        if (sidebar.classList.contains('sidebar-collapsed')) {
+          this.innerHTML = '<i class="fas fa-chevron-right"></i>';
+        } else {
+          this.innerHTML = '<i class="fas fa-chevron-left"></i>';
+        }
+      }
+    });
+    
+    // Refresh widgets button
+    safeAddEventListener('refresh-widgets-btn', 'click', function() {
+      updateMarketInfo();
+      updatePerformanceMetrics();
+    });
+    
+    // API Configuration Modal handlers
+    safeAddEventListener('closeApiConfigModal', 'click', function() {
+      const modal = document.getElementById('apiConfigModal');
+      if (modal) modal.style.display = 'none';
+    });
 
-  // Log toggle
-  document.getElementById('log-toggle-btn').addEventListener('click', function() {
-    document.getElementById('log-container').classList.toggle('open');
-  });
-  
-  // Export data button
-  document.getElementById('export-data-btn').addEventListener('click', function() {
-    const csvData = positionManager.exportHistoryToCSV();
-    uiManager.exportToFile(csvData, `volty-trading-history-${new Date().toISOString().slice(0, 10)}.csv`);
-    uiManager.showStatusBar('Trading history exported to CSV', 'success');
-  });
+    safeAddEventListener('cancelApiConfig', 'click', function() {
+      const modal = document.getElementById('apiConfigModal');
+      if (modal) modal.style.display = 'none';
+    });
+
+    safeAddEventListener('saveApiConfig', 'click', function() {
+      const apiKeyInput = document.getElementById('modal-api-key');
+      const apiSecretInput = document.getElementById('modal-api-secret');
+      const useTestnetToggle = document.getElementById('modal-use-testnet-toggle');
+      
+      if (apiKeyInput && apiSecretInput && useTestnetToggle) {
+        const apiKey = apiKeyInput.value;
+        const apiSecret = apiSecretInput.value;
+        const useTestnet = useTestnetToggle.checked;
+        
+        if (apiKey && apiSecret) {
+          state.settings.apiKey = apiKey;
+          state.settings.apiSecret = apiSecret;
+          state.settings.useTestnet = useTestnet;
+          
+          // Update API client
+          apiClient.setEnvironment(useTestnet);
+          
+          // Store credentials securely
+          secureStorage.storeCredentials(apiKey, apiSecret);
+          
+          // Update sidebar inputs
+          const sidebarApiKey = document.getElementById('api-key');
+          const sidebarApiSecret = document.getElementById('api-secret');
+          const sidebarUseTestnet = document.getElementById('use-testnet-toggle');
+          
+          if (sidebarApiKey) sidebarApiKey.value = '********';
+          if (sidebarApiSecret) sidebarApiSecret.value = '********';
+          if (sidebarUseTestnet) sidebarUseTestnet.checked = useTestnet;
+          
+          saveSettings();
+          
+          const modal = document.getElementById('apiConfigModal');
+          if (modal) modal.style.display = 'none';
+          
+          uiManager.showStatusBar('API configuration saved', 'success');
+        } else {
+          uiManager.showStatusBar('Please enter API Key and Secret', 'error');
+        }
+      }
+    });
+
+    // Log toggle
+    safeAddEventListener('log-toggle-btn', 'click', function() {
+      const logContainer = document.getElementById('log-container');
+      if (logContainer) logContainer.classList.toggle('open');
+    });
+    
+    // Export data button
+    safeAddEventListener('export-data-btn', 'click', function() {
+      const csvData = positionManager.exportHistoryToCSV();
+      uiManager.exportToFile(csvData, `volty-trading-history-${new Date().toISOString().slice(0, 10)}.csv`);
+      uiManager.showStatusBar('Trading history exported to CSV', 'success');
+    });
+    
+    // Strategy settings modal handlers
+    safeAddEventListener('closeStrategyModal', 'click', function() {
+      const modal = document.getElementById('strategyModal');
+      if (modal) modal.style.display = 'none';
+    });
+    
+    safeAddEventListener('cancelStrategySettings', 'click', function() {
+      const modal = document.getElementById('strategyModal');
+      if (modal) modal.style.display = 'none';
+    });
+    
+    safeAddEventListener('saveStrategySettings', 'click', function() {
+      saveSettings();
+      
+      const modal = document.getElementById('strategyModal');
+      if (modal) modal.style.display = 'none';
+      
+      uiManager.showStatusBar('Strategy settings saved', 'success');
+    });
+    
+    // Risk management modal handlers
+    safeAddEventListener('closeRiskManagementModal', 'click', function() {
+      const modal = document.getElementById('riskManagementModal');
+      if (modal) modal.style.display = 'none';
+    });
+    
+    safeAddEventListener('cancelRiskSettings', 'click', function() {
+      const modal = document.getElementById('riskManagementModal');
+      if (modal) modal.style.display = 'none';
+    });
+    
+    safeAddEventListener('saveRiskSettings', 'click', function() {
+      saveSettings();
+      
+      const modal = document.getElementById('riskManagementModal');
+      if (modal) modal.style.display = 'none';
+      
+      uiManager.showStatusBar('Risk management settings saved', 'success');
+    });
+    
+    // Notification settings modal handlers
+    safeAddEventListener('closeNotificationsModal', 'click', function() {
+      const modal = document.getElementById('notificationsModal');
+      if (modal) modal.style.display = 'none';
+    });
+    
+    safeAddEventListener('cancelNotificationSettings', 'click', function() {
+      const modal = document.getElementById('notificationsModal');
+      if (modal) modal.style.display = 'none';
+    });
+    
+    safeAddEventListener('saveNotificationSettings', 'click', function() {
+      saveSettings();
+      
+      const modal = document.getElementById('notificationsModal');
+      if (modal) modal.style.display = 'none';
+      
+      uiManager.showStatusBar('Notification settings saved', 'success');
+    });
+  } catch (error) {
+    console.error('Error setting up event listeners:', error);
+    uiManager.addLogMessage(`Error setting up UI: ${error.message}`, false, true);
+  }
 }
 
 /**
@@ -641,18 +843,23 @@ function setupEventListeners() {
  * @returns {boolean} - Whether API is configured
  */
 function checkApiConfiguration(showAlert = false) {
-  return secureStorage.hasCredentials() || (
-    state.settings.apiKey && 
-    state.settings.apiSecret && 
-    state.settings.apiKey.length > 0 && 
-    state.settings.apiSecret.length > 0
-  ) || (() => {
-    if (showAlert) {
-      uiManager.showStatusBar('Please configure API keys first', 'warning');
-      document.getElementById('apiConfigModal').style.display = 'flex';
-    }
-    return false;
-  })();
+  const hasCredentials = secureStorage.hasCredentials();
+  const hasApiKeys = state.settings.apiKey && 
+                     state.settings.apiSecret && 
+                     state.settings.apiKey.length > 0 && 
+                     state.settings.apiSecret.length > 0;
+  
+  if (hasCredentials || hasApiKeys) {
+    return true;
+  }
+  
+  if (showAlert) {
+    uiManager.showStatusBar('Please configure API keys first', 'warning');
+    const apiConfigModal = document.getElementById('apiConfigModal');
+    if (apiConfigModal) apiConfigModal.style.display = 'flex';
+  }
+  
+  return false;
 }
 
 /**
@@ -673,6 +880,7 @@ async function testApiConnection() {
   } catch (error) {
     uiManager.addLogMessage(`API connection failed: ${error.message}`, false, true);
     uiManager.showStatusBar('API connection failed', 'error');
+    console.error('API connection failed:', error);
   }
 }
 
@@ -694,12 +902,13 @@ async function testDiscordWebhook() {
   uiManager.showStatusBar('Sending test message to Discord...', 'info');
   
   try {
-    await uiManager.sendDiscordNotification('Volty Trading Bot - Test Message');
+    await uiManager.sendDiscordNotification('Volty Trading Bot - Test Message from gelimorto2');
     uiManager.addLogMessage('Discord webhook test message sent', true);
     uiManager.showStatusBar('Discord test message sent', 'success');
   } catch (error) {
     uiManager.addLogMessage(`Discord webhook test failed: ${error.message}`, false, true);
     uiManager.showStatusBar('Discord webhook test failed', 'error');
+    console.error('Discord webhook test failed:', error);
   }
 }
 
@@ -707,6 +916,14 @@ async function testDiscordWebhook() {
  * Update clock display
  */
 function updateClock() {
+  const now = new Date();
+  const utcString = now.toISOString().replace('T', ' ').substring(0, 19);
+  
+  const clockDisplay = document.getElementById('clock-display');
+  if (clockDisplay) {
+    clockDisplay.textContent = utcString + ' UTC';
+  }
+  
   uiManager.updateClock();
 }
 
@@ -754,6 +971,7 @@ async function startTrading(isLive = false) {
     uiManager.addLogMessage(`Error starting trading: ${error.message}`, false, true);
     stopTrading();
     uiManager.showStatusBar(`Error starting trading: ${error.message}`, 'error');
+    console.error('Error starting trading:', error);
   }
 }
 
@@ -859,6 +1077,7 @@ async function closePosition(reason) {
   } catch (error) {
     uiManager.addLogMessage(`Error closing position: ${error.message}`, false, true);
     uiManager.showStatusBar(`Error closing position: ${error.message}`, 'error');
+    console.error('Error closing position:', error);
   }
 }
 
@@ -913,6 +1132,7 @@ async function openPosition(type) {
   } catch (error) {
     uiManager.addLogMessage(`Error opening position: ${error.message}`, false, true);
     uiManager.showStatusBar(`Error opening position: ${error.message}`, 'error');
+    console.error('Error opening position:', error);
   }
 }
 
@@ -974,6 +1194,7 @@ async function fetchMarketData() {
       activityType: 'waiting'
     });
     
+    console.error('Error fetching market data:', error);
     throw error;
   }
 }
@@ -1077,6 +1298,8 @@ async function runTradingLoop() {
       activityType: 'waiting'
     });
     
+    console.error('Error in trading loop:', error);
+    
     // Try to continue after a delay
     setTimeout(() => {
       if (state.isRunning) {
@@ -1172,6 +1395,7 @@ async function initializeTradingViewChart() {
     });
   } catch (error) {
     uiManager.addLogMessage('Error initializing chart: ' + error.message, false, true);
+    console.error('Error initializing chart:', error);
     throw error;
   }
 }
@@ -1186,5 +1410,8 @@ window.voltyBot = {
   positionManager,
   strategies,
   activeStrategy,
-  uiManager
+  uiManager,
+  version: '2.0.0',
+  currentUser: 'gelimorto2',
+  lastUpdated: '2025-06-15 21:23:59'
 };
