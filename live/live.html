@@ -3,1210 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Volty Trading Bot - Advanced Algorithmic Trading Platform">
     <title>Volty Trading Bot - Live Trading</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --primary-color: #4f46e5;
-            --primary-hover: #4338ca;
-            --secondary-color: #1f2937;
-            --success-color: #22c55e;
-            --warning-color: #f59e0b;
-            --danger-color: #ef4444;
-            --info-color: #3b82f6;
-            --text-light: #f3f4f6;
-            --text-dark: #1f2937;
-            --text-muted: #9ca3af;
-            --border-color: #374151;
-            --bg-dark: #111827;
-            --bg-secondary: #1f2937;
-            --bg-light: #f9fafb;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Inter', sans-serif;
-        }
-
-        body {
-            background-color: var(--bg-dark);
-            color: var(--text-light);
-            overflow: hidden;
-            height: 100vh;
-            width: 100vw;
-        }
-
-        a {
-            color: inherit;
-            text-decoration: none;
-        }
-
-        /* Layout */
-        .app-container {
-            display: flex;
-            height: 100vh;
-            width: 100vw;
-            overflow: hidden;
-        }
-
-        /* Sidebar */
-        .sidebar {
-            width: 280px;
-            background-color: var(--secondary-color);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            transition: width 0.3s ease;
-            z-index: 10;
-        }
-
-        .sidebar-collapsed {
-            width: 70px;
-        }
-
-        .sidebar-header {
-            padding: 1rem;
-            display: flex;
-            align-items: center;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .sidebar-logo {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: var(--primary-color);
-            font-weight: 700;
-            font-size: 1.25rem;
-        }
-
-        .sidebar-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 1rem;
-        }
-
-        .nav-section {
-            margin-bottom: 1.5rem;
-        }
-
-        .nav-section-title {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            color: var(--text-muted);
-            margin-bottom: 0.5rem;
-            padding: 0 0.5rem;
-        }
-
-        .nav-item {
-            padding: 0.5rem;
-            border-radius: 0.25rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.875rem;
-            color: var(--text-light);
-            transition: background-color 0.2s ease;
-            margin-bottom: 0.25rem;
-        }
-
-        .nav-item:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-
-        .nav-item.active {
-            background-color: var(--primary-color);
-            color: white;
-        }
-
-        .sidebar-footer {
-            padding: 1rem;
-            border-top: 1px solid var(--border-color);
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-align: center;
-        }
-
-        /* Main Content */
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            position: relative;
-        }
-
-        /* Top Bar */
-        .top-bar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.75rem 1rem;
-            background-color: var(--secondary-color);
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .trading-mode {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .mode-btn {
-            background-color: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-light);
-            padding: 0.25rem 0.75rem;
-            border-radius: 0.25rem;
-            font-size: 0.875rem;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-        }
-
-        .mode-btn:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-
-        .mode-btn.active {
-            background-color: var(--primary-color);
-            border-color: var(--primary-color);
-            color: white;
-        }
-
-        .market-info {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .market-badge {
-            background-color: rgba(255, 255, 255, 0.1);
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-            font-size: 0.875rem;
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
-        }
-
-        .position-info-badge {
-            background-color: rgba(255, 255, 255, 0.1);
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-            font-size: 0.875rem;
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
-            border-left: 3px solid var(--primary-color);
-        }
-
-        .position-info-badge.long {
-            border-left-color: var(--success-color);
-        }
-
-        .position-info-badge.short {
-            border-left-color: var(--danger-color);
-        }
-
-        .user-dropdown {
-            position: relative;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            cursor: pointer;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-            transition: background-color 0.2s ease;
-        }
-
-        .user-dropdown:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-
-        .user-avatar {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background-color: var(--primary-color);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75rem;
-            font-weight: 600;
-            color: white;
-        }
-
-        .user-info {
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-
-        .dropdown-menu {
-            position: absolute;
-            top: calc(100% + 5px);
-            right: 0;
-            background-color: var(--secondary-color);
-            border: 1px solid var(--border-color);
-            border-radius: 0.25rem;
-            width: 180px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            display: none;
-            z-index: 100;
-        }
-
-        .dropdown-menu.show {
-            display: block;
-        }
-
-        .dropdown-item {
-            padding: 0.5rem 1rem;
-            font-size: 0.875rem;
-            transition: background-color 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .dropdown-item:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-
-        .dropdown-divider {
-            border-top: 1px solid var(--border-color);
-            margin: 0.25rem 0;
-        }
-
-        /* Content Area */
-        .content-area {
-            flex: 1;
-            display: flex;
-            position: relative;
-            overflow: hidden;
-        }
-
-        /* Chart Container */
-        .chart-container {
-            flex: 1;
-            position: relative;
-            overflow: hidden;
-            height: 100%;
-        }
-
-        .tradingview-widget-container {
-            height: 100%;
-            width: 100%;
-            position: relative;
-        }
-
-        .tradingview-widget-container__widget {
-            height: calc(100% - 32px);
-            width: 100%;
-            background-color: var(--bg-dark);
-        }
-
-        .tradingview-widget-copyright {
-            height: 32px;
-            line-height: 32px;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            text-align: center;
-        }
-
-        .blue-text {
-            color: var(--info-color);
-        }
-
-        /* Overlay Controls */
-        .overlay-controls {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 0.5rem;
-            z-index: 5;
-        }
-
-        .bot-activity {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 5px;
-        }
-
-        .bot-activity.scanning {
-            background-color: var(--primary-color);
-            animation: pulse 1.5s infinite;
-        }
-
-        .bot-activity.trading {
-            background-color: var(--warning-color);
-            animation: pulse 0.7s infinite;
-        }
-
-        .bot-activity.waiting {
-            background-color: var(--text-muted);
-        }
-
-        @keyframes pulse {
-            0% {
-                transform: scale(0.95);
-                box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7);
-            }
-            
-            70% {
-                transform: scale(1);
-                box-shadow: 0 0 0 10px rgba(79, 70, 229, 0);
-            }
-            
-            100% {
-                transform: scale(0.95);
-                box-shadow: 0 0 0 0 rgba(79, 70, 229, 0);
-            }
-        }
-
-        .status-indicator {
-            background-color: rgba(31, 41, 55, 0.7);
-            border: 1px solid var(--border-color);
-            border-radius: 2rem;
-            padding: 0.5rem 1rem;
-            font-size: 0.75rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            backdrop-filter: blur(10px);
-        }
-
-        .status-indicator.idle {
-            color: var(--text-muted);
-        }
-
-        .status-indicator.active {
-            color: var(--success-color);
-        }
-
-        .status-indicator.live {
-            color: var(--primary-color);
-        }
-
-        #activity-status {
-            background-color: rgba(31, 41, 55, 0.7);
-            border: 1px solid var(--border-color);
-            border-radius: 0.25rem;
-            padding: 0.5rem 0.75rem;
-            font-size: 0.75rem;
-            color: var(--text-light);
-            backdrop-filter: blur(10px);
-        }
-
-        /* Mode Indicators */
-        .mode-indicator {
-            position: absolute;
-            top: 80px;
-            right: 20px;
-            background-color: rgba(31, 41, 55, 0.7);
-            border: 1px solid var(--border-color);
-            border-radius: 2rem;
-            padding: 0.5rem 1rem;
-            font-size: 0.75rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            backdrop-filter: blur(10px);
-            z-index: 5;
-        }
-
-        #practice-mode-indicator {
-            color: var(--warning-color);
-            display: flex;
-        }
-
-        #live-mode-indicator {
-            color: var(--primary-color);
-            display: none;
-        }
-
-        /* Bot Controls */
-        .bot-controls {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 0.5rem;
-            z-index: 5;
-        }
-
-        .btn {
-            padding: 0.5rem 1rem;
-            border-radius: 0.25rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-            border: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            font-size: 0.875rem;
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        .btn-success {
-            background-color: var(--success-color);
-            color: white;
-        }
-
-        .btn-success:hover:not(:disabled) {
-            background-color: #1ca350;
-        }
-
-        .btn-danger {
-            background-color: var(--danger-color);
-            color: white;
-        }
-
-        .btn-danger:hover:not(:disabled) {
-            background-color: #dc2626;
-        }
-
-        .btn-warning {
-            background-color: var(--warning-color);
-            color: white;
-        }
-
-        .btn-warning:hover:not(:disabled) {
-            background-color: #d97706;
-        }
-
-        .btn-secondary {
-            background-color: var(--secondary-color);
-            color: var(--text-light);
-            border: 1px solid var(--border-color);
-        }
-
-        .btn-secondary:hover:not(:disabled) {
-            background-color: #374151;
-        }
-
-        .btn-primary {
-            background-color: var(--primary-color);
-            color: white;
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            background-color: var(--primary-hover);
-        }
-
-        .btn-block {
-            width: 100%;
-        }
-
-        .btn-sm {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.75rem;
-        }
-
-        /* Clock */
-        .clock-container {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            background-color: rgba(31, 41, 55, 0.7);
-            border: 1px solid var(--border-color);
-            border-radius: 0.25rem;
-            padding: 0.5rem 0.75rem;
-            font-size: 0.75rem;
-            color: var(--text-light);
-            backdrop-filter: blur(10px);
-            z-index: 5;
-        }
-
-        /* Floating Position Indicator */
-        .floating-position-indicator {
-            position: absolute;
-            top: 80px;
-            left: 20px;
-            background-color: rgba(31, 41, 55, 0.7);
-            border: 1px solid var(--border-color);
-            border-radius: 0.5rem;
-            padding: 0.75rem;
-            font-size: 0.75rem;
-            width: 280px;
-            display: none;
-            z-index: 5;
-            backdrop-filter: blur(10px);
-        }
-
-        .floating-position-indicator.long {
-            border-left: 4px solid var(--success-color);
-        }
-
-        .floating-position-indicator.short {
-            border-left: 4px solid var(--danger-color);
-        }
-
-        /* Widget Panel Toggle */
-        .widget-panel-toggle {
-            position: absolute;
-            bottom: 70px;
-            right: 20px;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            z-index: 5;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            transition: background-color 0.2s ease;
-        }
-
-        .widget-panel-toggle:hover {
-            background-color: var(--primary-hover);
-        }
-
-        /* Log Container */
-        .log-container {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 0;
-            background-color: rgba(17, 24, 39, 0.95);
-            border-top: 1px solid var(--border-color);
-            transition: height 0.3s ease;
-            overflow: hidden;
-            z-index: 10;
-        }
-
-        .log-container.open {
-            height: 200px;
-        }
-
-        .log-header {
-            padding: 0.5rem 1rem;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .log-title {
-            font-size: 0.875rem;
-            font-weight: 600;
-        }
-
-        #logMessages {
-            padding: 0.5rem 1rem;
-            height: calc(100% - 40px);
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 0.75rem;
-        }
-
-        .log-message {
-            margin-bottom: 0.25rem;
-            line-height: 1.4;
-        }
-
-        .log-message.positive {
-            color: var(--success-color);
-        }
-
-        .log-message.negative {
-            color: var(--danger-color);
-        }
-
-        /* Widget Panel */
-        .widget-panel {
-            position: absolute;
-            top: 0;
-            right: -360px;
-            width: 360px;
-            height: 100%;
-            background-color: var(--secondary-color);
-            border-left: 1px solid var(--border-color);
-            transition: right 0.3s ease;
-            z-index: 5;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .widget-panel.open {
-            right: 0;
-        }
-
-        .widget-header {
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .widget-header h3 {
-            font-size: 0.875rem;
-            font-weight: 600;
-        }
-
-        .widget-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 1rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
-        .widget-item {
-            background-color: rgba(0, 0, 0, 0.2);
-            border-radius: 0.5rem;
-            border: 1px solid var(--border-color);
-            overflow: hidden;
-        }
-
-        .widget-item-title {
-            padding: 0.75rem;
-            border-bottom: 1px solid var(--border-color);
-            font-weight: 600;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-
-        .metric-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.5rem 0.75rem;
-            font-size: 0.875rem;
-        }
-
-        .metric-label {
-            color: var(--text-muted);
-        }
-
-        .metric-value {
-            font-weight: 600;
-        }
-
-        .position-actions {
-            padding: 0.75rem;
-            border-top: 1px solid var(--border-color);
-        }
-
-        .text-center {
-            text-align: center;
-        }
-
-        .text-muted {
-            color: var(--text-muted);
-        }
-
-        .py-2 {
-            padding-top: 0.5rem;
-            padding-bottom: 0.5rem;
-        }
-
-        /* Status Bar */
-        .status-bar {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 300px;
-            background-color: var(--secondary-color);
-            border: 1px solid var(--border-color);
-            border-radius: 0.25rem;
-            overflow: hidden;
-            z-index: 1000;
-            display: none;
-        }
-
-        #status-message {
-            padding: 0.75rem;
-            font-size: 0.875rem;
-            text-align: center;
-        }
-
-        .status-progress {
-            height: 3px;
-            background-color: var(--primary-color);
-            width: 0%;
-        }
-
-        .status-info .status-progress {
-            background-color: var(--info-color);
-        }
-
-        .status-success .status-progress {
-            background-color: var(--success-color);
-        }
-
-        .status-warning .status-progress {
-            background-color: var(--warning-color);
-        }
-
-        .status-error .status-progress {
-            background-color: var(--danger-color);
-        }
-
-        /* Loading Indicator */
-        .loading-indicator {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(17, 24, 39, 0.8);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            backdrop-filter: blur(5px);
-        }
-
-        .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: var(--primary-color);
-            animation: spin 1s linear infinite;
-            margin-bottom: 1rem;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        /* Modal Backdrop */
-        .modal-backdrop {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            backdrop-filter: blur(5px);
-        }
-
-        .modal {
-            background-color: var(--secondary-color);
-            border-radius: 0.5rem;
-            width: 100%;
-            max-width: 480px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-            overflow: hidden;
-        }
-
-        .modal-header {
-            padding: 1rem;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .modal-title {
-            font-weight: 600;
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-size: 1.5rem;
-            line-height: 1;
-            cursor: pointer;
-        }
-
-        .modal-body {
-            padding: 1rem;
-        }
-
-        .modal-footer {
-            padding: 1rem;
-            border-top: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 0.5rem;
-        }
-
-        .form-group {
-            margin-bottom: 1rem;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-size: 0.875rem;
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 0.5rem 0.75rem;
-            border: 1px solid var(--border-color);
-            background-color: rgba(0, 0, 0, 0.2);
-            color: var(--text-light);
-            border-radius: 0.25rem;
-            font-size: 0.875rem;
-            transition: border-color 0.2s ease;
-        }
-
-        .form-control:focus {
-            outline: none;
-            border-color: var(--primary-color);
-        }
-
-        .mb-3 {
-            margin-bottom: 0.75rem;
-        }
-
-        .mt-3 {
-            margin-top: 0.75rem;
-        }
-
-        .d-flex {
-            display: flex;
-        }
-
-        .align-items-center {
-            align-items: center;
-        }
-
-        /* Toggle Switch */
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 40px;
-            height: 20px;
-            margin-right: 0.5rem;
-        }
-
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: var(--border-color);
-            transition: 0.4s;
-            border-radius: 34px;
-        }
-
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 16px;
-            width: 16px;
-            left: 2px;
-            bottom: 2px;
-            background-color: white;
-            transition: 0.4s;
-            border-radius: 50%;
-        }
-
-        input:checked + .slider {
-            background-color: var(--primary-color);
-        }
-
-        input:focus + .slider {
-            box-shadow: 0 0 1px var(--primary-color);
-        }
-
-        input:checked + .slider:before {
-            transform: translateX(20px);
-        }
-
-        .switch-label {
-            font-size: 0.875rem;
-        }
-
-        /* Version Info */
-        .version-info {
-            position: fixed;
-            bottom: 10px;
-            left: 10px;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            z-index: 5;
-        }
-    </style>
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="assets/images/favicon.png">
 </head>
 <body>
+    <!-- Loading Indicator -->
+    <div class="loading-indicator" id="loadingIndicator">
+        <div class="loading-spinner"></div>
+        <div>Initializing Volty Trading Bot...</div>
+    </div>
+
     <div class="app-container">
         <!-- Sidebar -->
-        <div class="sidebar" id="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-logo">
                     <i class="fas fa-bolt"></i>
                     <span>Volty Bot</span>
                 </div>
-                <button id="sidebar-toggle" class="btn-sm" style="margin-left: auto; background: none; border: none; color: var(--text-muted);">
+                <button id="sidebar-toggle" class="btn-sm" aria-label="Toggle sidebar">
                     <i class="fas fa-chevron-left"></i>
                 </button>
             </div>
             <div class="sidebar-content">
-                <div class="nav-section">
-                    <div class="nav-section-title">Navigation</div>
-                    <a href="#" class="nav-item active">
-                        <i class="fas fa-chart-line"></i>
-                        <span>Live Trading</span>
-                    </a>
-                    <a href="#" class="nav-item">
-                        <i class="fas fa-history"></i>
-                        <span>Trade History</span>
-                    </a>
-                    <a href="#" class="nav-item">
-                        <i class="fas fa-sliders-h"></i>
-                        <span>Strategy Builder</span>
-                    </a>
-                    <a href="#" class="nav-item">
-                        <i class="fas fa-flask"></i>
-                        <span>Backtester</span>
-                    </a>
-                </div>
-                
-                <div class="nav-section">
-                    <div class="nav-section-title">Settings</div>
-                    
-                    <div style="padding: 0.5rem;">
-                        <div class="form-group">
-                            <label for="symbol">Trading Pair</label>
-                            <select id="symbol" class="form-control">
-                                <option value="BTCUSDT">BTC/USDT</option>
-                                <option value="ETHUSDT">ETH/USDT</option>
-                                <option value="BNBUSDT">BNB/USDT</option>
-                                <option value="SOLUSDT">SOL/USDT</option>
-                                <option value="ADAUSDT">ADA/USDT</option>
-                                <option value="DOGEUSDT">DOGE/USDT</option>
-                                <option value="XRPUSDT">XRP/USDT</option>
-                                <option value="DOTUSDT">DOT/USDT</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="timeframe">Timeframe</label>
-                            <select id="timeframe" class="form-control">
-                                <option value="1m">1 Minute</option>
-                                <option value="5m">5 Minutes</option>
-                                <option value="15m">15 Minutes</option>
-                                <option value="30m">30 Minutes</option>
-                                <option value="1h" selected>1 Hour</option>
-                                <option value="4h">4 Hours</option>
-                                <option value="1d">1 Day</option>
-                            </select>
-                        </div>
+                <nav>
+                    <div class="nav-section">
+                        <div class="nav-section-title">Navigation</div>
+                        <a href="#" class="nav-item active" aria-current="page">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Live Trading</span>
+                        </a>
+                        <a href="#" class="nav-item">
+                            <i class="fas fa-history"></i>
+                            <span>Trade History</span>
+                        </a>
+                        <a href="#" class="nav-item">
+                            <i class="fas fa-sliders-h"></i>
+                            <span>Strategy Builder</span>
+                        </a>
+                        <a href="#" class="nav-item">
+                            <span>Backtester</span>
+                        </a>
                     </div>
                     
-                    <div class="widget-item mb-3">
-                        <div class="widget-item-title">Strategy Parameters</div>
-                        <div style="padding: 0.5rem 0.75rem;">
-                            <div class="form-group">
-                                <label for="bb-length">
-                                    Bollinger Bands Length: <span id="bb-length-value">20</span>
-                                </label>
-                                <input type="range" id="bb-length" min="10" max="50" value="20" class="form-control">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="bb-dev">
-                                    Bollinger Bands Deviation: <span id="bb-dev-value">2</span>
-                                </label>
-                                <input type="range" id="bb-dev" min="1" max="4" step="0.1" value="2" class="form-control">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="volume-candles">
-                                    Volume Candles: <span id="volume-candles-value">3</span>
-                                </label>
-                                <input type="range" id="volume-candles" min="1" max="10" value="3" class="form-control">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="volume-increase">
-                                    Volume Increase (%): <span id="volume-increase-value">20</span>
-                                </label>
-                                <input type="range" id="volume-increase" min="5" max="50" value="20" class="form-control">
-                            </div>
-                        </div>
+                    <div class="nav-section">
+                        <div class="nav-section-title">Settings</div>
+                        <a href="#" class="nav-item" data-toggle="modal" data-target="settingsModal">
+                            <i class="fas fa-cog"></i>
+                            <span>General Settings</span>
+                        </a>
+                        <a href="#" class="nav-item" data-toggle="modal" data-target="apiConfigModal">
+                            <i class="fas fa-key"></i>
+                            <span>API Configuration</span>
+                        </a>
+                        <a href="#" class="nav-item" data-toggle="modal" data-target="notificationsModal">
+                            <i class="fas fa-bell"></i>
+                            <span>Notifications</span>
+                        </a>
                     </div>
                     
-                    <div class="widget-item mb-3">
-                        <div class="widget-item-title">Account Settings</div>
-                        <div style="padding: 0.5rem 0.75rem;">
-                            <div class="form-group">
-                                <label for="initial-capital">Initial Capital (USDT)</label>
-                                <input type="number" id="initial-capital" class="form-control" value="10000">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="position-size">
-                                    Position Size: <span id="position-size-value">10%</span>
-                                </label>
-                                <input type="range" id="position-size" min="1" max="100" value="10" class="form-control">
-                            </div>
-                        </div>
+                    <div class="nav-section">
+                        <div class="nav-section-title">Support</div>
+                        <a href="#" class="nav-item">
+                            <i class="fas fa-book"></i>
+                            <span>Documentation</span>
+                        </a>
+                        <a href="#" class="nav-item">
+                            <i class="fas fa-question-circle"></i>
+                            <span>Help Center</span>
+                        </a>
                     </div>
-                    
-                    <div class="widget-item mb-3">
-                        <div class="widget-item-title">Risk Management</div>
-                        <div style="padding: 0.5rem 0.75rem;">
-                            <div class="form-group d-flex align-items-center mb-3">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="take-profit-toggle" checked>
-                                    <span class="slider"></span>
-                                </label>
-                                <span class="switch-label">Take Profit</span>
-                                <input type="number" id="take-profit-value" class="form-control" style="width: 80px; margin-left: auto;" value="3">
-                                <span style="margin-left: 0.5rem;">%</span>
-                            </div>
-                            
-                            <div class="form-group d-flex align-items-center mb-3">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="stop-loss-toggle" checked>
-                                    <span class="slider"></span>
-                                </label>
-                                <span class="switch-label">Stop Loss</span>
-                                <input type="number" id="stop-loss-value" class="form-control" style="width: 80px; margin-left: auto;" value="2">
-                                <span style="margin-left: 0.5rem;">%</span>
-                            </div>
-                            
-                            <div class="form-group d-flex align-items-center mb-3">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="trailing-stop-toggle">
-                                    <span class="slider"></span>
-                                </label>
-                                <span class="switch-label">Trailing Stop</span>
-                                <input type="number" id="trailing-stop-value" class="form-control" style="width: 80px; margin-left: auto;" value="1.5" disabled>
-                                <span style="margin-left: 0.5rem;">%</span>
-                            </div>
-                            
-                            <div class="form-group d-flex align-items-center mb-3">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="auto-trade-toggle" checked>
-                                    <span class="slider"></span>
-                                </label>
-                                <span class="switch-label">Auto Trading</span>
-                            </div>
-                            
-                            <div class="form-group d-flex align-items-center">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="show-position-lines-toggle" checked>
-                                    <span class="slider"></span>
-                                </label>
-                                <span class="switch-label">Show Position Lines</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="widget-item mb-3">
-                        <div class="widget-item-title">API Settings</div>
-                        <div style="padding: 0.5rem 0.75rem;">
-                            <div class="form-group">
-                                <label for="api-key">API Key</label>
-                                <input type="text" id="api-key" class="form-control" placeholder="Enter API key">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="api-secret">API Secret</label>
-                                <input type="password" id="api-secret" class="form-control" placeholder="Enter API secret">
-                            </div>
-                            
-                            <div class="form-group d-flex align-items-center mb-3">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="use-testnet-toggle" checked>
-                                    <span class="slider"></span>
-                                </label>
-                                <span class="switch-label">Use Testnet</span>
-                            </div>
-                            
-                            <div class="d-flex" style="gap: 0.5rem;">
-                                <button id="save-api-btn" class="btn btn-primary btn-sm" style="flex: 1;">Save</button>
-                                <button id="test-api-btn" class="btn btn-secondary btn-sm" style="flex: 1;">Test API</button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="widget-item mb-3">
-                        <div class="widget-item-title">Notifications</div>
-                        <div style="padding: 0.5rem 0.75rem;">
-                            <div class="form-group d-flex align-items-center mb-3">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="browser-notifications-toggle" checked>
-                                    <span class="slider"></span>
-                                </label>
-                                <span class="switch-label">Browser Notifications</span>
-                            </div>
-                            
-                            <div class="form-group d-flex align-items-center mb-3">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="sound-notifications-toggle" checked>
-                                    <span class="slider"></span>
-                                </label>
-                                <span class="switch-label">Sound Notifications</span>
-                            </div>
-                            
-                            <div class="form-group d-flex align-items-center mb-3">
-                                <label class="toggle-switch">
-                                    <input type="checkbox" id="discord-notifications-toggle">
-                                    <span class="slider"></span>
-                                </label>
-                                <span class="switch-label">Discord Notifications</span>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="discord-webhook">Discord Webhook</label>
-                                <input type="text" id="discord-webhook" class="form-control" placeholder="Enter webhook URL" disabled>
-                                <button id="test-discord-btn" class="btn btn-secondary btn-sm mt-3 btn-block">Test Webhook</button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <button id="save-settings-btn" class="btn btn-primary btn-block" style="margin: 0.5rem;">
-                        Save All Settings
-                    </button>
-                </div>
+                </nav>
             </div>
             <div class="sidebar-footer">
-                Volty Trading Bot v2.0.0
+                <div>Volty Trading Bot v2.0.0</div>
+                <div>&copy; 2025 Volty Trading</div>
             </div>
-        </div>
-        
+        </aside>
+
         <!-- Main Content -->
-        <div class="main-content">
+        <main class="main-content">
             <!-- Top Bar -->
-            <div class="top-bar">
+            <header class="top-bar">
                 <div class="trading-mode">
                     <button id="paper-trading-btn" class="mode-btn active">Paper Trading</button>
                     <button id="live-trading-btn" class="mode-btn">Live Trading</button>
@@ -1214,23 +97,45 @@
                 
                 <div class="market-info">
                     <div class="market-badge" id="market-symbol-badge">BTC/USDT</div>
-                    <div>
-                        <span id="market-price">$0.00</span>
-                        <span id="market-change" style="margin-left: 0.25rem; font-size: 0.75rem;">0.00%</span>
-                    </div>
-                    <div class="market-badge">
-                        <i class="fas fa-chart-bar"></i>
-                        <span id="market-volume">$0.00M</span>
-                    </div>
+                    <select id="symbol" class="form-control form-control-sm">
+                        <option value="BTCUSDT">BTC/USDT</option>
+                        <option value="ETHUSDT">ETH/USDT</option>
+                        <option value="BNBUSDT">BNB/USDT</option>
+                        <option value="ADAUSDT">ADA/USDT</option>
+                        <option value="SOLUSDT">SOL/USDT</option>
+                        <option value="DOGEUSDT">DOGE/USDT</option>
+                        <option value="DOTUSDT">DOT/USDT</option>
+                    </select>
+                    <select id="timeframe" class="form-control form-control-sm">
+                        <option value="1m">1m</option>
+                        <option value="5m">5m</option>
+                        <option value="15m">15m</option>
+                        <option value="30m">30m</option>
+                        <option value="1h" selected>1h</option>
+                        <option value="4h">4h</option>
+                        <option value="1d">1d</option>
+                    </select>
                 </div>
                 
-                <div class="user-dropdown" id="user-dropdown">
+                <div class="user-dropdown">
                     <div class="user-avatar">G</div>
                     <div class="user-info">gelimorto2</div>
-                    <i class="fas fa-chevron-down" style="font-size: 0.75rem; color: var(--text-muted);"></i>
+                    <i class="fas fa-chevron-down"></i>
+                    <div class="dropdown-menu">
+                        <a href="#" class="dropdown-item">
+                            <i class="fas fa-user"></i> Profile
+                        </a>
+                        <a href="#" class="dropdown-item">
+                            <i class="fas fa-cog"></i> Settings
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <a href="#" class="dropdown-item">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
                 </div>
-            </div>
-            
+            </header>
+
             <!-- Content Area -->
             <div class="content-area">
                 <!-- Chart Container -->
@@ -1239,7 +144,7 @@
                         <div class="tradingview-widget-container__widget"></div>
                         <div class="tradingview-widget-copyright">
                             <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">
-                                <span class="blue-text">Track all markets on TradingView</span>
+                                <span class="blue-text">Chart by TradingView</span>
                             </a>
                         </div>
                     </div>
@@ -1250,6 +155,7 @@
                             <div class="bot-activity waiting" id="bot-activity"></div>
                             <span>BOT IDLE</span>
                         </div>
+                        
                         <div id="activity-status">Ready to start trading</div>
                     </div>
                     
@@ -1260,7 +166,7 @@
                     </div>
                     
                     <div class="mode-indicator" id="live-mode-indicator">
-                        <i class="fas fa-satellite-dish"></i>
+                        <i class="fas fa-broadcast-tower"></i>
                         <span>LIVE TRADING</span>
                     </div>
                     
@@ -1268,165 +174,170 @@
                     <div class="floating-position-indicator" id="floating-position-indicator"></div>
                     
                     <!-- Bot Controls -->
-                    <div class="bot-controls" id="paper-trading-buttons">
-                        <button id="start-trading-btn" class="btn btn-success">
-                            <i class="fas fa-play"></i>
-                            <span>Start</span>
-                        </button>
-                        <button id="stop-trading-btn" class="btn btn-danger" disabled>
-                            <i class="fas fa-stop"></i>
-                            <span>Stop</span>
-                        </button>
-                        <button id="reset-trading-btn" class="btn btn-secondary">
-                            <i class="fas fa-redo"></i>
-                            <span>Reset</span>
-                        </button>
-                    </div>
-                    
-                    <div class="bot-controls" id="live-trading-buttons" style="display: none;">
-                        <button id="start-live-trading-btn" class="btn btn-success">
-                            <i class="fas fa-play"></i>
-                            <span>Start Live</span>
-                        </button>
-                        <button id="stop-live-trading-btn" class="btn btn-danger" disabled>
-                            <i class="fas fa-stop"></i>
-                            <span>Stop</span>
-                        </button>
-                    </div>
-                    
-                    <!-- Clock -->
-                    <div class="clock-container">
-                        <i class="far fa-clock" style="margin-right: 0.5rem;"></i>
-                        <span id="clock-display">2025-06-13 04:59:37 UTC</span>
+                    <div class="bot-controls">
+                        <div id="paper-trading-buttons">
+                            <button id="start-trading-btn" class="btn btn-success">
+                                <i class="fas fa-play"></i> Start Trading
+                            </button>
+                            <button id="stop-trading-btn" class="btn btn-danger" disabled>
+                                <i class="fas fa-stop"></i> Stop Trading
+                            </button>
+                            <button id="reset-trading-btn" class="btn btn-secondary">
+                                <i class="fas fa-redo"></i> Reset
+                            </button>
+                        </div>
+                        
+                        <div id="live-trading-buttons" style="display: none;">
+                            <button id="start-live-trading-btn" class="btn btn-primary">
+                                <i class="fas fa-play"></i> Start Live Trading
+                            </button>
+                            <button id="stop-live-trading-btn" class="btn btn-danger" disabled>
+                                <i class="fas fa-stop"></i> Stop Trading
+                            </button>
+                        </div>
                     </div>
                     
                     <!-- Widget Panel Toggle -->
-                    <button class="widget-panel-toggle" id="widget-panel-toggle">
-                        <i class="fas fa-chart-pie"></i>
+                    <button class="widget-panel-toggle" id="widget-panel-toggle" aria-label="Toggle widget panel">
+                        <i class="fas fa-tachometer-alt"></i>
                     </button>
                     
-                    <!-- Log Button -->
-                    <button class="widget-panel-toggle" id="log-toggle-btn" style="bottom: 120px;">
-                        <i class="fas fa-list"></i>
-                    </button>
+                    <!-- Clock -->
+                    <div class="clock-container">
+                        <i class="far fa-clock"></i>
+                        <span id="clock-display">2025-06-15 21:03:07 UTC</span>
+                    </div>
                 </div>
                 
                 <!-- Widget Panel -->
                 <div class="widget-panel" id="widget-panel">
                     <div class="widget-header">
                         <h3>Trading Dashboard</h3>
-                        <button class="btn-sm" id="refresh-widgets-btn" style="background: none; border: none; color: var(--text-muted);">
+                        <button id="refresh-widgets-btn" class="btn-sm btn-secondary" aria-label="Refresh widgets">
                             <i class="fas fa-sync-alt"></i>
                         </button>
                     </div>
+                    
                     <div class="widget-content">
+                        <!-- Market Info Widget -->
                         <div class="widget-item">
-                            <div class="widget-item-title">Market Information</div>
-                            <div style="padding: 0.75rem;">
-                                <div style="margin-bottom: 0.5rem; font-weight: 600;" id="market-symbol">BTC/USDT</div>
-                                <div class="d-flex align-items-center" style="margin-bottom: 0.5rem;">
-                                    <span style="font-size: 1.5rem; font-weight: 700;" id="market-price-large">$0.00</span>
-                                    <span style="margin-left: 0.5rem; font-size: 0.875rem;" id="market-change-large">0.00%</span>
-                                </div>
-                                <div class="metric-row">
-                                    <span class="metric-label">24h Volume:</span>
-                                    <span class="metric-value" id="market-volume-large">$0.00M</span>
-                                </div>
-                                <div class="metric-row">
-                                    <span class="metric-label">Last Update:</span>
-                                    <span class="metric-value" id="last-tick-info">N/A</span>
-                                </div>
+                            <div class="widget-item-title">MARKET INFO</div>
+                            <div class="metric-row">
+                                <div class="metric-label">Symbol</div>
+                                <div class="metric-value" id="market-symbol">BTC/USDT</div>
+                            </div>
+                            <div class="metric-row">
+                                <div class="metric-label">Current Price</div>
+                                <div class="metric-value" id="market-price">$0.00</div>
+                            </div>
+                            <div class="metric-row">
+                                <div class="metric-label">24h Change</div>
+                                <div class="metric-value" id="market-change">0.00%</div>
+                            </div>
+                            <div class="metric-row">
+                                <div class="metric-label">24h Volume</div>
+                                <div class="metric-value" id="market-volume">$0.00M</div>
+                            </div>
+                            <div class="metric-row">
+                                <div class="metric-label">Last Update</div>
+                                <div class="metric-value" id="last-tick-info">--:--:--</div>
                             </div>
                         </div>
                         
-                        <div class="widget-item">
-                            <div class="widget-item-title">Current Position</div>
-                            <div id="no-position-info" style="padding: 1rem; text-align: center;">
-                                <div style="color: var(--text-muted); margin-bottom: 0.5rem;">No open position</div>
-                                <div style="font-size: 0.75rem;">The bot will automatically open positions based on your strategy settings.</div>
+                        <!-- Position Info Widget -->
+                        <div class="widget-item" id="position-info" style="display: none;">
+                            <div class="widget-item-title">CURRENT POSITION</div>
+                            <div class="metric-row">
+                                <div class="metric-label">Type</div>
+                                <div class="metric-value" id="position-type">LONG</div>
                             </div>
-                            <div id="position-info" style="display: none;">
-                                <div style="padding: 0.75rem;">
-                                    <div style="margin-bottom: 0.5rem; font-weight: 600;">
-                                        <span id="position-type">LONG</span> Position
-                                    </div>
-                                    <div class="metric-row">
-                                        <span class="metric-label">Entry Price:</span>
-                                        <span class="metric-value" id="position-entry-price">$0.00</span>
-                                    </div>
-                                    <div class="metric-row">
-                                        <span class="metric-label">Current Price:</span>
-                                        <span class="metric-value" id="position-current-price">$0.00</span>
-                                    </div>
-                                    <div class="metric-row">
-                                        <span class="metric-label">P&L:</span>
-                                        <span class="metric-value" id="position-pnl">$0.00 (0.00%)</span>
-                                    </div>
-                                    <div class="metric-row">
-                                        <span class="metric-label">Take Profit:</span>
-                                        <span class="metric-value" id="position-tp">$0.00</span>
-                                    </div>
-                                    <div class="metric-row">
-                                        <span class="metric-label">Stop Loss:</span>
-                                        <span class="metric-value" id="position-sl">$0.00</span>
-                                    </div>
-                                </div>
-                                <div class="position-actions">
-                                    <button id="position-close-btn" class="btn btn-danger btn-block">Close Position</button>
-                                </div>
+                            <div class="metric-row">
+                                <div class="metric-label">Entry Price</div>
+                                <div class="metric-value" id="position-entry-price">$0.00</div>
+                            </div>
+                            <div class="metric-row">
+                                <div class="metric-label">Current Price</div>
+                                <div class="metric-value" id="position-current-price">$0.00</div>
+                            </div>
+                            <div class="metric-row">
+                                <div class="metric-label">Unrealized P&L</div>
+                                <div class="metric-value" id="position-pnl">$0.00 (0.00%)</div>
+                            </div>
+                            <div class="metric-row">
+                                <div class="metric-label">Take Profit</div>
+                                <div class="metric-value" id="position-tp">$0.00</div>
+                            </div>
+                            <div class="metric-row">
+                                <div class="metric-label">Stop Loss</div>
+                                <div class="metric-value" id="position-sl">$0.00</div>
+                            </div>
+                            <div class="position-actions">
+                                <button id="position-close-btn" class="btn btn-danger btn-block">
+                                    <i class="fas fa-times"></i> Close Position
+                                </button>
                             </div>
                         </div>
                         
-                        <div class="widget-item">
-                            <div class="widget-item-title">Performance Metrics</div>
-                            <div style="padding: 0.75rem;">
-                                <div class="metric-row">
-                                    <span class="metric-label">Total Return:</span>
-                                    <span class="metric-value" id="total-return">0.00%</span>
-                                </div>
-                                <div class="metric-row">
-                                    <span class="metric-label">Win Rate:</span>
-                                    <span class="metric-value" id="win-rate">0.0%</span>
-                                </div>
-                                <div class="metric-row">
-                                    <span class="metric-label">Profit Factor:</span>
-                                    <span class="metric-value" id="profit-factor">0.00</span>
-                                </div>
-                                <div class="metric-row">
-                                    <span class="metric-label">Max Drawdown:</span>
-                                    <span class="metric-value" id="max-drawdown">0.00%</span>
-                                </div>
+                        <div class="widget-item" id="no-position-info">
+                            <div class="widget-item-title">POSITION</div>
+                            <div class="py-2 text-center text-muted">
+                                No open position
                             </div>
                         </div>
                         
+                        <!-- Performance Widget -->
                         <div class="widget-item">
-                            <div class="widget-item-title">Today's Stats</div>
-                            <div style="padding: 0.75rem;">
-                                <div class="metric-row">
-                                    <span class="metric-label">Trades:</span>
-                                    <span class="metric-value" id="stat-daily-trades">0</span>
-                                </div>
-                                <div class="metric-row">
-                                    <span class="metric-label">P&L:</span>
-                                    <span class="metric-value" id="stat-daily-pnl">$0.00</span>
-                                </div>
+                            <div class="widget-item-title">PERFORMANCE</div>
+                            <div class="metric-row">
+                                <div class="metric-label">Total Return</div>
+                                <div class="metric-value" id="total-return">0.00%</div>
+                            </div>
+                            <div class="metric-row">
+                                <div class="metric-label">Win Rate</div>
+                                <div class="metric-value" id="win-rate">0.0%</div>
+                            </div>
+                            <div class="metric-row">
+                                <div class="metric-label">Profit Factor</div>
+                                <div class="metric-value" id="profit-factor">0.00</div>
+                            </div>
+                            <div class="metric-row">
+                                <div class="metric-label">Max Drawdown</div>
+                                <div class="metric-value" id="max-drawdown">0.00%</div>
                             </div>
                         </div>
-                    </div>
-                </div>
-                
-                <!-- Log Container -->
-                <div class="log-container" id="log-container">
-                    <div class="log-header">
-                        <div class="log-title">Activity Log</div>
-                        <button class="btn-sm" id="log-close-btn" style="background: none; border: none; color: var(--text-muted);">
-                            <i class="fas fa-times"></i>
+                        
+                        <!-- Today's Stats Widget -->
+                        <div class="widget-item">
+                            <div class="widget-item-title">TODAY'S STATS</div>
+                            <div class="metric-row">
+                                <div class="metric-label">Trades</div>
+                                <div class="metric-value" id="stat-daily-trades">0</div>
+                            </div>
+                            <div class="metric-row">
+                                <div class="metric-label">P&L</div>
+                                <div class="metric-value" id="stat-daily-pnl">$0.00</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Export Data -->
+                        <button id="export-data-btn" class="btn btn-secondary btn-block">
+                            <i class="fas fa-download"></i> Export Trading Data
                         </button>
                     </div>
-                    <div id="logMessages"></div>
                 </div>
             </div>
-        </div>
+            
+            <!-- Log Container -->
+            <div class="log-container" id="log-container">
+                <div class="log-header">
+                    <div class="log-title">Activity Log</div>
+                    <button class="btn-sm btn-secondary" id="log-toggle-btn" aria-label="Toggle log">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </div>
+                <div id="logMessages"></div>
+            </div>
+        </main>
     </div>
     
     <!-- Status Bar -->
@@ -1435,56 +346,249 @@
         <div class="status-progress" id="status-progress"></div>
     </div>
     
-    <!-- Loading Indicator -->
-    <div class="loading-indicator" id="loadingIndicator">
-        <div class="loading-spinner"></div>
-        <div style="font-weight: 600; margin-bottom: 0.5rem;">Loading Volty Trading Bot</div>
-        <div style="color: var(--text-muted); font-size: 0.875rem;">Please wait...</div>
-    </div>
-    
     <!-- API Configuration Modal -->
     <div class="modal-backdrop" id="apiConfigModal">
         <div class="modal">
             <div class="modal-header">
-                <div class="modal-title">Configure API Keys</div>
-                <button class="modal-close" id="closeApiConfigModal">&times;</button>
+                <div class="modal-title">API Configuration</div>
+                <button class="modal-close" id="closeApiConfigModal" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
-                <p class="mb-3">Please configure your exchange API keys to enable live trading.</p>
-                
                 <div class="form-group">
                     <label for="modal-api-key">API Key</label>
                     <input type="text" id="modal-api-key" class="form-control" placeholder="Enter your API key">
                 </div>
-                
                 <div class="form-group">
                     <label for="modal-api-secret">API Secret</label>
                     <input type="password" id="modal-api-secret" class="form-control" placeholder="Enter your API secret">
                 </div>
-                
-                <div class="form-group d-flex align-items-center">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="modal-use-testnet-toggle" checked>
-                        <span class="slider"></span>
-                    </label>
-                    <span class="switch-label">Use Testnet (Recommended for testing)</span>
+                <div class="form-group">
+                    <div class="d-flex align-items-center">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="modal-use-testnet-toggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                        <span class="switch-label">Use Testnet</span>
+                    </div>
+                    <small class="text-muted">Enable this for testing with virtual funds.</small>
                 </div>
-                
-                <div class="text-muted" style="font-size: 0.75rem; margin-top: 1rem;">
-                    <i class="fas fa-info-circle"></i> Your API keys are stored locally in your browser and are never sent to our servers.
+                <div class="mb-3">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle"></i> Your API credentials are stored securely and never shared.
+                    </small>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="cancelApiConfig">Cancel</button>
-                <button class="btn btn-primary" id="saveApiConfig">Save</button>
+                <button class="btn btn-primary" id="saveApiConfig">Save Configuration</button>
             </div>
         </div>
     </div>
     
-    <div class="version-info">
-        v2.0.0 | Last updated: 2025-06-13
+    <!-- Strategy Settings Modal -->
+    <div class="modal-backdrop" id="strategyModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Strategy Settings</div>
+                <button class="modal-close" id="closeStrategyModal" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="strategy-select">Strategy</label>
+                    <select id="strategy-select" class="form-control">
+                        <option value="bollingerBandsVolume">Bollinger Bands with Volume</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bb-length">Bollinger Bands Period</label>
+                    <div class="d-flex align-items-center">
+                        <input type="range" id="bb-length" class="form-control" min="10" max="50" value="20">
+                        <span id="bb-length-value" class="ml-2">20</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bb-dev">Bollinger Bands Deviation</label>
+                    <div class="d-flex align-items-center">
+                        <input type="range" id="bb-dev" class="form-control" min="1" max="4" step="0.1" value="2">
+                        <span id="bb-dev-value" class="ml-2">2</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="volume-candles">Volume Analysis Period</label>
+                    <div class="d-flex align-items-center">
+                        <input type="range" id="volume-candles" class="form-control" min="1" max="10" value="3">
+                        <span id="volume-candles-value" class="ml-2">3</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="volume-increase">Volume Increase Threshold (%)</label>
+                    <div class="d-flex align-items-center">
+                        <input type="range" id="volume-increase" class="form-control" min="5" max="50" value="20">
+                        <span id="volume-increase-value" class="ml-2">20</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelStrategySettings">Cancel</button>
+                <button class="btn btn-primary" id="saveStrategySettings">Save Settings</button>
+            </div>
+        </div>
     </div>
     
-    <script src="live.js"></script>
+    <!-- Risk Management Modal -->
+    <div class="modal-backdrop" id="riskManagementModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Risk Management</div>
+                <button class="modal-close" id="closeRiskManagementModal" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="initial-capital">Initial Capital (USDT)</label>
+                    <input type="number" id="initial-capital" class="form-control" min="100" value="10000">
+                </div>
+                
+                <div class="form-group">
+                    <label for="position-size">Position Size (% of balance)</label>
+                    <div class="d-flex align-items-center">
+                        <input type="range" id="position-size" class="form-control" min="1" max="100" value="10">
+                        <span id="position-size-value" class="ml-2">10%</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <div class="d-flex align-items-center mb-2">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="take-profit-toggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                        <span class="switch-label">Take Profit</span>
+                    </div>
+                    <input type="number" id="take-profit-value" class="form-control" min="0.1" step="0.1" value="3" aria-label="Take profit percentage">
+                    <small class="text-muted">Percentage from entry price</small>
+                </div>
+                
+                <div class="form-group">
+                    <div class="d-flex align-items-center mb-2">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="stop-loss-toggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                        <span class="switch-label">Stop Loss</span>
+                    </div>
+                    <input type="number" id="stop-loss-value" class="form-control" min="0.1" step="0.1" value="2" aria-label="Stop loss percentage">
+                    <small class="text-muted">Percentage from entry price</small>
+                </div>
+                
+                <div class="form-group">
+                    <div class="d-flex align-items-center mb-2">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="trailing-stop-toggle">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="switch-label">Trailing Stop</span>
+                    </div>
+                    <input type="number" id="trailing-stop-value" class="form-control" min="0.1" step="0.1" value="1.5" disabled aria-label="Trailing stop percentage">
+                    <small class="text-muted">Percentage from highest/lowest price</small>
+                </div>
+                
+                <div class="form-group">
+                    <div class="d-flex align-items-center">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="auto-trade-toggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                        <span class="switch-label">Auto-Trading</span>
+                    </div>
+                    <small class="text-muted">Automatically execute trades based on signals</small>
+                </div>
+                
+                <div class="form-group">
+                    <div class="d-flex align-items-center">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="show-position-lines-toggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                        <span class="switch-label">Show Position Lines</span>
+                    </div>
+                    <small class="text-muted">Display entry, take profit and stop loss levels</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelRiskSettings">Cancel</button>
+                <button class="btn btn-primary" id="saveRiskSettings">Save Settings</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Notification Settings Modal -->
+    <div class="modal-backdrop" id="notificationsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Notification Settings</div>
+                <button class="modal-close" id="closeNotificationsModal" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <div class="d-flex align-items-center">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="browser-notifications-toggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                        <span class="switch-label">Browser Notifications</span>
+                    </div>
+                    <small class="text-muted">Show browser notifications for important events</small>
+                </div>
+                
+                <div class="form-group">
+                    <div class="d-flex align-items-center">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="sound-notifications-toggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                        <span class="switch-label">Sound Notifications</span>
+                    </div>
+                    <small class="text-muted">Play sounds for important events</small>
+                </div>
+                
+                <div class="form-group">
+                    <div class="d-flex align-items-center mb-2">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="discord-notifications-toggle">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="switch-label">Discord Notifications</span>
+                    </div>
+                    <input type="text" id="discord-webhook" class="form-control" placeholder="Discord webhook URL" disabled>
+                    <small class="text-muted">Send trade notifications to Discord</small>
+                </div>
+                
+                <div class="mt-3">
+                    <button id="test-discord-btn" class="btn btn-secondary btn-sm">
+                        <i class="fab fa-discord"></i> Test Discord Webhook
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelNotificationSettings">Cancel</button>
+                <button class="btn btn-primary" id="saveNotificationSettings">Save Settings</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Version Info -->
+    <div class="version-info">Volty Trading Bot v2.0.0 | Last Updated: 2025-06-15</div>
+    
+    <!-- Scripts -->
+    <script type="module" src="js/secure-storage.js"></script>
+    <script type="module" src="js/api-client.js"></script>
+    <script type="module" src="js/trading-strategies.js"></script>
+    <script type="module" src="js/position-manager.js"></script>
+    <script type="module" src="js/ui-manager.js"></script>
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>
