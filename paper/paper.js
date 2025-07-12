@@ -2484,6 +2484,11 @@ function formatDateTime(date) {
 // Fetch historical data from Binance API
 async function fetchHistoricalData(symbol, interval, limit = 100) {
     try {
+        // Check if axios is available
+        if (typeof axios === 'undefined') {
+            throw new Error('Axios library not loaded. Please refresh the page.');
+        }
+        
         // Use the proxy URL to avoid CORS issues
         const url = `${BINANCE_API_URL}/klines`;
         const params = new URLSearchParams({
@@ -2512,6 +2517,11 @@ async function fetchHistoricalData(symbol, interval, limit = 100) {
 // Fetch the latest candle
 async function fetchLatestCandle(symbol, interval) {
     try {
+        // Check if axios is available
+        if (typeof axios === 'undefined') {
+            throw new Error('Axios library not loaded. Please refresh the page.');
+        }
+        
         // Use the proxy URL to avoid CORS issues
         const url = `${BINANCE_API_URL}/klines`;
         const params = new URLSearchParams({
@@ -2542,6 +2552,15 @@ async function fetchLatestCandle(symbol, interval) {
 
 // Load settings from localStorage when page loads
 document.addEventListener('DOMContentLoaded', function() {
+    // Check if axios is available
+    if (typeof axios === 'undefined') {
+        console.error('Axios library not loaded. Please refresh the page.');
+        logMessage('Error initializing system: axios is not defined');
+        return;
+    }
+    
+    console.log('System initializing with all dependencies loaded...');
+    
     // Load settings from localStorage
     loadSettingsFromLocalStorage();
     

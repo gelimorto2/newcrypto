@@ -19,11 +19,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for TradingView-like styling
+# Custom CSS for grayscale styling
 st.markdown("""
 <style>
     .main {
-        background: linear-gradient(135deg, #0c1426 0%, #1a1a2e 50%, #16213e 100%);
+        background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 50%, #303030 100%);
     }
     
     .stMetric {
@@ -44,17 +44,17 @@ st.markdown("""
     }
     
     .trade-long {
-        background-color: rgba(34, 197, 94, 0.1);
-        border-left: 4px solid #22c55e;
+        background-color: rgba(136, 136, 136, 0.1);
+        border-left: 4px solid #888888;
     }
     
     .trade-short {
-        background-color: rgba(239, 68, 68, 0.1);
-        border-left: 4px solid #ef4444;
+        background-color: rgba(85, 85, 85, 0.1);
+        border-left: 4px solid #555555;
     }
     
     .status-backtest {
-        background-color: #059669;
+        background-color: #777777;
         color: white;
         padding: 0.25rem 0.75rem;
         border-radius: 9999px;
@@ -324,10 +324,10 @@ def create_candlestick_chart(data: pd.DataFrame, signals_df: pd.DataFrame = None
             low=data['low'],
             close=data['close'],
             name='Price',
-            increasing_line_color='#00ff88',
-            decreasing_line_color='#ff4444',
-            increasing_fillcolor='rgba(0, 255, 136, 0.3)',
-            decreasing_fillcolor='rgba(255, 68, 68, 0.3)'
+            increasing_line_color='#888888',
+            decreasing_line_color='#555555',
+            increasing_fillcolor='rgba(136, 136, 136, 0.3)',
+            decreasing_fillcolor='rgba(85, 85, 85, 0.3)'
         ),
         row=1, col=1
     )
@@ -339,7 +339,7 @@ def create_candlestick_chart(data: pd.DataFrame, signals_df: pd.DataFrame = None
                 x=signals_df['datetime'],
                 y=signals_df['long_signal'],
                 mode='lines',
-                line=dict(color='#00ff88', width=1, dash='dash'),
+                line=dict(color='#888888', width=1, dash='dash'),
                 name='Long Signal',
                 opacity=0.7
             ),
@@ -351,7 +351,7 @@ def create_candlestick_chart(data: pd.DataFrame, signals_df: pd.DataFrame = None
                 x=signals_df['datetime'],
                 y=signals_df['short_signal'],
                 mode='lines',
-                line=dict(color='#ff4444', width=1, dash='dash'),
+                line=dict(color='#555555', width=1, dash='dash'),
                 name='Short Signal',
                 opacity=0.7
             ),
@@ -369,7 +369,7 @@ def create_candlestick_chart(data: pd.DataFrame, signals_df: pd.DataFrame = None
                     x=[t.entry_time for t in long_entries],
                     y=[t.entry_price for t in long_entries],
                     mode='markers',
-                    marker=dict(color='#00ff88', size=8, symbol='triangle-up'),
+                    marker=dict(color='#888888', size=8, symbol='triangle-up'),
                     name='Long Entry'
                 ),
                 row=1, col=1
@@ -380,7 +380,7 @@ def create_candlestick_chart(data: pd.DataFrame, signals_df: pd.DataFrame = None
                     x=[t.exit_time for t in long_entries],
                     y=[t.exit_price for t in long_entries],
                     mode='markers',
-                    marker=dict(color='#00ff88', size=8, symbol='triangle-down'),
+                    marker=dict(color='#888888', size=8, symbol='triangle-down'),
                     name='Long Exit'
                 ),
                 row=1, col=1
@@ -392,7 +392,7 @@ def create_candlestick_chart(data: pd.DataFrame, signals_df: pd.DataFrame = None
                     x=[t.entry_time for t in short_entries],
                     y=[t.entry_price for t in short_entries],
                     mode='markers',
-                    marker=dict(color='#ff4444', size=8, symbol='triangle-down'),
+                    marker=dict(color='#555555', size=8, symbol='triangle-down'),
                     name='Short Entry'
                 ),
                 row=1, col=1
@@ -403,7 +403,7 @@ def create_candlestick_chart(data: pd.DataFrame, signals_df: pd.DataFrame = None
                     x=[t.exit_time for t in short_entries],
                     y=[t.exit_price for t in short_entries],
                     mode='markers',
-                    marker=dict(color='#ff4444', size=8, symbol='triangle-up'),
+                    marker=dict(color='#555555', size=8, symbol='triangle-up'),
                     name='Short Exit'
                 ),
                 row=1, col=1
@@ -416,14 +416,14 @@ def create_candlestick_chart(data: pd.DataFrame, signals_df: pd.DataFrame = None
                 x=signals_df['datetime'],
                 y=signals_df['atr'],
                 mode='lines',
-                line=dict(color='#fbbf24', width=2),
+                line=dict(color='#999999', width=2),
                 name='ATR'
             ),
             row=2, col=1
         )
     
     # Volume bars
-    colors = ['#00ff88' if data['close'].iloc[i] >= data['open'].iloc[i] else '#ff4444' 
+    colors = ['#888888' if data['close'].iloc[i] >= data['open'].iloc[i] else '#555555' 
               for i in range(len(data))]
     
     fig.add_trace(
@@ -481,10 +481,10 @@ def create_equity_curve(results: BacktestResults, initial_capital: float):
             x=dates,
             y=equity,
             mode='lines',
-            line=dict(color='#00ff88', width=3),
+            line=dict(color='#888888', width=3),
             name='Equity',
             fill='tonexty',
-            fillcolor='rgba(0, 255, 136, 0.1)'
+            fillcolor='rgba(136, 136, 136, 0.1)'
         )
     )
     
@@ -516,7 +516,7 @@ def main():
     
     # Header
     st.markdown("""
-    <h1 style='text-align: center; background: linear-gradient(90deg, #3b82f6, #8b5cf6); 
+    <h1 style='text-align: center; background: linear-gradient(90deg, #777777, #888888); 
                -webkit-background-clip: text; -webkit-text-fill-color: transparent; 
                font-size: 3rem; margin-bottom: 2rem;'>
         📈 Volty Strategy Backtester

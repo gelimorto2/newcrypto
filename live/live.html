@@ -38,15 +38,16 @@
                             <i class="fas fa-chart-line"></i>
                             <span>Live Trading</span>
                         </a>
-                        <a href="#" class="nav-item">
+                        <a href="../paper/paper.html" class="nav-item">
                             <i class="fas fa-history"></i>
-                            <span>Trade History</span>
+                            <span>Paper Trading</span>
                         </a>
-                        <a href="#" class="nav-item">
+                        <a href="#" class="nav-item" onclick="openStrategyBuilder()">
                             <i class="fas fa-sliders-h"></i>
                             <span>Strategy Builder</span>
                         </a>
-                        <a href="#" class="nav-item">
+                        <a href="../backtest/backtest.py" class="nav-item" target="_blank">
+                            <i class="fas fa-chart-bar"></i>
                             <span>Backtester</span>
                         </a>
                     </div>
@@ -580,6 +581,74 @@
         </div>
     </div>
     
+    
+    <!-- Strategy Builder Modal -->
+    <div class="modal-backdrop" id="strategyBuilderModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Strategy Builder</div>
+                <button class="modal-close" id="closeStrategyBuilderModal" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="strategy-name">Strategy Name</label>
+                    <input type="text" id="strategy-name" class="form-control" placeholder="Enter strategy name">
+                </div>
+                
+                <div class="form-group">
+                    <label for="strategy-description">Description</label>
+                    <textarea id="strategy-description" class="form-control" rows="3" placeholder="Describe your strategy"></textarea>
+                </div>
+                
+                <h6>Entry Conditions</h6>
+                <div class="form-group">
+                    <label for="entry-indicator">Primary Indicator</label>
+                    <select id="entry-indicator" class="form-control">
+                        <option value="bollinger">Bollinger Bands</option>
+                        <option value="rsi">RSI</option>
+                        <option value="macd">MACD</option>
+                        <option value="sma">Simple Moving Average</option>
+                        <option value="ema">Exponential Moving Average</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="entry-condition">Entry Condition</label>
+                    <select id="entry-condition" class="form-control">
+                        <option value="above">Price above indicator</option>
+                        <option value="below">Price below indicator</option>
+                        <option value="cross_above">Price crosses above</option>
+                        <option value="cross_below">Price crosses below</option>
+                    </select>
+                </div>
+                
+                <h6>Exit Conditions</h6>
+                <div class="form-group">
+                    <label for="exit-method">Exit Method</label>
+                    <select id="exit-method" class="form-control">
+                        <option value="opposite_signal">Opposite Signal</option>
+                        <option value="take_profit">Take Profit %</option>
+                        <option value="stop_loss">Stop Loss %</option>
+                        <option value="trailing_stop">Trailing Stop</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="risk-reward">Risk/Reward Ratio</label>
+                    <input type="number" id="risk-reward" class="form-control" min="1" max="10" step="0.1" value="2">
+                </div>
+                
+                <div class="alert alert-info" role="alert">
+                    <strong>Note:</strong> Custom strategies are saved locally and can be backtested using the Backtester module.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelStrategyBuilder">Cancel</button>
+                <button class="btn btn-primary" id="saveStrategy">Save Strategy</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- Version Info -->
     <div class="version-info">Volty Trading Bot v2.0.0 | Last Updated: 2025-06-15</div>
     
@@ -590,5 +659,63 @@
     <script type="module" src="js/position-manager.js"></script>
     <script type="module" src="js/ui-manager.js"></script>
     <script type="module" src="js/main.js"></script>
+    
+    <script>
+        // Strategy Builder functionality
+        function openStrategyBuilder() {
+            document.getElementById('strategyBuilderModal').style.display = 'flex';
+        }
+        
+        document.getElementById('closeStrategyBuilderModal').addEventListener('click', function() {
+            document.getElementById('strategyBuilderModal').style.display = 'none';
+        });
+        
+        document.getElementById('cancelStrategyBuilder').addEventListener('click', function() {
+            document.getElementById('strategyBuilderModal').style.display = 'none';
+        });
+        
+        document.getElementById('saveStrategy').addEventListener('click', function() {
+            const strategyName = document.getElementById('strategy-name').value;
+            const description = document.getElementById('strategy-description').value;
+            const entryIndicator = document.getElementById('entry-indicator').value;
+            const entryCondition = document.getElementById('entry-condition').value;
+            const exitMethod = document.getElementById('exit-method').value;
+            const riskReward = document.getElementById('risk-reward').value;
+            
+            if (!strategyName) {
+                alert('Please enter a strategy name');
+                return;
+            }
+            
+            const strategy = {
+                name: strategyName,
+                description: description,
+                entryIndicator: entryIndicator,
+                entryCondition: entryCondition,
+                exitMethod: exitMethod,
+                riskReward: parseFloat(riskReward),
+                created: new Date().toISOString()
+            };
+            
+            // Save to localStorage
+            const strategies = JSON.parse(localStorage.getItem('customStrategies') || '[]');
+            strategies.push(strategy);
+            localStorage.setItem('customStrategies', JSON.stringify(strategies));
+            
+            alert('Strategy saved successfully!');
+            document.getElementById('strategyBuilderModal').style.display = 'none';
+            
+            // Clear form
+            document.getElementById('strategy-name').value = '';
+            document.getElementById('strategy-description').value = '';
+        });
+        
+        // Close modal when clicking outside
+        document.getElementById('strategyBuilderModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.style.display = 'none';
+            }
+        });
+    </script>
 </body>
 </html>
