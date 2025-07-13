@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Volty Strategy Live Paper Trading</title>
+    <title>AI Strategy Paper Trading</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
@@ -447,7 +447,7 @@
                 </div>
                 
                 <div class="status-indicator live" id="bot-status">
-                    🔴 LIVE TRADING
+                    🤖 AI PAPER TRADING
                 </div>
                 
                 <div id="mobile-info" class="mobile-info" style="display: none;">
@@ -506,25 +506,23 @@
                     </select>
                 </div>
                 
-                <h6 class="mt-4">⚙️ Strategy Parameters</h6>
+                <h6 class="mt-4">🤖 AI Model Settings</h6>
                 
                 <div class="mb-3">
-                    <label for="atr-length" class="form-label">ATR Length</label>
-                    <input type="range" class="form-range" id="atr-length" min="1" max="50" value="5">
-                    <div class="d-flex justify-content-between">
-                        <small>1</small>
-                        <small id="atr-length-value">5</small>
-                        <small>50</small>
-                    </div>
+                    <label for="ai-model-type" class="form-label">AI Model Type</label>
+                    <select class="form-select" id="ai-model-type">
+                        <option value="random_forest">Random Forest</option>
+                        <option value="gradient_boosting" selected>Gradient Boosting</option>
+                    </select>
                 </div>
                 
                 <div class="mb-3">
-                    <label for="atr-mult" class="form-label">ATR Multiplier</label>
-                    <input type="range" class="form-range" id="atr-mult" min="0.1" max="5.0" step="0.05" value="0.75">
+                    <label for="prediction-confidence" class="form-label">Min Confidence</label>
+                    <input type="range" class="form-range" id="prediction-confidence" min="0.1" max="1.0" step="0.1" value="0.7">
                     <div class="d-flex justify-content-between">
-                        <small>0.1</small>
-                        <small id="atr-mult-value">0.75</small>
-                        <small>5.0</small>
+                        <small>10%</small>
+                        <small id="prediction-confidence-value">70%</small>
+                        <small>100%</small>
                     </div>
                 </div>
                 
@@ -571,7 +569,7 @@
             
             <!-- Main content -->
             <div class="col-md-9 col-lg-10 ms-auto">
-                <h1 class="gradient-header">Volty Strategy Live Paper Trading</h1>
+                <h1 class="gradient-header">AI Strategy Paper Trading</h1>
                 
                 <!-- Performance Metrics -->
                 <div class="row">
