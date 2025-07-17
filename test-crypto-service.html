@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Data Service Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+        }
+        
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+            background-color: #2a2a2a;
+        }
+        
+        .success {
+            border-color: #28a745;
+        }
+        
+        .error {
+            border-color: #dc3545;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        #console-output {
+            background-color: #000;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>Crypto Data Service Test</h1>
+    
+    <div>
+        <button onclick="testCoinGeckoPrice()">Test CoinGecko Price</button>
+        <button onclick="testCoinGeckoOHLC()">Test CoinGecko OHLC</button>
+        <button onclick="testKlinesCompatibility()">Test Klines Compatibility</button>
+        <button onclick="testPing()">Test API Ping</button>
+        <button onclick="clearConsole()">Clear Console</button>
+    </div>
+    
+    <div id="results"></div>
+    
+    <h3>Console Output:</h3>
+    <div id="console-output"></div>
+
+    <script type="module">
+        import { cryptoDataService, CryptoDataError } from '../live/js/crypto-data-service.js';
+        
+        // Capture console output
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        const consoleOutput = document.getElementById('console-output');
+        
+        function addToConsole(message, type = 'log') {
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? '#f00' : type === 'warn' ? '#fa0' : '#0f0';
+            consoleOutput.innerHTML += `<span style="color: ${color}">[${timestamp}] ${message}</span>\n`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+        
+        console.log = (...args) => {
+            originalLog(...args);
+            addToConsole(args.join(' '), 'log');
+        };
+        
+        console.error = (...args) => {
+            originalError(...args);
+            addToConsole(args.join(' '), 'error');
+        };
+        
+        console.warn = (...args) => {
+            originalWarn(...args);
+            addToConsole(args.join(' '), 'warn');
+        };
+        
+        function addResult(message, success = true) {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${success ? 'success' : 'error'}`;
+            resultDiv.textContent = message;
+            resultsDiv.appendChild(resultDiv);
+        }
+        
+        // Test functions
+        window.testCoinGeckoPrice = async function() {
+            try {
+                console.log('Testing CoinGecko current price...');
+                const priceData = await cryptoDataService.getCurrentPrice('BTCUSDT');
+                addResult(`✅ Price test successful: $${priceData.price} (24h: ${priceData.change24h?.toFixed(2)}%)`, true);
+            } catch (error) {
+                addResult(`❌ Price test failed: ${error.message}`, false);
+            }
+        };
+        
+        window.testCoinGeckoOHLC = async function() {
+            try {
+                console.log('Testing CoinGecko OHLC data...');
+                const ohlcData = await cryptoDataService.getOHLCData('BTCUSDT', 7);
+                addResult(`✅ OHLC test successful: ${ohlcData.length} candles received`, true);
+            } catch (error) {
+                addResult(`❌ OHLC test failed: ${error.message}`, false);
+            }
+        };
+        
+        window.testKlinesCompatibility = async function() {
+            try {
+                console.log('Testing klines compatibility...');
+                const klines = await cryptoDataService.getKlines('BTCUSDT', '1d', 30);
+                addResult(`✅ Klines test successful: ${klines.length} klines received`, true);
+            } catch (error) {
+                addResult(`❌ Klines test failed: ${error.message}`, false);
+            }
+        };
+        
+        window.testPing = async function() {
+            try {
+                console.log('Testing API ping...');
+                const pingResult = await cryptoDataService.ping();
+                addResult(`✅ Ping test successful: ${JSON.stringify(pingResult)}`, true);
+            } catch (error) {
+                addResult(`❌ Ping test failed: ${error.message}`, false);
+            }
+        };
+        
+        window.clearConsole = function() {
+            consoleOutput.innerHTML = '';
+            document.getElementById('results').innerHTML = '';
+        };
+        
+        // Run initial tests
+        console.log('Crypto Data Service Test Page Loaded');
+        console.log('Click buttons to test different functionalities');
+    </script>
+</body>
+</html>

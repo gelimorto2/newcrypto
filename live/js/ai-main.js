@@ -9,6 +9,7 @@
  */
 
 import { ExchangeAPIClient } from './api-client.js';
+import { cryptoDataService } from './crypto-data-service.js';
 import { secureStorage } from './secure-storage.js';
 import { PositionManager } from './position-manager.js';
 import { uiManager } from './ui-manager.js';
@@ -325,26 +326,101 @@ class AITradingBot {
   
   async fetchMarketData() {
     try {
+      console.log(`🤖 [AI] Starting market data fetch for ${aiState.symbol} (${aiState.timeframe})`);
       this.updateStatus('Fetching market data...');
       
-      // Simulate API call for now - replace with real API call
-      const mockData = this.generateMockData();
-      aiState.priceData = mockData;
+      const startTime = performance.now();
+      
+      // Use enhanced CoinGecko API for market data
+      let klines;
+      try {
+        console.log(`🤖 [AI] Using CoinGecko API for ${aiState.symbol} data`);
+        klines = await cryptoDataService.getKlines(aiState.symbol, aiState.timeframe, 100);
+        console.log(`🤖 [AI] CoinGecko API returned ${klines.length} candles`);
+      } catch (coinGeckoError) {
+        console.warn(`🤖 [AI] CoinGecko API failed, falling back to mock data: ${coinGeckoError.message}`);
+        this.logMessage(`CoinGecko API unavailable, using mock data: ${coinGeckoError.message}`, 'warning');
+        
+        // Use mock data as fallback
+        const mockData = this.generateMockData();
+        aiState.priceData = mockData;
+        
+        // Update chart
+        if (aiState.chart) {
+          aiState.chart.updateCandlestickChart(mockData);
+        }
+        
+        this.updateMarketInfo(mockData);
+        this.updateStatus('Market data updated (mock)');
+        aiState.lastUpdate = new Date();
+        return;
+      }
+      
+      // Convert klines to our format
+      console.log(`🤖 [AI] Processing ${klines.length} candles`);
+      const formattedData = klines.map(candle => ({
+        timestamp: new Date(parseInt(candle[0])),
+        open: parseFloat(candle[1]),
+        high: parseFloat(candle[2]),
+        low: parseFloat(candle[3]),
+        close: parseFloat(candle[4]),
+        volume: parseFloat(candle[5]) || 0
+      }));
+      
+      // Update AI state
+      aiState.priceData = formattedData;
+      aiState.currentPrice = formattedData[formattedData.length - 1]?.close || 0;
+      
+      console.log(`🤖 [AI] Current price: $${aiState.currentPrice}`);
+      
+      // Get additional market data for AI analysis
+      try {
+        const marketData = await cryptoDataService.getMarketData(aiState.symbol);
+        aiState.marketData = {
+          ...marketData,
+          dataSource: 'CoinGecko',
+          fetchTime: new Date().toISOString()
+        };
+        
+        console.log(`🤖 [AI] Enhanced market data:`, {
+          price: marketData.currentPrice,
+          volume24h: marketData.volume24h,
+          change24h: marketData.change24h?.toFixed(2) + '%'
+        });
+        
+      } catch (marketDataError) {
+        console.warn(`🤖 [AI] Enhanced market data fetch failed: ${marketDataError.message}`);
+      }
       
       // Update chart
       if (aiState.chart) {
-        aiState.chart.updateCandlestickChart(mockData);
+        aiState.chart.updateCandlestickChart(formattedData);
       }
       
       // Update market info
-      this.updateMarketInfo(mockData);
+      this.updateMarketInfo(formattedData);
       
-      this.updateStatus('Market data updated');
+      const endTime = performance.now();
+      const fetchDuration = Math.round(endTime - startTime);
+      
+      console.log(`🤖 [AI] Market data fetch completed in ${fetchDuration}ms`);
+      this.logMessage(`Market data updated: $${aiState.currentPrice} (${fetchDuration}ms)`, 'success');
+      
+      this.updateStatus(`Market data updated (${fetchDuration}ms)`);
       aiState.lastUpdate = new Date();
       
     } catch (error) {
-      console.error('Failed to fetch market data:', error);
+      console.error('🤖 [AI] Failed to fetch market data:', error);
       this.logMessage(`Failed to fetch market data: ${error.message}`, 'error');
+      
+      // Add detailed error logging for AI context
+      if (error.name === 'CryptoDataError') {
+        console.error(`🤖 [AI] CryptoDataError details:`, {
+          code: error.code,
+          isRetryable: error.isRetryable,
+          timestamp: error.timestamp
+        });
+      }
     }
   }
   

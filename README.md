@@ -1,6 +1,6 @@
 # AI Crypto Trading Bot
 
-An advanced AI-powered cryptocurrency trading bot with machine learning predictions, custom charting, and intelligent trading strategies.
+An advanced AI-powered cryptocurrency trading bot with machine learning predictions, custom charting, and intelligent trading strategies. Now featuring enhanced data sources and verbose logging for better reliability and debugging.
 
 ## Features
 
@@ -24,10 +24,33 @@ An advanced AI-powered cryptocurrency trading bot with machine learning predicti
 - **Backtesting**: Historical performance analysis with AI models
 
 ### 🔧 Advanced Features
+- **Enhanced Data Sources**: CoinGecko API integration (primary) with Binance fallback
+- **Verbose Logging**: Detailed console output for debugging and monitoring
+- **No API Key Required**: Primary data source (CoinGecko) requires no authentication
+- **Automatic Fallback**: Seamless switching between data sources for reliability
 - **Centralized AI System**: Unified AI model management
 - **Model Persistence**: Save and load trained models
 - **API Backend**: Flask-based REST API for AI operations
 - **Responsive Interface**: Modern web UI optimized for AI workflows
+
+## Enhanced Data Sources
+
+### Primary: CoinGecko API
+- **Advantages**: No API key required, reliable, comprehensive market data
+- **Rate Limits**: 50 calls/minute (free tier)
+- **Data Available**: Real-time prices, OHLC data, market metrics, 24h changes
+- **Supported Pairs**: All major cryptocurrencies vs USD
+
+### Fallback: Binance API
+- **Usage**: Automatic fallback when CoinGecko is unavailable
+- **Data Available**: Klines (OHLC), real-time prices, volume data
+- **Advantages**: High-frequency data, detailed volume information
+
+### Verbose Logging
+- **Real-time Monitoring**: Detailed console logs for all API calls
+- **Performance Metrics**: Response times, data quality, source tracking
+- **Error Handling**: Comprehensive error logging with retry information
+- **Debug Information**: Data validation, processing steps, fallback triggers
 
 ## Project Structure
 
@@ -70,10 +93,18 @@ pip install -r ai_requirements.txt
 python ai_api.py
 ```
 
+**Note**: The enhanced crypto data service uses CoinGecko API as the primary data source, which requires no API key and provides reliable market data. Binance API is used as an automatic fallback.
+
 ### 2. Web Interface
 Open `index.html` in your browser to access the main interface with links to:
 - AI Live Trading Dashboard
 - AI Paper Trading Simulator
+
+**Enhanced Features**:
+- Real-time verbose logging in browser console
+- Automatic data source switching for reliability
+- Enhanced market data with 24h changes, volume, and market cap
+- Performance monitoring with response times
 
 ### 3. AI Paper Trading
 1. Navigate to `paper/paper.html`
@@ -82,18 +113,36 @@ Open `index.html` in your browser to access the main interface with links to:
 4. Start trading with AI predictions
 5. Analyze performance and model accuracy
 
+**Data Source Features**:
+- Automatic CoinGecko integration for reliable data
+- Fallback to Binance API if needed
+- Verbose console logging for debugging
+- Real-time performance metrics
+
 ### 4. AI Live Trading
 1. Navigate to `live/live.html`
-2. Configure API credentials (Binance)
+2. Configure API credentials (Binance) if using live trading features
 3. Set up AI model preferences
 4. Configure risk management parameters
 5. Start AI-powered live trading (use testnet first)
+
+**Enhanced Monitoring**:
+- Detailed API call logging
+- Data source status indicators
+- Response time monitoring
+- Error tracking and retry information
 
 ### 5. Model Management
 1. Train multiple AI models for different timeframes
 2. Compare model performance side-by-side
 3. Save and load trained models
 4. Monitor prediction accuracy and confidence
+
+### 6. Monitoring and Debugging
+- **Console Logging**: All API calls, response times, and data processing are logged
+- **Data Source Status**: Monitor which data source is being used
+- **Error Tracking**: Detailed error information with retry status
+- **Performance Metrics**: Response times and data quality indicators
 
 ## AI Model Configuration
 

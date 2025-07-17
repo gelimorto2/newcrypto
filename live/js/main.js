@@ -9,6 +9,7 @@
  */
 
 import { ExchangeAPIClient } from './api-client.js';
+import { cryptoDataService } from './crypto-data-service.js';
 import { secureStorage } from './secure-storage.js';
 import { PositionManager } from './position-manager.js';
 import { strategies } from './trading-strategies.js';
@@ -1137,10 +1138,12 @@ async function openPosition(type) {
 }
 
 /**
- * Fetch market data from the exchange
+ * Fetch market data using enhanced CoinGecko API
  */
 async function fetchMarketData() {
   try {
+    console.log(`🔄 [${new Date().toISOString()}] Starting market data fetch for ${state.symbol} (${state.timeframe})`);
+    
     uiManager.updateStatus({
       isRunning: state.isRunning,
       isLiveTrading: state.isLiveTrading,
@@ -1148,45 +1151,111 @@ async function fetchMarketData() {
       activityType: state.isRunning ? 'scanning' : 'waiting'
     });
     
-    // Get klines data from the exchange
-    const klines = await apiClient.getKlines(state.symbol, state.timeframe);
+    const startTime = performance.now();
     
-    // Process klines data
+    // Try to get klines data using new CoinGecko service first
+    let klines;
+    try {
+      console.log(`📊 Using CoinGecko API for ${state.symbol} data`);
+      klines = await cryptoDataService.getKlines(state.symbol, state.timeframe, 100);
+      console.log(`✅ CoinGecko API returned ${klines.length} candles`);
+    } catch (coinGeckoError) {
+      console.warn(`⚠️ CoinGecko API failed, falling back to original API: ${coinGeckoError.message}`);
+      uiManager.addLogMessage(`CoinGecko API unavailable, using fallback: ${coinGeckoError.message}`, false, false);
+      
+      // Fallback to original API client
+      klines = await apiClient.getKlines(state.symbol, state.timeframe);
+      console.log(`✅ Fallback API returned ${klines.length} candles`);
+    }
+    
+    // Process klines data with verbose logging
+    console.log(`🔍 Processing ${klines.length} candles for ${state.symbol}`);
     state.priceData = [];
     state.volumeData = [];
     
-    klines.forEach(candle => {
+    let processedCandles = 0;
+    klines.forEach((candle, index) => {
       // Klines data format: [open time, open, high, low, close, volume, ...]
       const closePrice = parseFloat(candle[4]);
       const volume = parseFloat(candle[5]);
       
-      state.priceData.push(closePrice);
-      state.volumeData.push(volume);
+      if (!isNaN(closePrice) && !isNaN(volume)) {
+        state.priceData.push(closePrice);
+        state.volumeData.push(volume);
+        processedCandles++;
+      } else {
+        console.warn(`⚠️ Invalid candle data at index ${index}:`, candle);
+      }
     });
     
-    // Update current price (last candle)
+    console.log(`📈 Processed ${processedCandles}/${klines.length} valid candles`);
+    
+    // Update current price (last candle) with validation
     if (state.priceData.length > 0) {
+      const previousPrice = state.currentPrice;
       state.currentPrice = state.priceData[state.priceData.length - 1];
+      
+      const priceChange = previousPrice > 0 ? 
+        ((state.currentPrice - previousPrice) / previousPrice * 100).toFixed(4) : 0;
+      
+      console.log(`💰 Price update: $${state.currentPrice} (${priceChange > 0 ? '+' : ''}${priceChange}%)`);
+    } else {
+      console.error('❌ No valid price data received');
+      throw new Error('No valid price data received from API');
     }
     
-    // Update market info
+    // Get additional market data for enhanced info
+    try {
+      console.log(`📊 Fetching additional market data for ${state.symbol}`);
+      const marketData = await cryptoDataService.getMarketData(state.symbol);
+      
+      // Store additional market metrics
+      state.marketData = {
+        ...marketData,
+        dataSource: 'CoinGecko',
+        fetchTime: new Date().toISOString()
+      };
+      
+      console.log(`📈 Market data updated:`, {
+        price: marketData.currentPrice,
+        volume24h: marketData.volume24h,
+        change24h: marketData.change24h?.toFixed(2) + '%'
+      });
+      
+    } catch (marketDataError) {
+      console.warn(`⚠️ Additional market data fetch failed: ${marketDataError.message}`);
+      // Don't fail the whole operation for this
+    }
+    
+    // Update market info display
     updateMarketInfo();
     
     // Update position info if exists
     if (positionManager.currentPosition) {
+      console.log(`🔄 Updating position with new price: $${state.currentPrice}`);
       positionManager.updatePosition(state.currentPrice);
     }
+    
+    const endTime = performance.now();
+    const fetchDuration = Math.round(endTime - startTime);
+    
+    console.log(`✅ Market data fetch completed in ${fetchDuration}ms`);
+    uiManager.addLogMessage(`Market data updated: $${state.currentPrice} (${fetchDuration}ms)`, false, false);
     
     uiManager.updateStatus({
       isRunning: state.isRunning,
       isLiveTrading: state.isLiveTrading,
-      statusText: 'Market data updated',
+      statusText: `Market data updated (${fetchDuration}ms)`,
       activityType: state.isRunning ? 'scanning' : 'waiting'
     });
     
     return true;
+    
   } catch (error) {
-    uiManager.addLogMessage(`Error fetching market data: ${error.message}`, false, true);
+    const errorMessage = `Error fetching market data: ${error.message}`;
+    console.error(`❌ ${errorMessage}`, error);
+    
+    uiManager.addLogMessage(errorMessage, false, true);
     uiManager.updateStatus({
       isRunning: state.isRunning,
       isLiveTrading: state.isLiveTrading,
@@ -1194,27 +1263,55 @@ async function fetchMarketData() {
       activityType: 'waiting'
     });
     
-    console.error('Error fetching market data:', error);
+    // Add detailed error logging
+    if (error.name === 'CryptoDataError') {
+      console.error(`🔍 CryptoDataError details:`, {
+        code: error.code,
+        isRetryable: error.isRetryable,
+        timestamp: error.timestamp
+      });
+    }
+    
     throw error;
   }
 }
 
 /**
- * Update market info display
+ * Update market info display with enhanced data
  */
 function updateMarketInfo() {
   if (state.priceData.length > 0) {
     const currentPrice = state.currentPrice;
     const previousPrice = state.priceData[state.priceData.length - 2] || currentPrice;
-    const volume = state.volumeData[state.volumeData.length - 1];
+    const volume = state.volumeData[state.volumeData.length - 1] || 0;
     const lastUpdate = new Date().toLocaleTimeString();
     
-    uiManager.updateMarketInfo({
+    // Calculate price change
+    const priceChange = previousPrice > 0 ? 
+      ((currentPrice - previousPrice) / previousPrice * 100) : 0;
+    
+    const marketInfo = {
       currentPrice,
       previousPrice,
       volume,
-      lastUpdate
-    });
+      lastUpdate,
+      priceChange: priceChange.toFixed(4),
+      dataPoints: state.priceData.length
+    };
+    
+    // Add enhanced market data if available
+    if (state.marketData) {
+      marketInfo.volume24h = state.marketData.volume24h;
+      marketInfo.change24h = state.marketData.change24h;
+      marketInfo.high24h = state.marketData.high24h;
+      marketInfo.low24h = state.marketData.low24h;
+      marketInfo.marketCap = state.marketData.marketCap;
+      marketInfo.dataSource = state.marketData.dataSource;
+    }
+    
+    console.log(`📊 Market info updated:`, marketInfo);
+    
+    uiManager.updateMarketInfo(marketInfo);
   }
 }
 
