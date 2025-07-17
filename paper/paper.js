@@ -1,7 +1,142 @@
 // Constants and settings
 const BINANCE_API_URL = 'https://api.binance.com/api/v3';
+const COINGECKO_API_URL = 'https://api.coingecko.com/api/v3';
 const PROXY_URL = 'https://cors-anywhere.herokuapp.com/'; // Use a CORS proxy if needed
 const POLL_INTERVAL = 5000; // 5 seconds
+
+// Enhanced logging function
+function logVerbose(message, level = 'info', data = null) {
+  const timestamp = new Date().toISOString();
+  const prefix = `[${timestamp}] [PaperTrading]`;
+  
+  switch (level) {
+    case 'error':
+      console.error(`${prefix} ❌ ${message}`, data || '');
+      break;
+    case 'warn':
+      console.warn(`${prefix} ⚠️ ${message}`, data || '');
+      break;
+    case 'success':
+      console.log(`${prefix} ✅ ${message}`, data || '');
+      break;
+    case 'debug':
+      console.debug(`${prefix} 🔍 ${message}`, data || '');
+      break;
+    default:
+      console.log(`${prefix} ℹ️ ${message}`, data || '');
+  }
+}
+
+// Symbol mapping for CoinGecko
+const SYMBOL_MAPPING = {
+  'BTCUSDT': { id: 'bitcoin', vs_currency: 'usd' },
+  'ETHUSDT': { id: 'ethereum', vs_currency: 'usd' },
+  'BNBUSDT': { id: 'binancecoin', vs_currency: 'usd' },
+  'ADAUSDT': { id: 'cardano', vs_currency: 'usd' },
+  'DOTUSDT': { id: 'polkadot', vs_currency: 'usd' },
+  'XRPUSDT': { id: 'ripple', vs_currency: 'usd' },
+  'LTCUSDT': { id: 'litecoin', vs_currency: 'usd' },
+  'LINKUSDT': { id: 'chainlink', vs_currency: 'usd' },
+  'BCHUSDT': { id: 'bitcoin-cash', vs_currency: 'usd' },
+  'XLMUSDT': { id: 'stellar', vs_currency: 'usd' },
+  'UNIUSDT': { id: 'uniswap', vs_currency: 'usd' },
+  'DOGEUSDT': { id: 'dogecoin', vs_currency: 'usd' }
+};
+
+// Enhanced crypto data fetching with CoinGecko support
+async function fetchWithCoinGecko(symbol, days = 30) {
+  try {
+    const mapping = SYMBOL_MAPPING[symbol.toUpperCase()];
+    if (!mapping) {
+      throw new Error(`Unsupported symbol for CoinGecko: ${symbol}`);
+    }
+    
+    logVerbose(`Fetching OHLC data from CoinGecko for ${symbol} (${days} days)`);
+    
+    const url = `${COINGECKO_API_URL}/coins/${mapping.id}/ohlc`;
+    const params = new URLSearchParams({
+      vs_currency: 'usd',
+      days: days
+    });
+    
+    const response = await fetch(`${url}?${params.toString()}`);
+    
+    if (!response.ok) {
+      throw new Error(`CoinGecko API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new Error(`No OHLC data found for ${symbol}`);
+    }
+    
+    // Convert CoinGecko OHLC format to our format
+    const formattedData = data.map(candle => ({
+      datetime: new Date(candle[0]),
+      open: candle[1],
+      high: candle[2],
+      low: candle[3],
+      close: candle[4],
+      volume: 0 // CoinGecko OHLC doesn't include volume
+    }));
+    
+    logVerbose(`Retrieved ${formattedData.length} OHLC candles from CoinGecko`, 'success');
+    return formattedData;
+    
+  } catch (error) {
+    logVerbose(`CoinGecko fetch failed: ${error.message}`, 'error');
+    throw error;
+  }
+}
+
+// Get current price from CoinGecko
+async function getCurrentPriceFromCoinGecko(symbol) {
+  try {
+    const mapping = SYMBOL_MAPPING[symbol.toUpperCase()];
+    if (!mapping) {
+      throw new Error(`Unsupported symbol for CoinGecko: ${symbol}`);
+    }
+    
+    logVerbose(`Fetching current price from CoinGecko for ${symbol}`);
+    
+    const url = `${COINGECKO_API_URL}/simple/price`;
+    const params = new URLSearchParams({
+      ids: mapping.id,
+      vs_currencies: mapping.vs_currency,
+      include_last_updated_at: true,
+      include_24hr_change: true
+    });
+    
+    const response = await fetch(`${url}?${params.toString()}`);
+    
+    if (!response.ok) {
+      throw new Error(`CoinGecko API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data[mapping.id]) {
+      throw new Error(`No price data found for ${symbol}`);
+    }
+    
+    const priceData = {
+      symbol: symbol,
+      price: data[mapping.id][mapping.vs_currency],
+      change24h: data[mapping.id][`${mapping.vs_currency}_24h_change`] || 0,
+      lastUpdated: new Date(data[mapping.id].last_updated_at * 1000),
+      timestamp: Date.now()
+    };
+    
+    logVerbose(`Current price for ${symbol}: $${priceData.price} (24h: ${priceData.change24h?.toFixed(2)}%)`, 'success');
+    return priceData;
+    
+  } catch (error) {
+    logVerbose(`CoinGecko current price fetch failed: ${error.message}`, 'error');
+    throw error;
+  }
+}
+
 const OHLC_COLORS = {
     up: 'rgba(34, 197, 94, 0.8)',
     down: 'rgba(239, 68, 68, 0.8)',
@@ -2483,32 +2618,100 @@ function formatDateTime(date) {
 
 // Fetch historical data from Binance API
 async function fetchHistoricalData(symbol, interval, limit = 100) {
+    const startTime = performance.now();
+    logVerbose(`Starting historical data fetch for ${symbol} ${interval} (${limit} candles)`);
+    
     try {
-        // Check if axios is available
-        if (typeof axios === 'undefined') {
-            throw new Error('Axios library not loaded. Please refresh the page.');
+        // Try CoinGecko first (more reliable, no API key needed)
+        try {
+            // Map interval to days for CoinGecko
+            const intervalToDays = {
+                '1m': 1,
+                '5m': 1,
+                '15m': 1,
+                '30m': 1,
+                '1h': Math.max(1, Math.ceil(limit / 24)),
+                '4h': Math.max(1, Math.ceil(limit / 6)),
+                '1d': limit,
+                '1w': limit * 7,
+                '1M': limit * 30
+            };
+            
+            const days = intervalToDays[interval] || Math.max(1, Math.ceil(limit / 24));
+            logVerbose(`Using CoinGecko API with ${days} days for ${symbol}`);
+            
+            const data = await fetchWithCoinGecko(symbol, days);
+            
+            // Take the last 'limit' candles if we got more than requested
+            const result = data.slice(-limit);
+            
+            const endTime = performance.now();
+            const duration = Math.round(endTime - startTime);
+            
+            logVerbose(`Historical data fetch completed in ${duration}ms (CoinGecko)`, 'success', {
+                symbol,
+                interval,
+                candlesRequested: limit,
+                candlesReceived: result.length,
+                dataSource: 'CoinGecko'
+            });
+            
+            addLogMessage(`Data fetched: ${result.length} candles from CoinGecko (${duration}ms)`);
+            return result;
+            
+        } catch (coinGeckoError) {
+            logVerbose(`CoinGecko failed, falling back to Binance: ${coinGeckoError.message}`, 'warn');
+            addLogMessage(`CoinGecko unavailable, using Binance: ${coinGeckoError.message}`, true);
+            
+            // Fallback to original Binance API
+            logVerbose(`Using Binance API fallback for ${symbol}`);
+            
+            // Check if axios is available
+            if (typeof axios === 'undefined') {
+                throw new Error('Axios library not loaded. Please refresh the page.');
+            }
+            
+            const url = `${BINANCE_API_URL}/klines`;
+            const params = new URLSearchParams({
+                symbol: symbol,
+                interval: interval,
+                limit: limit
+            });
+            
+            const response = await axios.get(`${url}?${params.toString()}`);
+            
+            // Format the data
+            const result = response.data.map(d => ({
+                datetime: new Date(d[0]),
+                open: parseFloat(d[1]),
+                high: parseFloat(d[2]),
+                low: parseFloat(d[3]),
+                close: parseFloat(d[4]),
+                volume: parseFloat(d[5])
+            }));
+            
+            const endTime = performance.now();
+            const duration = Math.round(endTime - startTime);
+            
+            logVerbose(`Historical data fetch completed in ${duration}ms (Binance fallback)`, 'success', {
+                symbol,
+                interval,
+                candlesRequested: limit,
+                candlesReceived: result.length,
+                dataSource: 'Binance'
+            });
+            
+            addLogMessage(`Data fetched: ${result.length} candles from Binance (${duration}ms)`);
+            return result;
         }
         
-        // Use the proxy URL to avoid CORS issues
-        const url = `${BINANCE_API_URL}/klines`;
-        const params = new URLSearchParams({
-            symbol: symbol,
-            interval: interval,
-            limit: limit
-        });
-        
-        const response = await axios.get(`${url}?${params.toString()}`);
-        
-        // Format the data
-        return response.data.map(d => ({
-            datetime: new Date(d[0]),
-            open: parseFloat(d[1]),
-            high: parseFloat(d[2]),
-            low: parseFloat(d[3]),
-            close: parseFloat(d[4]),
-            volume: parseFloat(d[5])
-        }));
     } catch (error) {
+        const endTime = performance.now();
+        const duration = Math.round(endTime - startTime);
+        
+        logVerbose(`Historical data fetch failed after ${duration}ms: ${error.message}`, 'error');
+        addLogMessage(`Error fetching data: ${error.message}`, true);
+        
         console.error('Error fetching historical data:', error);
         throw error;
     }
@@ -2516,35 +2719,95 @@ async function fetchHistoricalData(symbol, interval, limit = 100) {
 
 // Fetch the latest candle
 async function fetchLatestCandle(symbol, interval) {
+    const startTime = performance.now();
+    logVerbose(`Fetching latest candle for ${symbol} ${interval}`);
+    
     try {
-        // Check if axios is available
-        if (typeof axios === 'undefined') {
-            throw new Error('Axios library not loaded. Please refresh the page.');
+        // Try CoinGecko current price first
+        try {
+            logVerbose(`Using CoinGecko for latest ${symbol} price`);
+            
+            const priceData = await getCurrentPriceFromCoinGecko(symbol);
+            
+            // Create a candle-like object from current price
+            // Note: CoinGecko doesn't provide OHLC for current candle, so we simulate it
+            const result = {
+                datetime: priceData.lastUpdated,
+                open: priceData.price,
+                high: priceData.price,
+                low: priceData.price,
+                close: priceData.price,
+                volume: 0, // Volume not available from current price endpoint
+                change24h: priceData.change24h
+            };
+            
+            const endTime = performance.now();
+            const duration = Math.round(endTime - startTime);
+            
+            logVerbose(`Latest candle fetch completed in ${duration}ms (CoinGecko)`, 'success', {
+                symbol,
+                price: result.close,
+                change24h: result.change24h,
+                dataSource: 'CoinGecko'
+            });
+            
+            addLogMessage(`Latest price: $${result.close} (${duration}ms)`);
+            return result;
+            
+        } catch (coinGeckoError) {
+            logVerbose(`CoinGecko latest price failed, falling back to Binance: ${coinGeckoError.message}`, 'warn');
+            
+            // Fallback to Binance API
+            logVerbose(`Using Binance API fallback for latest ${symbol} candle`);
+            
+            // Check if axios is available
+            if (typeof axios === 'undefined') {
+                throw new Error('Axios library not loaded. Please refresh the page.');
+            }
+            
+            const url = `${BINANCE_API_URL}/klines`;
+            const params = new URLSearchParams({
+                symbol: symbol,
+                interval: interval,
+                limit: 1
+            });
+            
+            const response = await axios.get(`${url}?${params.toString()}`);
+            
+            if (response.data.length === 0) return null;
+            
+            // Format the data
+            const d = response.data[0];
+            const result = {
+                datetime: new Date(d[0]),
+                open: parseFloat(d[1]),
+                high: parseFloat(d[2]),
+                low: parseFloat(d[3]),
+                close: parseFloat(d[4]),
+                volume: parseFloat(d[5])
+            };
+            
+            const endTime = performance.now();
+            const duration = Math.round(endTime - startTime);
+            
+            logVerbose(`Latest candle fetch completed in ${duration}ms (Binance fallback)`, 'success', {
+                symbol,
+                price: result.close,
+                volume: result.volume,
+                dataSource: 'Binance'
+            });
+            
+            addLogMessage(`Latest candle: $${result.close} (${duration}ms)`);
+            return result;
         }
         
-        // Use the proxy URL to avoid CORS issues
-        const url = `${BINANCE_API_URL}/klines`;
-        const params = new URLSearchParams({
-            symbol: symbol,
-            interval: interval,
-            limit: 1
-        });
-        
-        const response = await axios.get(`${url}?${params.toString()}`);
-        
-        if (response.data.length === 0) return null;
-        
-        // Format the data
-        const d = response.data[0];
-        return {
-            datetime: new Date(d[0]),
-            open: parseFloat(d[1]),
-            high: parseFloat(d[2]),
-            low: parseFloat(d[3]),
-            close: parseFloat(d[4]),
-            volume: parseFloat(d[5])
-        };
     } catch (error) {
+        const endTime = performance.now();
+        const duration = Math.round(endTime - startTime);
+        
+        logVerbose(`Latest candle fetch failed after ${duration}ms: ${error.message}`, 'error');
+        addLogMessage(`Error fetching latest data: ${error.message}`, true);
+        
         console.error('Error fetching latest candle:', error);
         throw error;
     }
