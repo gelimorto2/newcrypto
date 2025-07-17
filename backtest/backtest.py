@@ -9,6 +9,21 @@ import datetime
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 import warnings
+import sys
+import os
+
+# Add parent directory to path for crypto data service
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Try to import enhanced crypto data service
+try:
+    from crypto_data_service import enhanced_crypto_service, get_binance_data
+    crypto_service_available = True
+    print("✅ Enhanced crypto data service loaded successfully")
+except ImportError:
+    crypto_service_available = False
+    print("⚠️ Enhanced crypto data service not available, using fallback")
+
 warnings.filterwarnings('ignore')
 
 # Page configuration
@@ -271,39 +286,123 @@ class Backtester:
         )
 
 def get_binance_data(symbol: str, interval: str, limit: int = 1000) -> pd.DataFrame:
-    """Fetch historical data from Binance API"""
+    """Fetch historical data using enhanced crypto data service with fallback"""
     try:
-        url = "https://api.binance.com/api/v3/klines"
-        params = {
-            'symbol': symbol,
-            'interval': interval,
-            'limit': limit
-        }
-        
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        
-        data = response.json()
-        
-        df = pd.DataFrame(data, columns=[
-            'timestamp', 'open', 'high', 'low', 'close', 'volume',
-            'close_time', 'quote_volume', 'trades', 'taker_buy_base',
-            'taker_buy_quote', 'ignore'
-        ])
-        
-        # Convert to proper data types
-        df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
-        for col in ['open', 'high', 'low', 'close', 'volume']:
-            df[col] = pd.to_numeric(df[col])
-        
-        df = df[['datetime', 'open', 'high', 'low', 'close', 'volume']]
-        df = df.sort_values('datetime').reset_index(drop=True)
-        
-        return df
+        if crypto_service_available:
+            # Use enhanced crypto data service
+            st.info(f"🚀 Fetching {symbol} data using enhanced crypto service...")
+            
+            # Convert Binance interval to standard timeframe
+            timeframe_map = {
+                '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m',
+                '1h': '1h', '4h': '4h', '1d': '1d', '1w': '1w'
+            }
+            
+            timeframe = timeframe_map.get(interval, '1h')
+            
+            # Convert symbol format (BTCUSDT -> BTC/USDT)
+            if '/' not in symbol and symbol.endswith('USDT'):
+                formatted_symbol = symbol.replace('USDT', '/USDT')
+            else:
+                formatted_symbol = symbol
+            
+            ohlc_data = enhanced_crypto_service.get_ohlc_data(formatted_symbol, timeframe, limit)
+            
+            # Convert to DataFrame in expected format
+            data = []
+            for candle in ohlc_data:
+                data.append({
+                    'datetime': candle.timestamp,
+                    'open': candle.open,
+                    'high': candle.high,
+                    'low': candle.low,
+                    'close': candle.close,
+                    'volume': candle.volume
+                })
+            
+            df = pd.DataFrame(data)
+            df = df.sort_values('datetime').reset_index(drop=True)
+            
+            st.success(f"✅ Successfully fetched {len(df)} candles from {ohlc_data[0].source if ohlc_data else 'enhanced service'}")
+            return df
+            
+        else:
+            # Fallback to direct Binance API
+            st.warning("⚠️ Enhanced service unavailable, using direct Binance API...")
+            
+            url = "https://api.binance.com/api/v3/klines"
+            params = {
+                'symbol': symbol,
+                'interval': interval,
+                'limit': limit
+            }
+            
+            response = requests.get(url, params=params, timeout=30)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            df = pd.DataFrame(data, columns=[
+                'timestamp', 'open', 'high', 'low', 'close', 'volume',
+                'close_time', 'quote_volume', 'trades', 'taker_buy_base',
+                'taker_buy_quote', 'ignore'
+            ])
+            
+            # Convert to proper data types
+            df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
+            for col in ['open', 'high', 'low', 'close', 'volume']:
+                df[col] = pd.to_numeric(df[col])
+            
+            df = df[['datetime', 'open', 'high', 'low', 'close', 'volume']]
+            df = df.sort_values('datetime').reset_index(drop=True)
+            
+            st.success(f"✅ Fetched {len(df)} candles from Binance API")
+            return df
         
     except Exception as e:
-        st.error(f"Error fetching data: {str(e)}")
-        return pd.DataFrame()
+        st.error(f"❌ Error fetching data: {str(e)}")
+        
+        # Generate mock data as last resort
+        st.warning("🔄 Generating mock data for demonstration...")
+        
+        dates = pd.date_range(
+            start=datetime.datetime.now() - datetime.timedelta(days=limit), 
+            periods=limit, 
+            freq='H' if interval in ['1h', '4h'] else 'D'
+        )
+        
+        # Generate realistic crypto price data
+        base_price = 45000 if 'BTC' in symbol.upper() else 2500
+        prices = []
+        current_price = base_price
+        
+        for _ in range(limit):
+            change = np.random.normal(0, 0.02)  # 2% volatility
+            current_price = current_price * (1 + change)
+            prices.append(current_price)
+        
+        # Create OHLCV data
+        mock_data = []
+        for i, (date, close) in enumerate(zip(dates, prices)):
+            open_price = prices[i-1] if i > 0 else close
+            high = max(open_price, close) * (1 + abs(np.random.normal(0, 0.01)))
+            low = min(open_price, close) * (1 - abs(np.random.normal(0, 0.01)))
+            volume = np.random.uniform(1000, 10000)
+            
+            mock_data.append({
+                'datetime': date,
+                'open': open_price,
+                'high': high,
+                'low': low,
+                'close': close,
+                'volume': volume
+            })
+        
+        df = pd.DataFrame(mock_data)
+        df = df.sort_values('datetime').reset_index(drop=True)
+        
+        st.info(f"📊 Generated {len(df)} mock candles for {symbol}")
+        return df
 
 def create_candlestick_chart(data: pd.DataFrame, signals_df: pd.DataFrame = None, trades: List[Trade] = None):
     """Create TradingView-style candlestick chart"""

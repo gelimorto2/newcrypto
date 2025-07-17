@@ -12,9 +12,17 @@ from datetime import datetime, timedelta
 import os
 import sys
 
-# Add the parent directory to path to import ai_models
+# Add the parent directory to path to import ai_models and crypto service
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ai_models import model_manager, AIModelManager
+
+# Import enhanced crypto data service
+try:
+    from crypto_data_service import enhanced_crypto_service, EnhancedCryptoDataService
+    crypto_service_available = True
+except ImportError:
+    crypto_service_available = False
+    print("⚠️ Enhanced crypto data service not available, using mock data")
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -196,6 +204,179 @@ def evaluate_model(model_id):
         
     except Exception as e:
         return jsonify({
+            'error': str(e)
+        }), 500
+
+@app.route('/api/crypto/price/<symbol>', methods=['GET'])
+def get_crypto_price(symbol):
+    """Get current price for a cryptocurrency symbol using enhanced service"""
+    try:
+        if crypto_service_available:
+            # Use enhanced crypto data service
+            price_data = enhanced_crypto_service.get_current_price(symbol)
+            
+            return jsonify({
+                'success': True,
+                'data': {
+                    'symbol': price_data.symbol,
+                    'price': price_data.price,
+                    'change_24h': price_data.change_24h,
+                    'volume_24h': price_data.volume_24h,
+                    'high_24h': price_data.high_24h,
+                    'low_24h': price_data.low_24h,
+                    'timestamp': price_data.timestamp.isoformat(),
+                    'source': price_data.source
+                }
+            })
+        else:
+            # Fallback to mock data
+            mock_price = np.random.uniform(40000, 70000) if symbol.upper().startswith('BTC') else np.random.uniform(2000, 4000)
+            return jsonify({
+                'success': True,
+                'data': {
+                    'symbol': symbol,
+                    'price': round(mock_price, 2),
+                    'change_24h': round(np.random.uniform(-5, 5), 2),
+                    'volume_24h': round(np.random.uniform(1000000, 10000000), 2),
+                    'timestamp': datetime.now().isoformat(),
+                    'source': 'mock'
+                }
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/crypto/ohlc/<symbol>', methods=['GET'])
+def get_crypto_ohlc(symbol):
+    """Get OHLC data for a cryptocurrency symbol"""
+    try:
+        timeframe = request.args.get('timeframe', '1d')
+        limit = int(request.args.get('limit', 100))
+        
+        if crypto_service_available:
+            # Use enhanced crypto data service
+            ohlc_data = enhanced_crypto_service.get_ohlc_data(symbol, timeframe, limit)
+            
+            formatted_data = []
+            for candle in ohlc_data:
+                formatted_data.append({
+                    'timestamp': candle.timestamp.isoformat(),
+                    'open': candle.open,
+                    'high': candle.high,
+                    'low': candle.low,
+                    'close': candle.close,
+                    'volume': candle.volume,
+                    'timeframe': candle.timeframe,
+                    'source': candle.source
+                })
+            
+            return jsonify({
+                'success': True,
+                'symbol': symbol,
+                'timeframe': timeframe,
+                'data': formatted_data
+            })
+        else:
+            # Generate mock OHLC data
+            data = generate_mock_market_data(symbol, timeframe, limit)
+            return jsonify({
+                'success': True,
+                'symbol': symbol,
+                'timeframe': timeframe,
+                'data': data,
+                'source': 'mock'
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/crypto/status', methods=['GET'])
+def get_crypto_service_status():
+    """Get status of crypto data service"""
+    try:
+        if crypto_service_available:
+            status = enhanced_crypto_service.get_exchange_status()
+            return jsonify({
+                'success': True,
+                'service_available': True,
+                'status': status
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'service_available': False,
+                'status': {
+                    'message': 'Enhanced crypto service not available, using mock data',
+                    'fallback_mode': True
+                }
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/crypto/multiple-prices', methods=['POST'])
+def get_multiple_crypto_prices():
+    """Get prices for multiple cryptocurrency symbols"""
+    try:
+        data = request.get_json()
+        symbols = data.get('symbols', [])
+        
+        if not symbols:
+            return jsonify({
+                'success': False,
+                'error': 'No symbols provided'
+            }), 400
+        
+        if crypto_service_available:
+            # Use enhanced crypto data service
+            results = enhanced_crypto_service.get_multiple_prices(symbols)
+            
+            formatted_results = {}
+            for symbol, price_data in results.items():
+                formatted_results[symbol] = {
+                    'symbol': price_data.symbol,
+                    'price': price_data.price,
+                    'change_24h': price_data.change_24h,
+                    'volume_24h': price_data.volume_24h,
+                    'timestamp': price_data.timestamp.isoformat(),
+                    'source': price_data.source
+                }
+            
+            return jsonify({
+                'success': True,
+                'data': formatted_results
+            })
+        else:
+            # Generate mock data for all symbols
+            results = {}
+            for symbol in symbols:
+                mock_price = np.random.uniform(40000, 70000) if symbol.upper().startswith('BTC') else np.random.uniform(1000, 5000)
+                results[symbol] = {
+                    'symbol': symbol,
+                    'price': round(mock_price, 2),
+                    'change_24h': round(np.random.uniform(-5, 5), 2),
+                    'volume_24h': round(np.random.uniform(1000000, 10000000), 2),
+                    'timestamp': datetime.now().isoformat(),
+                    'source': 'mock'
+                }
+            
+            return jsonify({
+                'success': True,
+                'data': results
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
             'error': str(e)
         }), 500
 
