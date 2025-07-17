@@ -18,6 +18,12 @@ seaborn>=0.12.0
 requests>=2.31.0
 python-dateutil>=2.8.0
 
+# Enhanced crypto data libraries
+ccxt>=4.3.0
+python-binance>=1.0.19
+requests-cache>=1.1.0
+rich>=13.7.0
+
 # Optional: Advanced ML libraries
 # tensorflow>=2.13.0
 # keras>=2.13.0
